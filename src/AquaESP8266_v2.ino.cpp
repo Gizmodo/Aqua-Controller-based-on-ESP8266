@@ -8,7 +8,7 @@
 #include <WiFiUdp.h>
 #include <Ticker.h>
 #include <RtcDS3231.h>
-
+#include <uEEPROMLib.h>
 //Defines
 #define DEBUG   //If you comment this line, the DPRINT & DPRINTLN lines are defined as blank.
 #ifdef DEBUG    //Macros are usually in all capital letters.
@@ -26,6 +26,9 @@
 #define WIFI_PASSWORD "11111111"
 //----------------------------------------------------------------------------------
 
+// uEEPROMLib eeprom;
+uEEPROMLib eeprom(0x57);
+unsigned int pos;
 
 unsigned long lastTime = 0;
 
@@ -102,7 +105,88 @@ void initRTC() {
   // clockRTC.setDateTime(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second);
   Serial.println("Часы запущены. Время " + String(clockRTC.dateFormat("H:i:s Y-m-d", dt)));
 }
+void eeprom_test() {
+delay (2000);
 
+    Serial.println("Serial OK");
+
+	delay(2500);
+	Serial.println("Delay OK");
+
+	#ifdef ARDUINO_ARCH_ESP8266
+		Wire.begin(); // D3 and D4 on ESP8266
+	#else
+		Wire.begin();
+	#endif
+
+
+#ifdef ARDUINO_ARCH_AVR
+	int inttmp = 32123;
+#else
+	// too logng for AVR 16 bits!
+	int inttmp = 24543557;
+#endif
+	float floattmp = 3.1416;
+	char chartmp = 'A';
+
+    char string[17] = "ForoElectro.Net\0";
+
+
+	// Testing template
+	if (!eeprom.eeprom_write(0, inttmp)) {
+		Serial.println("Failed to store INT");
+	} else {
+		Serial.println("INT correctly stored");
+	}
+	if (!eeprom.eeprom_write(4, floattmp)) {
+		Serial.println("Failed to store FLOAT");
+	} else {
+		Serial.println("FLOAT correctly stored");
+	}
+	if (!eeprom.eeprom_write(8, chartmp)) {
+		Serial.println("Failed to store CHAR");
+	} else {
+		Serial.println("CHAR correctly stored");
+	}
+
+	if (!eeprom.eeprom_write(9, (byte *) &string[0], 16)) {
+		Serial.println("Failed to store STRING");
+	} else {
+		Serial.println("STRING correctly stored");
+	}
+
+	inttmp = 0;
+	floattmp = 0;
+	chartmp = 0;
+    string[0] = string[1] = string[2] = string[3] = string[4] = 0;
+
+
+
+	Serial.print("int: ");
+	eeprom.eeprom_read(0, &inttmp);
+	Serial.println(inttmp);
+
+	Serial.print("float: ");
+	eeprom.eeprom_read(4, &floattmp);
+	Serial.println((float) floattmp);
+
+	Serial.print("char: ");
+	eeprom.eeprom_read(8, &chartmp);
+	Serial.println(chartmp);
+
+	Serial.print("chararray: ");
+	eeprom.eeprom_read(9, (byte *) &string[0], 16);
+	Serial.println(string);
+
+	Serial.println();
+
+
+	for(pos = 26; pos < 1000; pos++) {
+		eeprom.eeprom_write(pos, (unsigned char) (pos % 256));
+	}
+
+	pos = 0;
+} 
 void setup() {
   lastmillis = millis();
   lastTimeRTC = millis();
@@ -110,8 +194,10 @@ void setup() {
   initRTC();
 
   Serial.begin(115200);
+  eeprom_test();
   Serial.println();
   Serial.print("connecting to WiFi");
+  Serial.printf_P(PSTR("Welcome %u"),sizeof(rtc));
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   while (WiFi.status() != WL_CONNECTED)
