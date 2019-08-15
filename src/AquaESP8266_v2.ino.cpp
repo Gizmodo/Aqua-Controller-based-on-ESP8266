@@ -198,7 +198,7 @@ void syncTime() {
     delay(1000);
     int cb = udp.parsePacket();
     if (!cb) {
-        DPRINTLN("Нет ответа от сервера времени");
+        DPRINTLN("Нет ответа от сервера времени " + ntpServerName);
         update_status = false;
         count_sync++;
         minute_sync = rtc.getEpoch();
@@ -207,7 +207,7 @@ void syncTime() {
         count_sync = 0;
         hour_sync = rtc.getEpoch();
 
-        DPRINTLN("Получен ответ от сервера времени");
+        DPRINTLN("Получен ответ от сервера времени " + ntpServerName);
 
         udp.read(packetBuffer, NTP_PACKET_SIZE);
         unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
@@ -225,15 +225,9 @@ void syncTime() {
         rtc.dateTimeToStr(str);
         DPRINTLN(str);
 
-        // RTS
         uint32_t rtcEpoch = rtc.getEpoch();
         Serial.printf_P(PSTR("RTC эпоха: %d\n"), rtcEpoch);
         Serial.printf_P(PSTR("NTP эпоха: %d\n"), epoch);
-        // Serial.print("RTC эпоха = ");
-        // Serial.println(rtcEpoch);
-        // NTP
-        // Serial.print("NTP эпоха = ");
-        // Serial.println(epoch);
 
         if (abs(rtcEpoch - epoch) > 2) {
             DPRINT("Обновляем RTC (разница между эпохами = ");
@@ -244,25 +238,35 @@ void syncTime() {
             }
             rtc.setEpoch(epoch);
         } else {
-            DPRINTLN("Дата и время RTC синхронизированы.");
+            DPRINTLN("Дата и время RTC не требуют синхронизации");
         }
     }
 }
+
 void readOptionsEEPROM() {
-    Serial.println("Загрузка настроек из внутренней памяти");
+    DPRINTLN("Загрузка настроек из внутренней памяти");
     // todo
 };
+
 void readOptionsFirebase() {
-    Serial.println("Загрузка настроек из Firebase");
+    DPRINTLN("Загрузка настроек из Firebase");
     // todo
 };
+
+void DS18B20() {
+    DPRINTLN("Загрузка настроек из Firebase");
+    //todo
+    
+}
+
 void setup() {
     Serial.begin(115200);
-    Serial.println();
+    DPRINTLN();
 
     //Запуск часов реального времени
     initRTC();
 
+    DS18B20();
     lastmillis = millis();
     lastTimeRTC = millis();
 
@@ -272,11 +276,10 @@ void setup() {
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
     while ((WiFi.status() != WL_CONNECTED) && (wifiConnectCount != wifiMaxTry)) {
-        Serial.print(".");
+        DPRINT(".");
         delay(1000);
-        Serial.println();
+        DPRINTLN();
         wifiConnectCount++;
-        //  uptime();
     }
 
     if (WiFi.status() != WL_CONNECTED) {
