@@ -11,17 +11,6 @@
 #include <WiFiUdp.h>
 #include <uEEPROMLib.h>
 
-// Defines
-#define DEBUG                                      // If you comment this line, the DPRINT & DPRINTLN lines are
-                                                   // defined as blank.
-#ifdef DEBUG                                       // Macros are usually in all capital letters.
-#define DPRINT(...) Serial.print(__VA_ARGS__)      // DPRINT is a macro, debug print
-#define DPRINTLN(...) Serial.println(__VA_ARGS__)  // DPRINTLN is a macro, debug print with new line
-#else
-#define DPRINT(...)    // now defines a blank line
-#define DPRINTLN(...)  // now defines a blank line
-#endif
-
 #define FIREBASE_HOST "aqua-3006a.firebaseio.com"
 #define FIREBASE_AUTH "eRxKqsNsandXnfrDtd3wjGMHMc05nUeo5yeKmuni"
 
@@ -29,6 +18,8 @@
 #define WIFI_PASSWORD "11111111"
 
 #define GMT 3
+
+#define ONE_WIRE_BUS 14  //Пин, к которому подключены датчики DS18B20 D5 GPIO15
 //----------------------------------------------------------------------------------
 uint8_t wifiMaxTry = 5;  //Попытки подключения к сети
 uint8_t wifiConnectCount = 0;
@@ -50,8 +41,6 @@ RTCDateTime dt;
 RtcDS3231 rtc;
 
 const char* WiFi_hostname = "ESP8266-0";
-Ticker flipper;
-boolean point;
 IPAddress timeServerIP;
 const char* ntpServerName = "pool.ntp.org";
 const int NTP_PACKET_SIZE = 48;
@@ -73,6 +62,36 @@ FirebaseData firebaseData;
 unsigned long sendDataPrevMillis = 0;
 
 String path = "/ESP8266_Test/Stream";
+
+OneWire ds(ONE_WIRE_BUS);
+byte data[12];
+float temp1, temp2;
+//Адреса датчиков
+byte addr1[8] = {0x28, 0xFF, 0x17, 0xF0, 0x8B, 0x16, 0x03, 0x13};  //адрес датчика DS18B20
+byte addr2[8] = {0x28, 0xFF, 0x5F, 0x1E, 0x8C, 0x16, 0x03, 0xE2};  //адрес датчика DS18B20
+
+float DS18B20(byte* adres) {
+    unsigned int raw;
+    ds.reset();
+    ds.select(adres);
+    ds.write(0x44, 1);
+    ds.reset();
+    ds.select(adres);
+    ds.write(0xBE);
+    for (byte i = 0; i < 9; i++) {
+        data[i] = ds.read();
+    }
+    raw = (data[1] << 8) | data[0];
+    float celsius = (float)raw / 16.0;
+    return celsius;
+}
+
+void getTemperature() {
+    temp1 = DS18B20(addr1);
+    temp2 = DS18B20(addr2);
+    Serial.println(temp1);
+    Serial.println(temp2);
+}
 
 void uptime() {
     if (lastmillis + 60000 < millis()) {
@@ -198,7 +217,7 @@ void syncTime() {
     delay(1000);
     int cb = udp.parsePacket();
     if (!cb) {
-        DPRINTLN("Нет ответа от сервера времени " + ntpServerName);
+        Serial.printf_P(PSTR("Нет ответа от сервера времени %s\n"), ntpServerName);
         update_status = false;
         count_sync++;
         minute_sync = rtc.getEpoch();
@@ -206,9 +225,7 @@ void syncTime() {
         update_status = true;
         count_sync = 0;
         hour_sync = rtc.getEpoch();
-
-        DPRINTLN("Получен ответ от сервера времени " + ntpServerName);
-
+        Serial.printf_P(PSTR("Получен ответ от сервера времени %s\n"), ntpServerName);
         udp.read(packetBuffer, NTP_PACKET_SIZE);
         unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
         unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
@@ -223,50 +240,48 @@ void syncTime() {
 
         char str[20];
         rtc.dateTimeToStr(str);
-        DPRINTLN(str);
-
+        Serial.printf_P(PSTR("%s\n"), str);
         uint32_t rtcEpoch = rtc.getEpoch();
         Serial.printf_P(PSTR("RTC эпоха: %d\n"), rtcEpoch);
         Serial.printf_P(PSTR("NTP эпоха: %d\n"), epoch);
 
         if (abs(rtcEpoch - epoch) > 2) {
-            DPRINT("Обновляем RTC (разница между эпохами = ");
+            Serial.printf_P(PSTR("Обновляем RTC (разница между эпохами = "));
             if ((rtcEpoch - epoch) > 10000) {
-                DPRINTLN(abs(epoch - rtcEpoch));
+                Serial.printf_P(PSTR("%s\n"), abs(epoch - rtcEpoch));
             } else {
-                DPRINTLN(abs(rtcEpoch - epoch));
+                Serial.printf_P(PSTR("%s\n"), abs(rtcEpoch - epoch));
             }
             rtc.setEpoch(epoch);
         } else {
-            DPRINTLN("Дата и время RTC не требуют синхронизации");
+            Serial.printf_P(PSTR("Дата и время RTC не требуют синхронизации\n"));
         }
     }
 }
 
 void readOptionsEEPROM() {
-    DPRINTLN("Загрузка настроек из внутренней памяти");
+    Serial.printf_P(PSTR("Загрузка настроек из внутренней памяти\n"));
     // todo
 };
 
 void readOptionsFirebase() {
-    DPRINTLN("Загрузка настроек из Firebase");
+    Serial.printf_P(PSTR("Загрузка настроек из Firebase\n"));
     // todo
 };
 
-void DS18B20() {
-    DPRINTLN("Загрузка настроек из Firebase");
-    //todo
-    
+void DS18B201() {
+    Serial.printf_P(PSTR("Считывание показаний с датчиков температуры\n"));
+    // todo
 }
 
 void setup() {
     Serial.begin(115200);
-    DPRINTLN();
+    Serial.println();
 
     //Запуск часов реального времени
     initRTC();
 
-    DS18B20();
+    DS18B201();
     lastmillis = millis();
     lastTimeRTC = millis();
 
@@ -276,9 +291,9 @@ void setup() {
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
     while ((WiFi.status() != WL_CONNECTED) && (wifiConnectCount != wifiMaxTry)) {
-        DPRINT(".");
+        Serial.printf_P(PSTR("."));
         delay(1000);
-        DPRINTLN();
+        Serial.printf_P(PSTR("\n"));
         wifiConnectCount++;
     }
 
@@ -308,14 +323,19 @@ void setup() {
     }
 }
 
+void writeTemperature() {
+    if (WiFi.isConnected()) {
+    } else {
+    }
+}
 void loop() {
-    //
-
     uptime();
     if (millis() - lastTimeRTC > 1000) {
         lastTimeRTC = millis();
         dt = clockRTC.getDateTime();
-        Serial.println("RTC1 is " + String(clockRTC.dateFormat("H:i:s Y-m-d", dt)));
+        Serial.println(String(clockRTC.dateFormat("H:i:s Y-m-d", dt)));
+        getTemperature();
+        writeTemperature();
     }
 
     if (millis() - lastTime > 5000) {
