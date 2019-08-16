@@ -5,7 +5,7 @@
 #include <OneWire.h>
 #include <Wire.h>
 
-//#include "TimeAlarms.h"
+#include "TimeAlarms.h"
 #include <RtcDS3231.h>
 #include <Ticker.h>
 #include <WiFiUdp.h>
@@ -193,7 +193,7 @@ void eeprom_test() {
     pos = 0;
 }
 
-unsigned long sendNTPpacket(IPAddress& address) {
+void sendNTPpacket(IPAddress& address) {
     memset(packetBuffer, 0, NTP_PACKET_SIZE);
     packetBuffer[0] = 0b11100011;
     packetBuffer[1] = 0;
