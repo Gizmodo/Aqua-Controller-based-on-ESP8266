@@ -1,15 +1,14 @@
-#include <ArduinoJson.h>
 #include <DS3231.h>  //Время
 #include <ESP8266WiFi.h>
 #include <FirebaseESP8266.h>
 #include <OneWire.h>
 #include <Wire.h>
 
-#include "TimeAlarms.h"
 #include <RtcDS3231.h>
 #include <Ticker.h>
 #include <WiFiUdp.h>
 #include <uEEPROMLib.h>
+#include "TimeAlarms.h"
 
 #define FIREBASE_HOST "aqua-3006a.firebaseio.com"
 #define FIREBASE_AUTH "eRxKqsNsandXnfrDtd3wjGMHMc05nUeo5yeKmuni"
@@ -20,6 +19,11 @@
 #define GMT 3
 
 #define ONE_WIRE_BUS 14  //Пин, к которому подключены датчики DS18B20 D5 GPIO15
+
+#define ALARMS_COUNT 6  //Количество таймеров, которые нужно удалять. Помимо их есть еще два основных - каждую минуту и каждые пять.
+//Указанное кол-во надо увеличить в случае появления нового расписания для нового устройства, например, дозаторы, CO2, нагреватель и
+//прочие устройства которые будут запланированы на включение или выключение
+
 //----------------------------------------------------------------------------------
 uint8_t wifiMaxTry = 5;  //Попытки подключения к сети
 uint8_t wifiConnectCount = 0;
@@ -273,7 +277,40 @@ void DS18B201() {
     Serial.printf_P(PSTR("Считывание показаний с датчиков температуры\n"));
     // todo
 }
+//Сохрнение температур в журанал и в мгновенные значения
+void EveryMinuteTemperature() {
+    Serial.println("Вызван таймер");
+    dt = clockRTC.getDateTime();
+    Serial.println(String(clockRTC.dateFormat("H:i:s Y-m-d", dt)));
+    /*getTemperature();
+    saveTemps();
+    if (getFlagRereadSettings()) {
+      clearAlarms();
+      LoadVariables();
+      DPRINTLN("Alarms count = " + String(Alarm.count()));
+      Firebase.setBool("UpdateSettings", false);
+      if (isFailed) {
+        DPRINTLN("Error while setting UpdateSettings");
+        DPRINTLN(Firebase.error());
+      }
+    }
+    if (getFlagTimeSync()) {
+      udp.begin(localPort);
+      oldloop();                  // синхронизируем время
 
+      
+       // clearAlarms();
+      //  LoadVariables();
+      //  DPRINTLN("Alarms count = " + String(Alarm.count()));
+      
+      Firebase.setBool("TimeSync", false);
+      if (isFailed) {
+        DPRINTLN("Error while setting TimeSync");
+        DPRINTLN(Firebase.error());
+      }
+    }
+    */
+}
 void setup() {
     Serial.begin(115200);
     Serial.println();
@@ -321,6 +358,9 @@ void setup() {
                 }
           */
     }
+    Serial.printf_P(PSTR("Количество таймеров до: %d\n"), Alarm.count());
+    Alarm.timerRepeat(3, EveryMinuteTemperature);
+    Serial.printf_P(PSTR("Количество таймеров после: %d\n"), Alarm.count());
 }
 
 void writeTemperature() {
@@ -329,39 +369,95 @@ void writeTemperature() {
     }
 }
 void loop() {
+    Alarm.delay(0);  // must use Alarm delay to use the TimeAlarms library
     uptime();
-    if (millis() - lastTimeRTC > 1000) {
+    if (millis() - lastTimeRTC > 10000) {
         lastTimeRTC = millis();
         dt = clockRTC.getDateTime();
         Serial.println(String(clockRTC.dateFormat("H:i:s Y-m-d", dt)));
         getTemperature();
         writeTemperature();
     }
+    /*
+        if (millis() - lastTime > 5000) {
+            lastTime = millis();
+            if (WiFi.status() != WL_CONNECTED) {
+                Serial.println("WIFi connection lost");
+                Serial.println();
+                return;
+            }
+            if (millis() - sendDataPrevMillis > 15000) {
+                sendDataPrevMillis = millis();
+                count++;
 
-    if (millis() - lastTime > 5000) {
-        lastTime = millis();
-        if (WiFi.status() != WL_CONNECTED) {
-            Serial.println("WIFi connection lost");
-            Serial.println();
-            return;
-        }
-        if (millis() - sendDataPrevMillis > 15000) {
-            sendDataPrevMillis = millis();
-            count++;
+                Serial.println("------------------------------------");
+                Serial.println("Set string...");
+                if (Firebase.setString(firebaseData, path + "/String", "Hello World! " + String(count))) {
+                    Serial.println("PASSED");
+                    Serial.println("PATH: " + firebaseData.dataPath());
+                    Serial.println("TYPE: " + firebaseData.dataType());
+                    Serial.print("VALUE: ");
+                    if (firebaseData.dataType() == "int")
+                        Serial.println(firebaseData.intData());
+                    else if (firebaseData.dataType() == "float")
+                        Serial.println(firebaseData.floatData(), 5);
+                    else if (firebaseData.dataType() == "double")
+                        printf("%.9lf\n", firebaseData.doubleData());
+                    else if (firebaseData.dataType() == "boolean")
+                        Serial.println(firebaseData.boolData() == 1 ? "true" : "false");
+                    else if (firebaseData.dataType() == "string")
+                        Serial.println(firebaseData.stringData());
+                    else if (firebaseData.dataType() == "json")
+                        Serial.println(firebaseData.jsonData());
+                    Serial.println("------------------------------------");
+                    Serial.println();
+                } else {
+                    Serial.println("FAILED");
+                    Serial.println("REASON: " + firebaseData.errorReason());
+                    Serial.println("------------------------------------");
+                    Serial.println();
+                }
 
-            Serial.println("------------------------------------");
-            Serial.println("Set string...");
-            if (Firebase.setString(firebaseData, path + "/String", "Hello World! " + String(count))) {
-                Serial.println("PASSED");
-                Serial.println("PATH: " + firebaseData.dataPath());
-                Serial.println("TYPE: " + firebaseData.dataType());
+                // Pause WiFi client from all Firebase calls and use shared SSL WiFi
+                // client
+                if (firebaseData.pauseFirebase(true)) {
+                    WiFiClientSecure client = firebaseData.getWiFiClient();
+                    // Use the client to make your own http connection...
+                } else {
+                    Serial.println("------------------------------------");
+                    Serial.println("Can't pause the WiFi client...");
+                    Serial.println("------------------------------------");
+                    Serial.println();
+                }
+                // Unpause WiFi client from Firebase task
+                firebaseData.pauseFirebase(false);
+            }
+
+            if (!Firebase.readStream(firebaseData)) {
+                Serial.println("------------------------------------");
+                Serial.println("Can't read stream data...");
+                Serial.println("REASON: " + firebaseData.errorReason());
+                Serial.println("------------------------------------");
+                Serial.println();
+            }
+
+            if (firebaseData.streamTimeout()) {
+                Serial.println("Stream timeout, resume streaming...");
+                Serial.println();
+            }
+
+            if (firebaseData.streamAvailable()) {
+                Serial.println("------------------------------------");
+                Serial.println("Stream Data available...");
+                Serial.println("STREAM PATH: " + firebaseData.streamPath());
+                Serial.println("EVENT PATH: " + firebaseData.dataPath());
+                Serial.println("DATA TYPE: " + firebaseData.dataType());
+                Serial.println("EVENT TYPE: " + firebaseData.eventType());
                 Serial.print("VALUE: ");
                 if (firebaseData.dataType() == "int")
                     Serial.println(firebaseData.intData());
                 else if (firebaseData.dataType() == "float")
-                    Serial.println(firebaseData.floatData(), 5);
-                else if (firebaseData.dataType() == "double")
-                    printf("%.9lf\n", firebaseData.doubleData());
+                    Serial.println(firebaseData.floatData());
                 else if (firebaseData.dataType() == "boolean")
                     Serial.println(firebaseData.boolData() == 1 ? "true" : "false");
                 else if (firebaseData.dataType() == "string")
@@ -370,99 +466,8 @@ void loop() {
                     Serial.println(firebaseData.jsonData());
                 Serial.println("------------------------------------");
                 Serial.println();
-            } else {
-                Serial.println("FAILED");
-                Serial.println("REASON: " + firebaseData.errorReason());
-                Serial.println("------------------------------------");
-                Serial.println();
             }
-
-            // Pause WiFi client from all Firebase calls and use shared SSL WiFi
-            // client
-            if (firebaseData.pauseFirebase(true)) {
-                WiFiClientSecure client = firebaseData.getWiFiClient();
-                // Use the client to make your own http connection...
-            } else {
-                Serial.println("------------------------------------");
-                Serial.println("Can't pause the WiFi client...");
-                Serial.println("------------------------------------");
-                Serial.println();
-            }
-            // Unpause WiFi client from Firebase task
-            firebaseData.pauseFirebase(false);
-        }
-
-        if (!Firebase.readStream(firebaseData)) {
-            Serial.println("------------------------------------");
-            Serial.println("Can't read stream data...");
-            Serial.println("REASON: " + firebaseData.errorReason());
-            Serial.println("------------------------------------");
-            Serial.println();
-        }
-
-        if (firebaseData.streamTimeout()) {
-            Serial.println("Stream timeout, resume streaming...");
-            Serial.println();
-        }
-
-        if (firebaseData.streamAvailable()) {
-            Serial.println("------------------------------------");
-            Serial.println("Stream Data available...");
-            Serial.println("STREAM PATH: " + firebaseData.streamPath());
-            Serial.println("EVENT PATH: " + firebaseData.dataPath());
-            Serial.println("DATA TYPE: " + firebaseData.dataType());
-            Serial.println("EVENT TYPE: " + firebaseData.eventType());
-            Serial.print("VALUE: ");
-            if (firebaseData.dataType() == "int")
-                Serial.println(firebaseData.intData());
-            else if (firebaseData.dataType() == "float")
-                Serial.println(firebaseData.floatData());
-            else if (firebaseData.dataType() == "boolean")
-                Serial.println(firebaseData.boolData() == 1 ? "true" : "false");
-            else if (firebaseData.dataType() == "string")
-                Serial.println(firebaseData.stringData());
-            else if (firebaseData.dataType() == "json")
-                Serial.println(firebaseData.jsonData());
-            Serial.println("------------------------------------");
-            Serial.println();
-        }
-        /*
-        if (client.connect(FIREBASE_HOST, 443)) {
-          Serial.println();
-          Serial.println(">> " + String(count));
-          client.print("PUT /----test----.json?auth=");
-          client.print(FIREBASE_AUTH);
-          client.print(" HTTP/1.1\r\n");
-          client.print("Host: ");
-          client.print(FIREBASE_HOST);
-          client.print("\r\n");
-          client.print("Connection: keep-alive\r\n");
-          client.print("Keep-Alive: timeout=30, max=100\r\n");
-          client.print("Content-Length: 1\r\n\r\n");
-          client.print(0);
-          while (client.connected() && !client.available())
-            delay(1);
-          if (client.connected() && client.available())
-            while (client.available())
-              Serial.print((char)client.read());
-          Serial.println();
-          Serial.println("<<");
-          client.print("GET /----test----.json?auth=");
-          client.print(FIREBASE_AUTH);
-          client.print(" HTTP/1.1\r\n");
-          client.print("Host: ");
-          client.print(FIREBASE_HOST);
-          client.print("\r\n");
-          client.print("Connection: close\r\n\r\n");
-          while (client.connected() && !client.available())
-            delay(1);
-          if (client.connected() && client.available())
-            while (client.available())
-              Serial.print((char)client.read());
-          Serial.println();
-        } else {
-          Serial.println("Connect to Firebase failed!");
+           
         }
         */
-    }
 }
