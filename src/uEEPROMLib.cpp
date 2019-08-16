@@ -12,15 +12,15 @@
  * @created 2018-07-27
  */
 
+#include "uEEPROMLib.h"
 #include <Arduino.h>
 #include <Wire.h>
-#include "uEEPROMLib.h"
 
 /**
  * Constructor
  */
-uEEPROMLib::uEEPROMLib() { }
-
+uEEPROMLib::uEEPROMLib() {
+}
 
 /**
  * Constructor
@@ -28,11 +28,8 @@ uEEPROMLib::uEEPROMLib() { }
  * @param bool skipInit Set true to skip Wire.init (needed for STM32, SAM and Arduino, at least)
  */
 uEEPROMLib::uEEPROMLib(bool skipInit) {
-	init = skipInit;
+    init = skipInit;
 }
-
-
-
 
 /**
  * Constructor
@@ -40,9 +37,8 @@ uEEPROMLib::uEEPROMLib(bool skipInit) {
  * @param int ee_address I2C address of EEPROM
  */
 uEEPROMLib::uEEPROMLib(const int ee_address) {
-	_ee_address = ee_address;
+    _ee_address = ee_address;
 }
-
 
 /**
  * Constructor
@@ -51,10 +47,9 @@ uEEPROMLib::uEEPROMLib(const int ee_address) {
  * @param int ee_address I2C address of EEPROM
  */
 uEEPROMLib::uEEPROMLib(bool skipInit, const int ee_address) {
-	init = skipInit;
-	_ee_address = ee_address;
+    init = skipInit;
+    _ee_address = ee_address;
 }
-
 
 /**
  * Sets EEPROM i2c addres
@@ -62,9 +57,8 @@ uEEPROMLib::uEEPROMLib(bool skipInit, const int ee_address) {
  * @param int addr EEPROM i2C address
  */
 void uEEPROMLib::set_address(const uint8_t addr) {
-	_ee_address = addr;
+    _ee_address = addr;
 }
-
 
 /**
  * Read one byte
@@ -73,23 +67,23 @@ void uEEPROMLib::set_address(const uint8_t addr) {
  * @return char read byte
  */
 byte uEEPROMLib::_eeprom_read(const unsigned int address) {
-	uEEPROMLIB_STM32_INIT_FIX()
-	uEEPROMLIB_YIELD
-	byte rdata = 0xFF;
-	Wire.beginTransmission(_ee_address);
-	Wire.write((int)(address >> 8)); // MSB
-	Wire.write((int)(address & 0xFF)); // LSB
-    delay(uEEPROMLIB_WIRE_DELAY); // Little delay to assure EEPROM is able to process data; if missing and inside for look meses some values
-	if (Wire.endTransmission() == 0) {
-		Wire.requestFrom(_ee_address, 1);
-        delay(uEEPROMLIB_WIRE_DELAY); // Little delay to assure EEPROM is able to process data; if missing and inside for look meses some values
-		if(Wire.available()) {
-			rdata = (byte) Wire.read();
-            delay(uEEPROMLIB_WIRE_DELAY); // Little delay to assure EEPROM is able to process data; if missing and inside for look meses some values
-		}
-	}
-	uEEPROMLIB_YIELD
-	return rdata;
+    uEEPROMLIB_STM32_INIT_FIX() uEEPROMLIB_YIELD byte rdata = 0xFF;
+    Wire.beginTransmission(_ee_address);
+    Wire.write((int)(address >> 8));    // MSB
+    Wire.write((int)(address & 0xFF));  // LSB
+    delay(uEEPROMLIB_WIRE_DELAY);  // Little delay to assure EEPROM is able to process data; if missing and inside for look meses
+                                   // some values
+    if (Wire.endTransmission() == 0) {
+        Wire.requestFrom(_ee_address, 1);
+        delay(uEEPROMLIB_WIRE_DELAY);  // Little delay to assure EEPROM is able to process data; if missing and inside for look
+                                       // meses some values
+        if (Wire.available()) {
+            rdata = (byte)Wire.read();
+            delay(uEEPROMLIB_WIRE_DELAY);  // Little delay to assure EEPROM is able to process data; if missing and inside for look
+                                           // meses some values
+        }
+    }
+    uEEPROMLIB_YIELD return rdata;
 }
 
 /**
@@ -100,36 +94,36 @@ byte uEEPROMLib::_eeprom_read(const unsigned int address) {
  * @param uint8_t n number of bytes to read
  * @return  Bool    true if bytes read are the same as requested
  */
-bool uEEPROMLib::eeprom_read(const unsigned int address, byte *data, const uint8_t n) {
+bool uEEPROMLib::eeprom_read(const unsigned int address, byte* data, const uint8_t n) {
     bool ret = false;
-	uEEPROMLIB_STM32_INIT_FIX()
-	uEEPROMLIB_YIELD
-	Wire.beginTransmission(_ee_address);
-	Wire.write((int)(address >> 8)); // MSB
-	Wire.write((int)(address & 0xFF)); // LSB
-    delay(uEEPROMLIB_WIRE_DELAY); // Little delay to assure EEPROM is able to process data; if missing and inside for look meses some values
-	if (Wire.endTransmission() == 0) {
-		Wire.requestFrom(_ee_address, (int) n);
-        delay(uEEPROMLIB_WIRE_DELAY); // Little delay to assure EEPROM is able to process data; if missing and inside for look meses some values
-		if(Wire.available()) {
-			byte i = 0, j;
+    uEEPROMLIB_STM32_INIT_FIX() uEEPROMLIB_YIELD Wire.beginTransmission(_ee_address);
+    Wire.write((int)(address >> 8));    // MSB
+    Wire.write((int)(address & 0xFF));  // LSB
+    delay(uEEPROMLIB_WIRE_DELAY);  // Little delay to assure EEPROM is able to process data; if missing and inside for look meses
+                                   // some values
+    if (Wire.endTransmission() == 0) {
+        Wire.requestFrom(_ee_address, (int)n);
+        delay(uEEPROMLIB_WIRE_DELAY);  // Little delay to assure EEPROM is able to process data; if missing and inside for look
+                                       // meses some values
+        if (Wire.available()) {
+            byte i = 0, j;
             for (; i < n && Wire.available(); i++) {
-                *(data + i) = (byte) Wire.read();
- 		        delay(uEEPROMLIB_WIRE_DELAY); // Little delay to assure EEPROM is able to process data; if missing and inside for look meses some values
-            	uEEPROMLIB_YIELD
-				// Added to wait if needed but cut after a failure (timeout)
-            	for (j = 0; j < 255 && !Wire.available(); j++) {
-	 		        delay(uEEPROMLIB_WIRE_DELAY); // Little delay to assure EEPROM is able to process data; if missing and inside for look meses some values
-		        	uEEPROMLIB_YIELD
-				}
+                *(data + i) = (byte)Wire.read();
+                delay(uEEPROMLIB_WIRE_DELAY);  // Little delay to assure EEPROM is able to process data; if missing and inside for
+                                               // look meses some values
+                uEEPROMLIB_YIELD
+                    // Added to wait if needed but cut after a failure (timeout)
+                    for (j = 0; j < 255 && !Wire.available(); j++) {
+                    delay(uEEPROMLIB_WIRE_DELAY);  // Little delay to assure EEPROM is able to process data; if missing and inside
+                                                   // for look meses some values
+                    uEEPROMLIB_YIELD
+                }
             }
             ret = (i == n);
-		}
-	}
-	uEEPROMLIB_YIELD
-	return ret;
+        }
+    }
+    uEEPROMLIB_YIELD return ret;
 }
-
 
 /**
  * Read a byte from EEPROM address
@@ -138,7 +132,7 @@ bool uEEPROMLib::eeprom_read(const unsigned int address, byte *data, const uint8
  * @return byte read data
  */
 byte uEEPROMLib::eeprom_read(const unsigned int address) {
-	return _eeprom_read(address);
+    return _eeprom_read(address);
 }
 
 /**
@@ -149,16 +143,14 @@ byte uEEPROMLib::eeprom_read(const unsigned int address) {
  * @return bool true if successful
  */
 bool uEEPROMLib::_eeprom_write(const unsigned int address, const byte data) {
-	uEEPROMLIB_YIELD
-	Wire.beginTransmission(_ee_address);
-	Wire.write((int)(address >> 8)); // MSB
-	Wire.write((int)(address & 0xFF)); // LSB
-	Wire.write(data);
-	uEEPROMLIB_YIELD
-	delay(uEEPROMLIB_WIRE_DELAY); // Little delay to assure EEPROM is able to process data; if missing and inside for look meses some values
-	return Wire.endTransmission() == 0;
+    uEEPROMLIB_YIELD Wire.beginTransmission(_ee_address);
+    Wire.write((int)(address >> 8));    // MSB
+    Wire.write((int)(address & 0xFF));  // LSB
+    Wire.write(data);
+    uEEPROMLIB_YIELD delay(uEEPROMLIB_WIRE_DELAY);  // Little delay to assure EEPROM is able to process data; if missing and inside
+                                                    // for look meses some values
+    return Wire.endTransmission() == 0;
 }
-
 
 /**
  * Write sequence of n bytes
@@ -168,15 +160,14 @@ bool uEEPROMLib::_eeprom_write(const unsigned int address, const byte data) {
  * @param n uint8_t number of bytes to write
  * @return bool true if successful
  */
-bool uEEPROMLib::eeprom_write(const unsigned int address, void *data, const uint8_t n) {
-	bool r = true;
-	uint8_t i;
-	for (i = 0; i < n; i++) {
-		r &= _eeprom_write(address + i, (byte) *(((byte *) data) + i));
-	}
-	return r;
+bool uEEPROMLib::eeprom_write(const unsigned int address, void* data, const uint8_t n) {
+    bool r = true;
+    uint8_t i;
+    for (i = 0; i < n; i++) {
+        r &= _eeprom_write(address + i, (byte) * (((byte*)data) + i));
+    }
+    return r;
 }
-
 
 /**
  * Write one byte to EEPROM address
@@ -187,9 +178,8 @@ bool uEEPROMLib::eeprom_write(const unsigned int address, void *data, const uint
  * @param data char data to write
  */
 bool uEEPROMLib::eeprom_write(const unsigned int address, char data) {
-	return _eeprom_write(address, data);
+    return _eeprom_write(address, data);
 }
-
 
 /**
  * Write one byte to EEPROM address
@@ -200,7 +190,5 @@ bool uEEPROMLib::eeprom_write(const unsigned int address, char data) {
  * @param data unsigned char data to write
  */
 bool uEEPROMLib::eeprom_write(const unsigned int address, unsigned char data) {
-	return _eeprom_write(address, data);
+    return _eeprom_write(address, data);
 }
-
-
