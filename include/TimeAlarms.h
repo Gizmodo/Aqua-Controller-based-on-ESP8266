@@ -81,7 +81,7 @@ typedef AlarmID_t AlarmId;  // Arduino friendly name
 #define dtINVALID_TIME (time_t)(-1)
 #define AlarmHMS(_hr_, _min_, _sec_) (_hr_ * SECS_PER_HOUR + _min_ * SECS_PER_MIN + _sec_)
 
-#ifdef ARDUINO_ARCH_ESP8266
+#ifdef ARDUINO_ARCH_ESP82661
 #include <functional>
 typedef std::function<void()> OnTick_t;
 typedef std::function<void(byte)> OnTickByte_t;

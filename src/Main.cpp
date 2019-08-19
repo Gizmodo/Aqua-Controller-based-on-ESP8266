@@ -23,7 +23,6 @@
 #define ALARMS_COUNT 6  //Количество таймеров, которые нужно удалять. Помимо их есть еще два основных - каждую минуту и каждые пять.
 //Указанное кол-во надо увеличить в случае появления нового расписания для нового устройства, например, дозаторы, CO2, нагреватель и
 //прочие устройства которые будут запланированы на включение или выключение
-
 //----------------------------------------------------------------------------------
 uint8_t wifiMaxTry = 5;  //Попытки подключения к сети
 uint8_t wifiConnectCount = 0;
@@ -34,7 +33,6 @@ unsigned int pos;
 
 unsigned long lastTime = 0;
 
-unsigned long lastTimeRTC = 0;
 uint32_t count = 0;
 unsigned long lastmillis;
 byte upM = 0, upH = 0;
@@ -61,11 +59,10 @@ byte second1 = 0;
 
 WiFiUDP udp;
 
-FirebaseData firebaseData;
-
 unsigned long sendDataPrevMillis = 0;
 
 String path = "/ESP8266_Test/Stream";
+String path2 = "/";
 
 OneWire ds(ONE_WIRE_BUS);
 byte data[12];
@@ -272,44 +269,117 @@ void readOptionsFirebase() {
     Serial.printf_P(PSTR("Загрузка настроек из Firebase\n"));
     // todo
 };
+//Сохранение показаний датчиков температуры
+void writeTemperature() {
+    Serial.printf_P(PSTR("writeTemperature\n"));
+    if (WiFi.isConnected()) {
+        FirebaseData firebaseData;
+        Serial.printf_P(PSTR("Сохраняем в Firebase\n"));
+        Serial.printf_P(PSTR("Сохранение температуры с первого датчика\n"));
+        if (Firebase.setFloat(firebaseData, path2 + "Online/temp1", temp1)) {
+            Serial.printf_P(PSTR("Успешно\n"));
+        } else {
+            Serial.printf_P(PSTR("Ошибка"));
+            Serial.printf_P(PSTR("%s\n"), firebaseData.errorReason().c_str());
+        }
+        /*   Serial.printf_P(PSTR("Сохранение температуры со второго датчика\n"));
+           if (Firebase.setFloat(firebaseData, path2 + "Online/temp2", temp2)) {
+               Serial.printf_P(PSTR("Успешно\n"));
+           } else {
+               Serial.printf_P(PSTR("Ошибка"));
+               Serial.printf_P(PSTR("%s\n"), firebaseData.errorReason().c_str());
+           }
+           Serial.printf_P(PSTR("Сохранение даты/времени измерения температур\n"));
+           if (Firebase.setString(firebaseData, path2 + "Online/DateTime", String(clockRTC.dateFormat("H:i:s Y-m-d", dt)))) {
+               Serial.printf_P(PSTR("Успешно\n"));
+           } else {
+               Serial.printf_P(PSTR("Ошибка"));
+               Serial.printf_P(PSTR("%s\n"), firebaseData.errorReason().c_str());
+           }*/
+        /*
+        String str = "";
+         FirebaseJson json;
+         json.addDouble("temp1", temp1)
+             .addDouble("temp2", temp2)
+             .addString("datetime", String(clockRTC.dateFormat("H:i:s Y-m- d", dt)));
 
-void DS18B201() {
-    Serial.printf_P(PSTR("Считывание показаний с датчиков температуры\n"));
-    // todo
+         if (Firebase.pushJSON(firebaseData, "/test/append", json)) {
+             Serial.println(firebaseData.dataPath());
+             Serial.println(firebaseData.pushName());
+             Serial.println(firebaseData.dataPath() + "/" + firebaseData.pushName());
+         } else {
+             Serial.println(firebaseData.errorReason());
+         }
+        */
+    } else {
+        Serial.printf_P(PSTR("Сохраняем в EEPROM\n"));
+    }
 }
+void timer10sec() {
+    time_t now1 = Alarm.getNextTrigger(0) - 18000;
+    Serial.println("Timer 1: now - " + String(clockRTC.dateFormat("H:i:s", clockRTC.getDateTime())) + " next " +
+                   String(ctime(&now1)));
+    // getTemperature();
+    // 
+    return;
+}
+void timer20sec() {
+    writeTemperature();
+    time_t now1 = Alarm.getNextTrigger(0) - 18000;
+    Serial.println("Timer 2: now - " + String(clockRTC.dateFormat("H:i:s", clockRTC.getDateTime())) + " next " +
+                   String(ctime(&now1)));
+}
+void timer30sec() {
+    time_t now1 = Alarm.getNextTrigger(0) - 18000;
+    Serial.println("Timer 3: now - " + String(clockRTC.dateFormat("H:i:s", clockRTC.getDateTime())) + " next " +
+                   String(ctime(&now1)));
+}
+
 //Сохрнение температур в журанал и в мгновенные значения
-void EveryMinuteTemperature() {
-    Serial.println("Вызван таймер");
+void fiveMinuteTimer() {
+    /*
+      Serial.println("Вызван таймер");
+      dt = clockRTC.getDateTime();
+      Serial.println(String(clockRTC.dateFormat("H:i:s Y-m-d", dt)));
+    */
+    Serial.println(ESP.getFreeHeap());
+    getTemperature();
+    Serial.println(ESP.getFreeHeap());
+    writeTemperature();
+    Serial.println(ESP.getFreeHeap());
+    /* saveTemps();
+     if (getFlagRereadSettings()) {
+       clearAlarms();
+       LoadVariables();
+       DPRINTLN("Alarms count = " + String(Alarm.count()));
+       Firebase.setBool("UpdateSettings", false);
+       if (isFailed) {
+         DPRINTLN("Error while setting UpdateSettings");
+         DPRINTLN(Firebase.error());
+       }
+     }
+     if (getFlagTimeSync()) {
+       udp.begin(localPort);
+       oldloop();                  // синхронизируем время
+
+       
+        // clearAlarms();
+       //  LoadVariables();
+       //  DPRINTLN("Alarms count = " + String(Alarm.count()));
+       
+       Firebase.setBool("TimeSync", false);
+       if (isFailed) {
+         DPRINTLN("Error while setting TimeSync");
+         DPRINTLN(Firebase.error());
+       }
+     }
+     */
+}
+void oneMinuteTimer() {
     dt = clockRTC.getDateTime();
     Serial.println(String(clockRTC.dateFormat("H:i:s Y-m-d", dt)));
-    /*getTemperature();
-    saveTemps();
-    if (getFlagRereadSettings()) {
-      clearAlarms();
-      LoadVariables();
-      DPRINTLN("Alarms count = " + String(Alarm.count()));
-      Firebase.setBool("UpdateSettings", false);
-      if (isFailed) {
-        DPRINTLN("Error while setting UpdateSettings");
-        DPRINTLN(Firebase.error());
-      }
-    }
-    if (getFlagTimeSync()) {
-      udp.begin(localPort);
-      oldloop();                  // синхронизируем время
-
-      
-       // clearAlarms();
-      //  LoadVariables();
-      //  DPRINTLN("Alarms count = " + String(Alarm.count()));
-      
-      Firebase.setBool("TimeSync", false);
-      if (isFailed) {
-        DPRINTLN("Error while setting TimeSync");
-        DPRINTLN(Firebase.error());
-      }
-    }
-    */
+    uptime();
+    // getTemperature();
 }
 void setup() {
     Serial.begin(115200);
@@ -318,9 +388,8 @@ void setup() {
     //Запуск часов реального времени
     initRTC();
 
-    DS18B201();
     lastmillis = millis();
-    lastTimeRTC = millis();
+    lastTime = millis();
 
     // eeprom_test();
     Serial.printf_P(PSTR("Подключение к WiFi: %s\n"), WIFI_SSID);
@@ -344,130 +413,36 @@ void setup() {
 
         Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
         Firebase.reconnectWiFi(true);
-
         syncTime();  // синхронизируем время
-
         readOptionsFirebase();
-        /*
-                if (!Firebase.beginStream(firebaseData, path)) {
-                    Serial.println("------------------------------------");
-                    Serial.println("Can't begin stream connection...");
-                    Serial.println("REASON: " + firebaseData.errorReason());
-                    Serial.println("------------------------------------");
-                    Serial.println();
-                }
-          */
     }
-    Serial.printf_P(PSTR("Количество таймеров до: %d\n"), Alarm.count());
-    Alarm.timerRepeat(3, EveryMinuteTemperature);
-    Serial.printf_P(PSTR("Количество таймеров после: %d\n"), Alarm.count());
+    // Serial.printf_P(PSTR("Количество таймеров до: %d\n"), Alarm.count());
+    Alarm.timerRepeat(60, timer10sec);
+    Alarm.timerRepeat(60*2, timer20sec);
+    Alarm.timerRepeat(60*3, timer30sec);
+    // Alarm.timerRepeat(10, fiveMinuteTimer);
+    // Alarm.timerRepeat(3, oneMinuteTimer);  // вывод uptime каждую минуту
+    // Alarm.timerRepeat(5, uptime);  // вывод uptime каждую минуту
+    // Serial.printf_P(PSTR("Количество таймеров после: %d\n"), Alarm.count());
+    //  fiveMinuteTimer();
 }
 
-void writeTemperature() {
-    if (WiFi.isConnected()) {
-    } else {
-    }
-}
 void loop() {
     Alarm.delay(0);  // must use Alarm delay to use the TimeAlarms library
-    uptime();
-    if (millis() - lastTimeRTC > 10000) {
-        lastTimeRTC = millis();
-        dt = clockRTC.getDateTime();
-        Serial.println(String(clockRTC.dateFormat("H:i:s Y-m-d", dt)));
-        getTemperature();
-        writeTemperature();
+
+    if (millis() - lastTime > 15000) {
+        Serial.println(".........TIMER INFO...........");
+        lastTime = millis();
+        Serial.println(String(clockRTC.dateFormat("H:i:s", clockRTC.getDateTime())));
+        Serial.printf_P(PSTR("Количество таймеров: %d\n"), Alarm.count());
+        time_t now1 = Alarm.getNextTrigger(0) - 18000;
+        time_t now2 = Alarm.getNextTrigger(1) - 18000;
+        time_t now3 = Alarm.getNextTrigger(2) - 18000;
+
+        Serial.printf_P(PSTR("таймер 0: %s\n"), ctime(&now1));
+        Serial.printf_P(PSTR("таймер 1: %s\n"), ctime(&now2));
+        Serial.printf_P(PSTR("таймер 2: %s\n"), ctime(&now3));
+        Serial.println("END......TIMER INFO...........");
+        // Serial.printf_P(PSTR("таймер 1: %s\n"), Alarm.getNextTrigger(1));
     }
-    /*
-        if (millis() - lastTime > 5000) {
-            lastTime = millis();
-            if (WiFi.status() != WL_CONNECTED) {
-                Serial.println("WIFi connection lost");
-                Serial.println();
-                return;
-            }
-            if (millis() - sendDataPrevMillis > 15000) {
-                sendDataPrevMillis = millis();
-                count++;
-
-                Serial.println("------------------------------------");
-                Serial.println("Set string...");
-                if (Firebase.setString(firebaseData, path + "/String", "Hello World! " + String(count))) {
-                    Serial.println("PASSED");
-                    Serial.println("PATH: " + firebaseData.dataPath());
-                    Serial.println("TYPE: " + firebaseData.dataType());
-                    Serial.print("VALUE: ");
-                    if (firebaseData.dataType() == "int")
-                        Serial.println(firebaseData.intData());
-                    else if (firebaseData.dataType() == "float")
-                        Serial.println(firebaseData.floatData(), 5);
-                    else if (firebaseData.dataType() == "double")
-                        printf("%.9lf\n", firebaseData.doubleData());
-                    else if (firebaseData.dataType() == "boolean")
-                        Serial.println(firebaseData.boolData() == 1 ? "true" : "false");
-                    else if (firebaseData.dataType() == "string")
-                        Serial.println(firebaseData.stringData());
-                    else if (firebaseData.dataType() == "json")
-                        Serial.println(firebaseData.jsonData());
-                    Serial.println("------------------------------------");
-                    Serial.println();
-                } else {
-                    Serial.println("FAILED");
-                    Serial.println("REASON: " + firebaseData.errorReason());
-                    Serial.println("------------------------------------");
-                    Serial.println();
-                }
-
-                // Pause WiFi client from all Firebase calls and use shared SSL WiFi
-                // client
-                if (firebaseData.pauseFirebase(true)) {
-                    WiFiClientSecure client = firebaseData.getWiFiClient();
-                    // Use the client to make your own http connection...
-                } else {
-                    Serial.println("------------------------------------");
-                    Serial.println("Can't pause the WiFi client...");
-                    Serial.println("------------------------------------");
-                    Serial.println();
-                }
-                // Unpause WiFi client from Firebase task
-                firebaseData.pauseFirebase(false);
-            }
-
-            if (!Firebase.readStream(firebaseData)) {
-                Serial.println("------------------------------------");
-                Serial.println("Can't read stream data...");
-                Serial.println("REASON: " + firebaseData.errorReason());
-                Serial.println("------------------------------------");
-                Serial.println();
-            }
-
-            if (firebaseData.streamTimeout()) {
-                Serial.println("Stream timeout, resume streaming...");
-                Serial.println();
-            }
-
-            if (firebaseData.streamAvailable()) {
-                Serial.println("------------------------------------");
-                Serial.println("Stream Data available...");
-                Serial.println("STREAM PATH: " + firebaseData.streamPath());
-                Serial.println("EVENT PATH: " + firebaseData.dataPath());
-                Serial.println("DATA TYPE: " + firebaseData.dataType());
-                Serial.println("EVENT TYPE: " + firebaseData.eventType());
-                Serial.print("VALUE: ");
-                if (firebaseData.dataType() == "int")
-                    Serial.println(firebaseData.intData());
-                else if (firebaseData.dataType() == "float")
-                    Serial.println(firebaseData.floatData());
-                else if (firebaseData.dataType() == "boolean")
-                    Serial.println(firebaseData.boolData() == 1 ? "true" : "false");
-                else if (firebaseData.dataType() == "string")
-                    Serial.println(firebaseData.stringData());
-                else if (firebaseData.dataType() == "json")
-                    Serial.println(firebaseData.jsonData());
-                Serial.println("------------------------------------");
-                Serial.println();
-            }
-           
-        }
-        */
 }
