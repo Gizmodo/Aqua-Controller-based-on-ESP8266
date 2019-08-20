@@ -212,6 +212,7 @@ void sendNTPpacket(IPAddress& address) {
 
 // Синхронизация времени
 void syncTime() {
+    Serial.printf_P(PSTR("----------Запуск синхронизации времениs\n"), ntpServerName);
     udp.begin(2390);
     WiFi.hostByName(ntpServerName, timeServerIP);
     sendNTPpacket(timeServerIP);
@@ -258,6 +259,7 @@ void syncTime() {
             Serial.printf_P(PSTR("Дата и время RTC не требуют синхронизации\n"));
         }
     }
+    Serial.printf_P(PSTR("----------Конец синхронизации времениs\n"), ntpServerName);
 }
 
 void readOptionsEEPROM() {
@@ -316,23 +318,21 @@ void writeTemperature() {
     }
 }
 void timer10sec() {
-    time_t now1 = Alarm.getNextTrigger(0) - 18000;
+    time_t now = Alarm.getNextTrigger(0);
     Serial.println("Timer 1: now - " + String(clockRTC.dateFormat("H:i:s", clockRTC.getDateTime())) + " next " +
-                   String(ctime(&now1)));
+                   String(ctime(&now)));
     // getTemperature();
-    // 
-    return;
 }
 void timer20sec() {
     writeTemperature();
-    time_t now1 = Alarm.getNextTrigger(0) - 18000;
+    time_t now = Alarm.getNextTrigger(1);
     Serial.println("Timer 2: now - " + String(clockRTC.dateFormat("H:i:s", clockRTC.getDateTime())) + " next " +
-                   String(ctime(&now1)));
+                   String(ctime(&now)));
 }
 void timer30sec() {
-    time_t now1 = Alarm.getNextTrigger(0) - 18000;
+    time_t now = Alarm.getNextTrigger(2);
     Serial.println("Timer 3: now - " + String(clockRTC.dateFormat("H:i:s", clockRTC.getDateTime())) + " next " +
-                   String(ctime(&now1)));
+                   String(ctime(&now)));
 }
 
 //Сохрнение температур в журанал и в мгновенные значения
@@ -381,13 +381,31 @@ void oneMinuteTimer() {
     uptime();
     // getTemperature();
 }
+
+void setClock() {
+    configTime(3 * 3600, 0, "pool.ntp.org", "time.nist.gov");
+    time_t now = time(nullptr);
+    uint8_t tryCount = 0;
+    while (now < 8 * 3600 * 2) {
+        delay(100);
+        now = time(nullptr);
+        tryCount++;
+        if (tryCount > 50)
+            break;
+    }
+
+    struct tm timeinfo;
+    gmtime_r(&now, &timeinfo);
+}
+
 void setup() {
     Serial.begin(115200);
     Serial.println();
 
     //Запуск часов реального времени
     initRTC();
-
+    time_t now22 = time(nullptr);
+    Serial.println("START TIME:" + String(ctime(&now22)));
     lastmillis = millis();
     lastTime = millis();
 
@@ -410,16 +428,20 @@ void setup() {
     } else {
         Serial.printf_P(PSTR("Успешное подключение к WiFi: %s\n"), WIFI_SSID);
         Serial.println("IP адрес: " + WiFi.localIP().toString() + "\n");
-
+        setClock();
+        now22 = time(nullptr);
+        Serial.println("After setClock:" + String(ctime(&now22)));
         Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
         Firebase.reconnectWiFi(true);
         syncTime();  // синхронизируем время
         readOptionsFirebase();
     }
+    time_t now221 = time(nullptr);
+    Serial.println("After readOptionsFirebase:" + String(ctime(&now221)));
     // Serial.printf_P(PSTR("Количество таймеров до: %d\n"), Alarm.count());
-    Alarm.timerRepeat(60, timer10sec);
-    Alarm.timerRepeat(60*2, timer20sec);
-    Alarm.timerRepeat(60*3, timer30sec);
+    Alarm.timerRepeat(5, timer10sec);
+    Alarm.timerRepeat(10, timer20sec);
+    Alarm.timerRepeat(11, timer30sec);
     // Alarm.timerRepeat(10, fiveMinuteTimer);
     // Alarm.timerRepeat(3, oneMinuteTimer);  // вывод uptime каждую минуту
     // Alarm.timerRepeat(5, uptime);  // вывод uptime каждую минуту
@@ -428,21 +450,21 @@ void setup() {
 }
 
 void loop() {
-    Alarm.delay(0);  // must use Alarm delay to use the TimeAlarms library
+    Alarm.delay(10);  // must use Alarm delay to use the TimeAlarms library
 
-    if (millis() - lastTime > 15000) {
+    if (millis() - lastTime > 7000000) {
         Serial.println(".........TIMER INFO...........");
         lastTime = millis();
         Serial.println(String(clockRTC.dateFormat("H:i:s", clockRTC.getDateTime())));
         Serial.printf_P(PSTR("Количество таймеров: %d\n"), Alarm.count());
-        time_t now1 = Alarm.getNextTrigger(0) - 18000;
-        time_t now2 = Alarm.getNextTrigger(1) - 18000;
-        time_t now3 = Alarm.getNextTrigger(2) - 18000;
+        time_t now1 = Alarm.getNextTrigger(0);
+        time_t now2 = Alarm.getNextTrigger(1);
+        time_t now3 = Alarm.getNextTrigger(2);
 
         Serial.printf_P(PSTR("таймер 0: %s\n"), ctime(&now1));
         Serial.printf_P(PSTR("таймер 1: %s\n"), ctime(&now2));
         Serial.printf_P(PSTR("таймер 2: %s\n"), ctime(&now3));
-        Serial.println("END......TIMER INFO...........");
+        Serial.println(".........TIMER INFO...........");
         // Serial.printf_P(PSTR("таймер 1: %s\n"), Alarm.getNextTrigger(1));
     }
 }
