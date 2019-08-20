@@ -37,13 +37,10 @@ AlarmClass::AlarmClass() {
 //* Private Methods
 
 void AlarmClass::updateNextTrigger() {
-    Serial.printf_P(PSTR("UpdateNextTrigger called\n"));
     if (Mode.isEnabled) {
-        // time_t time = now();
         time_t timenow = time(nullptr);
         if (Mode.alarmType == dtTimer) {
             // its a timer
-            Serial.printf_P(PSTR("Add %d seconds to current time\n"), value);
             nextTrigger =
                 time(nullptr) + value;  // add the value to previous time (this ensures delay always at least Value seconds)
         }
@@ -224,11 +221,9 @@ bool TimeAlarmsClass::getIsServicing() {
 void TimeAlarmsClass::serviceAlarms() {
     if (!isServicing) {
         time_t now = time(nullptr);
-        // Serial.printf_P(PSTR("serviceAlarms: %s\n"), ctime(&now));
         isServicing = true;
         for (uint8_t i = 0; i < dtNBR_ALARMS; i++) {
             if (Alarm[i].Mode.isEnabled && (now >= Alarm[i].nextTrigger)) {
-                Serial.printf_P(PSTR("serviceAlarms: [%d] - %s\n"), i, ctime(&(Alarm[i].value)));
                 OnTick_t TickHandler = Alarm[i].onTickHandler;
                 OnTickByte_t TickByteHandler = Alarm[i].onTickByteHandler;
                 byte param = Alarm[i].param;
@@ -236,16 +231,15 @@ void TimeAlarmsClass::serviceAlarms() {
                 if (Alarm[i].Mode.isOneShot) {
                     free(i);  // free the ID if mode is OnShot
                 } else {
-                    Serial.printf_P(PSTR("Will update next trigger[%d] time\n"), i);
                     Alarm[i].updateNextTrigger();
                 }
                 if (TickHandler != NULL) {
-                    (*TickHandler)();  // call the handler
-                    // TickHandler();
+                    // (*TickHandler)();  // call the handler
+                    TickHandler();
                 }
                 if (TickByteHandler != NULL) {
-                    (*TickByteHandler)(param);  // call the handler
-                                                // TickByteHandler(param);
+                    //(*TickByteHandler)(param);  // call the handler
+                    TickByteHandler(param);
                 }
             }
         }
