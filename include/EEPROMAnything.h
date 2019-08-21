@@ -1,7 +1,6 @@
 #include <Arduino.h>  // for type definitions
 #include <EEPROM.h>
 
-
 template <class T>
 int EEPROM_writeAnything(int ee, const T& value) {
     const byte* p = (const byte*)(const void*)&value;
@@ -19,10 +18,10 @@ int EEPROM_readAnything(int ee, T& value) {
         *p++ = EEPROM.read(ee++);
     return i;
 }
-std::vector<String> splitStringToVector(String msg) {
+std::vector<String> splitStringToVector(const String& msg) {
     std::vector<String> subStrings;
-    int j = 0;
-    for (int i = 0; i < msg.length(); i++) {
+    uint32_t j = 0;
+    for (uint32_t i = 0; i < msg.length(); i++) {
         if (msg.charAt(i) == ':') {
             subStrings.push_back(msg.substring(j, i));
             j = i + 1;

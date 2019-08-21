@@ -8,6 +8,7 @@
 #include <Ticker.h>
 #include <WiFiUdp.h>
 #include <uEEPROMLib.h>
+#include "EEPROMAnything.h"
 #include "TimeAlarms.h"
 
 #define FIREBASE_HOST "aqua-3006a.firebaseio.com"
@@ -71,6 +72,26 @@ float temp1, temp2;
 byte addr1[8] = {0x28, 0xFF, 0x17, 0xF0, 0x8B, 0x16, 0x03, 0x13};  //адрес датчика DS18B20
 byte addr2[8] = {0x28, 0xFF, 0x5F, 0x1E, 0x8C, 0x16, 0x03, 0xE2};  //адрес датчика DS18B20
 
+enum ledPosition { LEFT, CENTER, RIGHT };
+
+struct ledStruct {
+    int HOn, HOff;
+    int MOn, MOff;
+    bool enabled;
+    bool currentState;
+    // ledPosition position;
+    AlarmId on, off;
+    byte pin;
+    String russianName;
+};
+typedef struct {
+    ledPosition position;
+    String name;
+
+    ledStruct led;
+} ledDescription;
+ledDescription leds[3];
+
 float DS18B20(byte* adres) {
     unsigned int raw;
     ds.reset();
@@ -86,7 +107,14 @@ float DS18B20(byte* adres) {
     float celsius = (float)raw / 16.0;
     return celsius;
 }
-
+void initLeds() {
+    leds[0].name = "Left";
+    leds[0].position = LEFT;
+    leds[1].name = "Center";
+    leds[1].position = CENTER;
+    leds[2].name = "Right";
+    leds[2].position = RIGHT;
+}
 void getTemperature() {
     temp1 = DS18B20(addr1);
     temp2 = DS18B20(addr2);
@@ -263,9 +291,88 @@ void readOptionsEEPROM() {
     Serial.printf_P(PSTR("Загрузка настроек из внутренней памяти\n"));
     // todo
 };
-
+void ledOnHandler() {
+}
+void ledOffHandler() {
+}
+//Загрузка времени включения/выключения прожектора
+void setLEDTime(ledPosition position) {
+    FirebaseData firebaseData;
+    FirebaseJson json;
+    String jsonData = "";
+    uint8_t ledsCount = (sizeof(leds) / sizeof(*leds));
+    String ledPath;
+    uint8_t index;
+    bool found = false;
+    for (size_t i = 0; i < ledsCount; i++) {
+        if (leds[i].position == position) {
+            ledPath = leds[i].name;
+            index = i;
+            found = true;
+            i = ledsCount;
+        }
+    }
+    if (found) {
+        if (Firebase.getJSON(firebaseData, "Light/" + ledPath)) {
+            Serial.println("DataType is " + firebaseData.dataType());
+            if (firebaseData.dataType() == "json") {
+                jsonData = firebaseData.jsonData();
+                Serial.println(jsonData);
+                FirebaseJsonObject jsonParseResult;
+                json.clear();
+                json.setJsonData(jsonData);
+                json.parse();
+                size_t count = json.getJsonObjectIteratorCount();
+                Serial.printf_P(PSTR("Count of objects: %s\n"), String(count).c_str());
+                String key;
+                String value;
+                std::vector<String> vectorString;
+                for (size_t i = 0; i < count; i++) {
+                    json.jsonObjectiterator(i, key, value);
+                    jsonParseResult = json.parseResult();
+                    if (key == "enabled") {
+                        leds[index].led.enabled = jsonParseResult.boolValue;
+                    }
+                    if (key == "off") {
+                        vectorString.clear();
+                        vectorString = splitStringToVector(value);
+                        leds[index].led.HOff = vectorString[0].toInt();
+                        leds[index].led.MOff = vectorString[1].toInt();
+                    }
+                    if (key == "on") {
+                        vectorString.clear();
+                        vectorString = splitStringToVector(value);
+                        leds[index].led.HOn = vectorString[0].toInt();
+                        leds[index].led.MOn = vectorString[1].toInt();
+                    }
+                    if (key == "pin") {
+                        leds[index].led.pin = jsonParseResult.intValue;
+                    }
+                    if (key == "position") {
+                        leds[index].led.russianName = jsonParseResult.stringValue;
+                    }
+                    if (key == "state") {
+                        leds[index].led.currentState = jsonParseResult.boolValue;
+                    }
+                    Serial.printf_P(PSTR("KEY: %s, VALUE:%s, TYPE:%s\n"), key.c_str(), value.c_str(), jsonParseResult.type.c_str());
+                }
+                leds[index].led.off =
+                    Alarm.alarmRepeat(leds[index].led.HOff, leds[index].led.MOff, 0, ledOnHandler, leds[index].led.pin);
+            } else {
+                Serial.println("Reply isn't JSON object!");
+            }
+        } else {
+            Serial.println("Firebase failed to get JSON");
+        }
+    } else {
+        Serial.println("Not found led!!!");
+    }
+}
 void readOptionsFirebase() {
     Serial.printf_P(PSTR("Загрузка настроек из Firebase\n"));
+    setLEDTime(LEFT);
+    setLEDTime(CENTER);
+    setLEDTime(RIGHT);
     // todo
 };
 //Сохранение показаний датчиков температуры
@@ -353,6 +460,7 @@ void setup() {
 
     //Запуск часов реального времени
     initRTC();
+    initLeds();
     getTemperature();
     lastmillis = millis();
     lastTime = millis();
