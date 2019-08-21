@@ -67,7 +67,7 @@ String path2 = "/";
 OneWire ds(ONE_WIRE_BUS);
 byte data[12];
 float temp1, temp2;
-//Адреса датчиков
+
 byte addr1[8] = {0x28, 0xFF, 0x17, 0xF0, 0x8B, 0x16, 0x03, 0x13};  //адрес датчика DS18B20
 byte addr2[8] = {0x28, 0xFF, 0x5F, 0x1E, 0x8C, 0x16, 0x03, 0xE2};  //адрес датчика DS18B20
 
@@ -90,8 +90,8 @@ float DS18B20(byte* adres) {
 void getTemperature() {
     temp1 = DS18B20(addr1);
     temp2 = DS18B20(addr2);
-    Serial.println(temp1);
-    Serial.println(temp2);
+    Serial.printf_P(PSTR("Датчик температуры 1: %s\n"), String(temp1).c_str());
+    Serial.printf_P(PSTR("Датчик температуры 2: %s\n"), String(temp2).c_str());
 }
 
 void uptime() {
@@ -106,9 +106,7 @@ void uptime() {
             upH = 0;
             upD++;
         }
-        char buf[21];
-        sprintf(buf, "Uptime %d day(s) %d:%d", upD, upH, upM);
-        Serial.println(buf);
+        Serial.printf_P(PSTR("Uptime %d дн. %02d:%02d\n"), upD, upH, upM);
     }
 }
 void initRTC() {
@@ -212,7 +210,7 @@ void sendNTPpacket(IPAddress& address) {
 
 // Синхронизация времени
 void syncTime() {
-    Serial.printf_P(PSTR("----------Запуск синхронизации времениs\n"), ntpServerName);
+    Serial.printf_P(PSTR("Синхронизация времени\n"), ntpServerName);
     udp.begin(2390);
     WiFi.hostByName(ntpServerName, timeServerIP);
     sendNTPpacket(timeServerIP);
@@ -259,7 +257,6 @@ void syncTime() {
             Serial.printf_P(PSTR("Дата и время RTC не требуют синхронизации\n"));
         }
     }
-    Serial.printf_P(PSTR("----------Конец синхронизации времениs\n"), ntpServerName);
 }
 
 void readOptionsEEPROM() {
@@ -272,81 +269,36 @@ void readOptionsFirebase() {
     // todo
 };
 //Сохранение показаний датчиков температуры
-void writeTemperature() {
-    Serial.printf_P(PSTR("writeTemperature\n"));
+void writeOnlineTemperature() {
     if (WiFi.isConnected()) {
         FirebaseData firebaseData;
-        Serial.printf_P(PSTR("Сохраняем в Firebase\n"));
-        Serial.printf_P(PSTR("Сохранение температуры с первого датчика\n"));
-        if (Firebase.setFloat(firebaseData, path2 + "Online/temp1", temp1)) {
+        FirebaseJson json;
+        Serial.printf_P(PSTR("Сохраняем в Firebase текущее показание температурных датчиков: "));
+        json.addDouble("temp1", temp1)
+            .addDouble("temp2", temp2)
+            .addString("DateTime", String(clockRTC.dateFormat("H:i:s d.m.Y", dt)));
+
+        if (Firebase.setJSON(firebaseData, "OnlineJSON", json)) {
             Serial.printf_P(PSTR("Успешно\n"));
         } else {
-            Serial.printf_P(PSTR("Ошибка"));
-            Serial.printf_P(PSTR("%s\n"), firebaseData.errorReason().c_str());
+            Serial.printf_P(PSTR("\nОшибка: %s\n"), firebaseData.errorReason().c_str());
         }
-        /*   Serial.printf_P(PSTR("Сохранение температуры со второго датчика\n"));
-           if (Firebase.setFloat(firebaseData, path2 + "Online/temp2", temp2)) {
-               Serial.printf_P(PSTR("Успешно\n"));
-           } else {
-               Serial.printf_P(PSTR("Ошибка"));
-               Serial.printf_P(PSTR("%s\n"), firebaseData.errorReason().c_str());
-           }
-           Serial.printf_P(PSTR("Сохранение даты/времени измерения температур\n"));
-           if (Firebase.setString(firebaseData, path2 + "Online/DateTime", String(clockRTC.dateFormat("H:i:s Y-m-d", dt)))) {
-               Serial.printf_P(PSTR("Успешно\n"));
-           } else {
-               Serial.printf_P(PSTR("Ошибка"));
-               Serial.printf_P(PSTR("%s\n"), firebaseData.errorReason().c_str());
-           }*/
-        /*
-        String str = "";
-         FirebaseJson json;
-         json.addDouble("temp1", temp1)
-             .addDouble("temp2", temp2)
-             .addString("datetime", String(clockRTC.dateFormat("H:i:s Y-m- d", dt)));
 
-         if (Firebase.pushJSON(firebaseData, "/test/append", json)) {
-             Serial.println(firebaseData.dataPath());
-             Serial.println(firebaseData.pushName());
-             Serial.println(firebaseData.dataPath() + "/" + firebaseData.pushName());
-         } else {
-             Serial.println(firebaseData.errorReason());
-         }
-        */
+        Serial.printf_P(PSTR("Сохраняем в журнал Firebase текущее показание температурных датчиков: "));
+        if (Firebase.pushJSON(firebaseData, "History/Temperature", json)) {
+            Serial.printf_P(PSTR("Успешно\n"));
+        } else {
+            Serial.printf_P(PSTR("\nОшибка: %s\n"), firebaseData.errorReason().c_str());
+        }
     } else {
         Serial.printf_P(PSTR("Сохраняем в EEPROM\n"));
     }
 }
-void timer10sec() {
-    time_t now = Alarm.getNextTrigger(0);
-    Serial.println("Timer 1: now - " + String(clockRTC.dateFormat("H:i:s", clockRTC.getDateTime())) + " next " +
-                   String(ctime(&now)));
-    // getTemperature();
-}
-void timer20sec() {
-    writeTemperature();
-    time_t now = Alarm.getNextTrigger(1);
-    Serial.println("Timer 2: now - " + String(clockRTC.dateFormat("H:i:s", clockRTC.getDateTime())) + " next " +
-                   String(ctime(&now)));
-}
-void timer30sec() {
-    time_t now = Alarm.getNextTrigger(2);
-    Serial.println("Timer 3: now - " + String(clockRTC.dateFormat("H:i:s", clockRTC.getDateTime())) + " next " +
-                   String(ctime(&now)));
-}
 
 //Сохрнение температур в журанал и в мгновенные значения
 void fiveMinuteTimer() {
-    /*
-      Serial.println("Вызван таймер");
-      dt = clockRTC.getDateTime();
-      Serial.println(String(clockRTC.dateFormat("H:i:s Y-m-d", dt)));
-    */
-    Serial.println(ESP.getFreeHeap());
     getTemperature();
-    Serial.println(ESP.getFreeHeap());
-    writeTemperature();
-    Serial.println(ESP.getFreeHeap());
+    writeOnlineTemperature();
     /* saveTemps();
      if (getFlagRereadSettings()) {
        clearAlarms();
@@ -361,7 +313,6 @@ void fiveMinuteTimer() {
      if (getFlagTimeSync()) {
        udp.begin(localPort);
        oldloop();                  // синхронизируем время
-
        
         // clearAlarms();
        //  LoadVariables();
@@ -376,10 +327,9 @@ void fiveMinuteTimer() {
      */
 }
 void oneMinuteTimer() {
-    dt = clockRTC.getDateTime();
-    Serial.println(String(clockRTC.dateFormat("H:i:s Y-m-d", dt)));
+    Serial.println(String(clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime())));
     uptime();
-    // getTemperature();
+    getTemperature();
 }
 
 void setClock() {
@@ -393,7 +343,6 @@ void setClock() {
         if (tryCount > 50)
             break;
     }
-
     struct tm timeinfo;
     gmtime_r(&now, &timeinfo);
 }
@@ -404,8 +353,7 @@ void setup() {
 
     //Запуск часов реального времени
     initRTC();
-    time_t now22 = time(nullptr);
-    Serial.println("START TIME:" + String(ctime(&now22)));
+    getTemperature();
     lastmillis = millis();
     lastTime = millis();
 
@@ -429,42 +377,22 @@ void setup() {
         Serial.printf_P(PSTR("Успешное подключение к WiFi: %s\n"), WIFI_SSID);
         Serial.println("IP адрес: " + WiFi.localIP().toString() + "\n");
         setClock();
-        now22 = time(nullptr);
-        Serial.println("After setClock:" + String(ctime(&now22)));
         Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
         Firebase.reconnectWiFi(true);
         syncTime();  // синхронизируем время
         readOptionsFirebase();
     }
-    time_t now221 = time(nullptr);
-    Serial.println("After readOptionsFirebase:" + String(ctime(&now221)));
-    // Serial.printf_P(PSTR("Количество таймеров до: %d\n"), Alarm.count());
-    Alarm.timerRepeat(5, timer10sec);
-    Alarm.timerRepeat(10, timer20sec);
-    Alarm.timerRepeat(11, timer30sec);
-    // Alarm.timerRepeat(10, fiveMinuteTimer);
-    // Alarm.timerRepeat(3, oneMinuteTimer);  // вывод uptime каждую минуту
-    // Alarm.timerRepeat(5, uptime);  // вывод uptime каждую минуту
-    // Serial.printf_P(PSTR("Количество таймеров после: %d\n"), Alarm.count());
-    //  fiveMinuteTimer();
+    Serial.printf_P(PSTR("Количество таймеров до: %d\n"), Alarm.count());
+    Alarm.timerRepeat(5 * 60, fiveMinuteTimer);  // сохраняем температуру в Firebase/EEPROM
+    Alarm.timerRepeat(60, oneMinuteTimer);       // вывод uptime и тмемпературу каждую минуту
+    Serial.printf_P(PSTR("Количество таймеров после: %d\n"), Alarm.count());
+    fiveMinuteTimer();
 }
 
 void loop() {
-    Alarm.delay(10);  // must use Alarm delay to use the TimeAlarms library
+    Alarm.delay(10);
 
-    if (millis() - lastTime > 7000000) {
-        Serial.println(".........TIMER INFO...........");
+    if (millis() - lastTime > 60000) {
         lastTime = millis();
-        Serial.println(String(clockRTC.dateFormat("H:i:s", clockRTC.getDateTime())));
-        Serial.printf_P(PSTR("Количество таймеров: %d\n"), Alarm.count());
-        time_t now1 = Alarm.getNextTrigger(0);
-        time_t now2 = Alarm.getNextTrigger(1);
-        time_t now3 = Alarm.getNextTrigger(2);
-
-        Serial.printf_P(PSTR("таймер 0: %s\n"), ctime(&now1));
-        Serial.printf_P(PSTR("таймер 1: %s\n"), ctime(&now2));
-        Serial.printf_P(PSTR("таймер 2: %s\n"), ctime(&now3));
-        Serial.println(".........TIMER INFO...........");
-        // Serial.printf_P(PSTR("таймер 1: %s\n"), Alarm.getNextTrigger(1));
     }
 }
