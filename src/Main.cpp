@@ -294,6 +294,36 @@ void ledOnHandler(byte pin) {
 }
 void ledOffHandler(byte pin) {
 }
+
+void printLEDTime(ledPosition position) {
+    uint8_t ledsCount(sizeof(leds) / sizeof(*leds));
+    uint8_t index;
+    bool found = false;
+    for (size_t i = 0; i < ledsCount; i++) {
+        if (leds[i].position == position) {
+            index = i;
+            i = ledsCount;
+            found = true;
+        }
+    }
+    if (!found) {
+        Serial.println("Not found led!!!");
+    } else {
+        Serial.printf_P(PSTR("Прожектор: %s. Вкл - %s:%s. Выкл - %s:%s. Состояние: %s. Доступен к использованию: %s\n"),
+                        String(leds[index].led.russianName).c_str(), String(leds[index].led.HOn).c_str(),
+                        String(leds[index].led.MOn).c_str(), String(leds[index].led.HOff).c_str(),
+                        String(leds[index].led.MOff).c_str(), ((leds[index].led.currentState == true) ? "включен" : "выключен"),
+                        ((leds[index].led.enabled == true) ? "да" : "нет")
+
+        );
+    }
+}
+void printAllLedsTime() {
+    Serial.printf_P(PSTR("Отображение текущих настроек всех прожекторов\n"));
+    printLEDTime(LEFT);
+    printLEDTime(CENTER);
+    printLEDTime(RIGHT);
+}
 //Загрузка времени включения/выключения прожектора
 void setLEDTime(ledPosition position) {
     FirebaseData firebaseData;
@@ -490,6 +520,7 @@ void setup() {
         Firebase.reconnectWiFi(true);
         syncTime();  // синхронизируем время
         readOptionsFirebase();
+        printAllLedsTime();
     }
     Serial.printf_P(PSTR("Количество таймеров до: %d\n"), Alarm.count());
     Alarm.timerRepeat(5 * 60, fiveMinuteTimer);  // сохраняем температуру в Firebase/EEPROM
