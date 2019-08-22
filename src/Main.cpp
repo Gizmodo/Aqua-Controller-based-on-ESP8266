@@ -75,19 +75,18 @@ byte addr2[8] = {0x28, 0xFF, 0x5F, 0x1E, 0x8C, 0x16, 0x03, 0xE2};  //адрес 
 enum ledPosition { LEFT, CENTER, RIGHT };
 
 struct ledStruct {
-    int HOn, HOff;
-    int MOn, MOff;
+    uint8_t HOn, HOff;
+    uint8_t MOn, MOff;
     bool enabled;
     bool currentState;
     // ledPosition position;
     AlarmId on, off;
-    byte pin;
+    uint8_t pin;
     String russianName;
 };
 typedef struct {
     ledPosition position;
     String name;
-
     ledStruct led;
 } ledDescription;
 ledDescription leds[3];
@@ -291,15 +290,15 @@ void readOptionsEEPROM() {
     Serial.printf_P(PSTR("Загрузка настроек из внутренней памяти\n"));
     // todo
 };
-void ledOnHandler() {
+void ledOnHandler(byte pin) {
 }
-void ledOffHandler() {
+void ledOffHandler(byte pin) {
 }
 //Загрузка времени включения/выключения прожектора
 void setLEDTime(ledPosition position) {
     FirebaseData firebaseData;
     FirebaseJson json;
-    String jsonData = "";
+
     uint8_t ledsCount = (sizeof(leds) / sizeof(*leds));
     String ledPath;
     uint8_t index;
@@ -316,16 +315,16 @@ void setLEDTime(ledPosition position) {
         if (Firebase.getJSON(firebaseData, "Light/" + ledPath)) {
             Serial.println("DataType is " + firebaseData.dataType());
             if (firebaseData.dataType() == "json") {
+                String jsonData = "";
+                FirebaseJsonObject jsonParseResult;
                 jsonData = firebaseData.jsonData();
                 Serial.println(jsonData);
-                FirebaseJsonObject jsonParseResult;
                 json.clear();
                 json.setJsonData(jsonData);
                 json.parse();
                 size_t count = json.getJsonObjectIteratorCount();
                 Serial.printf_P(PSTR("Count of objects: %s\n"), String(count).c_str());
-                String key;
-                String value;
+                String key, value;
                 std::vector<String> vectorString;
                 for (size_t i = 0; i < count; i++) {
                     json.jsonObjectiterator(i, key, value);
@@ -357,7 +356,9 @@ void setLEDTime(ledPosition position) {
                     Serial.printf_P(PSTR("KEY: %s, VALUE:%s, TYPE:%s\n"), key.c_str(), value.c_str(), jsonParseResult.type.c_str());
                 }
                 leds[index].led.off =
-                    Alarm.alarmRepeat(leds[index].led.HOff, leds[index].led.MOff, 0, ledOnHandler, leds[index].led.pin);
+                    Alarm.alarmRepeat(leds[index].led.HOff, leds[index].led.MOff, 0, ledOffHandler, leds[index].led.pin);
+                leds[index].led.on =
+                    Alarm.alarmRepeat(leds[index].led.HOn, leds[index].led.MOn, 0, ledOnHandler, leds[index].led.pin);
             } else {
                 Serial.println("Reply isn't JSON object!");
             }
