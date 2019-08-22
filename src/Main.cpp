@@ -118,7 +118,12 @@ void getTemperature() {
     Serial.printf_P(PSTR("Датчик температуры 1: %s\n"), String(temp1).c_str());
     Serial.printf_P(PSTR("Датчик температуры 2: %s\n"), String(temp2).c_str());
 }
-
+void clearAlarms() {
+    uint8_t countAlarms = Alarm.count();
+    for (size_t i = 0; i < countAlarms; i++) {
+        Alarm.free(i);
+    }
+}
 void uptime() {
     if (lastmillis + 60000 < millis()) {
         lastmillis = millis();
