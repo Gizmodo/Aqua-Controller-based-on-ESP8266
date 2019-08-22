@@ -32,8 +32,6 @@ uint8_t wifiConnectCount = 0;
 uEEPROMLib eeprom(0x57);
 unsigned int pos;
 
-unsigned long lastTime = 0;
-
 uint32_t count = 0;
 unsigned long lastmillis;
 byte upM = 0, upH = 0;
@@ -423,7 +421,13 @@ void writeOnlineTemperature() {
         }
 
         Serial.printf_P(PSTR("Сохраняем в журнал Firebase текущее показание температурных датчиков: "));
-        if (Firebase.pushJSON(firebaseData, "History/Temperature", json)) {
+        String deviceDateKey = clockRTC.dateFormat("Y-m-d", clockRTC.getDateTime());
+        json.clear();
+        json.addDouble("temp1", temp1)
+            .addDouble("temp2", temp2)
+            .addString("DateTime", String(clockRTC.dateFormat("H:i:s", clockRTC.getDateTime())));
+
+        if (Firebase.pushJSON(firebaseData, "History/Temperature/" + deviceDateKey, json)) {
             Serial.printf_P(PSTR("Успешно\n"));
         } else {
             Serial.printf_P(PSTR("\nОшибка: %s\n"), firebaseData.errorReason().c_str());
@@ -494,7 +498,6 @@ void setup() {
     initLeds();
     getTemperature();
     lastmillis = millis();
-    lastTime = millis();
 
     // eeprom_test();
     Serial.printf_P(PSTR("Подключение к WiFi: %s\n"), WIFI_SSID);
@@ -531,8 +534,4 @@ void setup() {
 
 void loop() {
     Alarm.delay(10);
-
-    if (millis() - lastTime > 60000) {
-        lastTime = millis();
-    }
 }
