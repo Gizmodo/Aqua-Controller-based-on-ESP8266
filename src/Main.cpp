@@ -63,7 +63,7 @@ unsigned long sendDataPrevMillis = 0;
 String path = "/ESP8266_Test/Stream";
 String pathLight = "Light/";
 String pathOnline = "OnlineJSON/";
-String pathOptions = "UpdateSettings";
+String pathUpdateSettings = "UpdateSettings";
 
 OneWire ds(ONE_WIRE_BUS);
 byte data[12];
@@ -472,25 +472,29 @@ void fiveMinuteTimer() {
      }
      */
 }
-bool needToUpdateOptions() {
+void checkUpdateSettings() {
     FirebaseData data;
-    if (Firebase.getBool(data, pathOptions)) {
+    if (Firebase.getBool(data, pathUpdateSettings)) {
         if (data.dataType() == "boolean") {
             if (data.boolData()) {
                 Serial.printf_P(PSTR("Запрос на обновление всех настроек!!!\n"));
+                // TODO Add payload
+                if (!Firebase.setBool(data, pathUpdateSettings, false)) {
+                    Serial.printf_P(PSTR("Не удалось вернуть флаг UpdateSettings: %s\n"), data.errorReason().c_str());
+                }
             }
         } else {
-            Serial.printf_P(PSTR("pathOptions не boolean\n"));
+            Serial.printf_P(PSTR("UpdateSettings не boolean\n"));
         }
     } else {
-        Serial.printf_P(PSTR("\nОшибка: %s\n"), data.errorReason().c_str());
+        Serial.printf_P(PSTR("Ошибка: %s\n"), data.errorReason().c_str());
     }
 }
 void oneMinuteTimer() {
     Serial.println(String(clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime())));
     uptime();
     getTemperature();
-    needToUpdateOptions();
+    checkUpdateSettings();
 }
 
 void setClock() {
