@@ -61,7 +61,8 @@ WiFiUDP udp;
 unsigned long sendDataPrevMillis = 0;
 
 String path = "/ESP8266_Test/Stream";
-String path2 = "/";
+String pathLight = "Light/";
+String pathOnline = "OnlineJSON/";
 
 OneWire ds(ONE_WIRE_BUS);
 byte data[12];
@@ -312,10 +313,9 @@ void printLEDTime(ledPosition position) {
     if (!found) {
         Serial.println("Not found led!!!");
     } else {
-        Serial.printf_P(PSTR("Прожектор: %s. Вкл - %s:%s. Выкл - %s:%s. Состояние: %s. Доступен к использованию: %s\n"),
-                        String(leds[index].led.russianName).c_str(), String(leds[index].led.HOn).c_str(),
-                        String(leds[index].led.MOn).c_str(), String(leds[index].led.HOff).c_str(),
-                        String(leds[index].led.MOff).c_str(), ((leds[index].led.currentState == true) ? "включен" : "выключен"),
+        Serial.printf_P(PSTR("Прожектор: %s. Вкл-%02d:%02d. Выкл-%02d:%02d. Состояние: %s. Доступен к использованию: %s\n"),
+                        String(leds[index].led.russianName).c_str(), leds[index].led.HOn, leds[index].led.MOn, leds[index].led.HOff,
+                        leds[index].led.MOff, ((leds[index].led.currentState == true) ? "включен" : "выключен"),
                         ((leds[index].led.enabled == true) ? "да" : "нет")
 
         );
@@ -345,8 +345,7 @@ void setLEDTime(ledPosition position) {
         }
     }
     if (found) {
-        if (Firebase.getJSON(firebaseData, "Light/" + ledPath)) {
-            Serial.println("DataType is " + firebaseData.dataType());
+        if (Firebase.getJSON(firebaseData, pathLight + ledPath)) {
             if (firebaseData.dataType() == "json") {
                 String jsonData = "";
                 FirebaseJsonObject jsonParseResult;
@@ -356,7 +355,7 @@ void setLEDTime(ledPosition position) {
                 json.setJsonData(jsonData);
                 json.parse();
                 size_t count = json.getJsonObjectIteratorCount();
-                Serial.printf_P(PSTR("Count of objects: %s\n"), String(count).c_str());
+                Serial.printf_P(PSTR("Количество объектов: %d\n"), count);
                 String key, value;
                 std::vector<String> vectorString;
                 for (size_t i = 0; i < count; i++) {
@@ -386,7 +385,7 @@ void setLEDTime(ledPosition position) {
                     if (key == "state") {
                         leds[index].led.currentState = jsonParseResult.boolValue;
                     }
-                    Serial.printf_P(PSTR("KEY: %s, VALUE:%s, TYPE:%s\n"), key.c_str(), value.c_str(), jsonParseResult.type.c_str());
+                    Serial.printf_P(PSTR("Key: %s, value:%s, type:%s\n"), key.c_str(), value.c_str(), jsonParseResult.type.c_str());
                 }
                 leds[index].led.off =
                     Alarm.alarmRepeat(leds[index].led.HOff, leds[index].led.MOff, 0, ledOffHandler, leds[index].led.pin);
@@ -407,7 +406,6 @@ void readOptionsFirebase() {
     setLEDTime(LEFT);
     setLEDTime(CENTER);
     setLEDTime(RIGHT);
-    // todo
 };
 //Сохранение показаний датчиков температуры
 void writeOnlineTemperature() {
@@ -419,7 +417,7 @@ void writeOnlineTemperature() {
             .addDouble("temp2", temp2)
             .addString("DateTime", String(clockRTC.dateFormat("H:i:s d.m.Y", dt)));
 
-        if (Firebase.setJSON(firebaseData, "OnlineJSON", json)) {
+        if (Firebase.setJSON(firebaseData, pathOnline, json)) {
             Serial.printf_P(PSTR("Успешно\n"));
         } else {
             Serial.printf_P(PSTR("\nОшибка: %s\n"), firebaseData.errorReason().c_str());
