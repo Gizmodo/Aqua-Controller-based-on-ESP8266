@@ -9,3 +9,4 @@ ColumnLimit: '132'
 IndentWidth: '4'
 Language: 'Cpp'
 NamespaceIndentation: None
+MaxEmptyLinesToKeep: '1'

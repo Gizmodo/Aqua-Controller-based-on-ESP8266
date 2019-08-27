@@ -90,7 +90,7 @@ typedef struct {
     ledStruct led;
 } ledDescription;
 ledDescription leds[3];
-
+void checkUpdateSettings();
 float DS18B20(byte* adres) {
     unsigned int raw;
     ds.reset();
@@ -123,9 +123,11 @@ void getTemperature() {
 void clearAlarms() {
     uint8_t countAlarms = Alarm.count();
     for (size_t i = 0; i < countAlarms; i++) {
+        Alarm.disable(i);
         Alarm.free(i);
     }
 }
+
 void uptime() {
     if (lastmillis + 60000 < millis()) {
         lastmillis = millis();
@@ -441,62 +443,6 @@ void writeOnlineTemperature() {
     }
 }
 
-//Сохрнение температур в журанал и в мгновенные значения
-void fiveMinuteTimer() {
-    getTemperature();
-    writeOnlineTemperature();
-    /* saveTemps();
-     if (getFlagRereadSettings()) {
-       clearAlarms();
-       LoadVariables();
-       DPRINTLN("Alarms count = " + String(Alarm.count()));
-       Firebase.setBool("UpdateSettings", false);
-       if (isFailed) {
-         DPRINTLN("Error while setting UpdateSettings");
-         DPRINTLN(Firebase.error());
-       }
-     }
-     if (getFlagTimeSync()) {
-       udp.begin(localPort);
-       oldloop();                  // синхронизируем время
-       
-        // clearAlarms();
-       //  LoadVariables();
-       //  DPRINTLN("Alarms count = " + String(Alarm.count()));
-       
-       Firebase.setBool("TimeSync", false);
-       if (isFailed) {
-         DPRINTLN("Error while setting TimeSync");
-         DPRINTLN(Firebase.error());
-       }
-     }
-     */
-}
-void checkUpdateSettings() {
-    FirebaseData data;
-    if (Firebase.getBool(data, pathUpdateSettings)) {
-        if (data.dataType() == "boolean") {
-            if (data.boolData()) {
-                Serial.printf_P(PSTR("Запрос на обновление всех настроек!!!\n"));
-                // TODO Add payload
-                if (!Firebase.setBool(data, pathUpdateSettings, false)) {
-                    Serial.printf_P(PSTR("Не удалось вернуть флаг UpdateSettings: %s\n"), data.errorReason().c_str());
-                }
-            }
-        } else {
-            Serial.printf_P(PSTR("UpdateSettings не boolean\n"));
-        }
-    } else {
-        Serial.printf_P(PSTR("Ошибка: %s\n"), data.errorReason().c_str());
-    }
-}
-void oneMinuteTimer() {
-    Serial.println(String(clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime())));
-    uptime();
-    getTemperature();
-    checkUpdateSettings();
-}
-
 void setClock() {
     configTime(3 * 3600, 0, "pool.ntp.org", "time.nist.gov");
     time_t now = time(nullptr);
@@ -512,6 +458,42 @@ void setClock() {
     gmtime_r(&now, &timeinfo);
 }
 
+void fiveMinuteTimer() {
+    getTemperature();
+    writeOnlineTemperature();
+}
+void oneMinuteTimer() {
+    Serial.println(String(clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime())));
+    uptime();
+    getTemperature();
+    checkUpdateSettings();
+}
+void startMainTimers() {
+    Serial.printf_P(PSTR("Количество таймеров до: %d\n"), Alarm.count());
+    Alarm.timerRepeat(5 * 60, fiveMinuteTimer);  // сохраняем температуру в Firebase/EEPROM
+    Alarm.timerRepeat(60, oneMinuteTimer);       // вывод uptime и тмемпературу каждую минуту
+    Serial.printf_P(PSTR("Количество таймеров после: %d\n"), Alarm.count());
+}
+void checkUpdateSettings() {
+    FirebaseData data;
+    if (Firebase.getBool(data, pathUpdateSettings)) {
+        if (data.dataType() == "boolean") {
+            if (data.boolData()) {
+                Serial.printf_P(PSTR("Запрос на обновление всех настроек!!!\n"));
+                clearAlarms();
+                readOptionsFirebase();
+              //  startMainTimers();
+                if (!Firebase.setBool(data, pathUpdateSettings, false)) {
+                    Serial.printf_P(PSTR("Не удалось вернуть флаг UpdateSettings: %s\n"), data.errorReason().c_str());
+                }
+            }
+        } else {
+            Serial.printf_P(PSTR("UpdateSettings не boolean\n"));
+        }
+    } else {
+        Serial.printf_P(PSTR("Ошибка: %s\n"), data.errorReason().c_str());
+    }
+}
 void setup() {
     Serial.begin(115200);
     Serial.println();
@@ -548,10 +530,7 @@ void setup() {
         readOptionsFirebase();
         printAllLedsTime();
     }
-    Serial.printf_P(PSTR("Количество таймеров до: %d\n"), Alarm.count());
-    Alarm.timerRepeat(5 * 60, fiveMinuteTimer);  // сохраняем температуру в Firebase/EEPROM
-    Alarm.timerRepeat(60, oneMinuteTimer);       // вывод uptime и тмемпературу каждую минуту
-    Serial.printf_P(PSTR("Количество таймеров после: %d\n"), Alarm.count());
+    startMainTimers();
     fiveMinuteTimer();
 }
 
