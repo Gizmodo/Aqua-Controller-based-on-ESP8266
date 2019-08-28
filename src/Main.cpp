@@ -60,9 +60,10 @@ WiFiUDP udp;
 
 unsigned long sendDataPrevMillis = 0;
 
-String path = "/ESP8266_Test/Stream";
 String pathLight = "Light/";
-String pathOnline = "OnlineJSON/";
+String pathTemperatureOnline = "Temperature/Online/";
+String pathTemperatureHistory = "Temperature/History/";
+
 String pathUpdateSettings = "UpdateSettings";
 
 OneWire ds(ONE_WIRE_BUS);
@@ -420,7 +421,7 @@ void writeOnlineTemperature() {
             .addDouble("temp2", temp2)
             .addString("DateTime", String(clockRTC.dateFormat("H:i:s d.m.Y", dt)));
 
-        if (Firebase.setJSON(firebaseData, pathOnline, json)) {
+        if (Firebase.setJSON(firebaseData, pathTemperatureOnline, json)) {
             Serial.printf_P(PSTR("Успешно\n"));
         } else {
             Serial.printf_P(PSTR("\nОшибка: %s\n"), firebaseData.errorReason().c_str());
@@ -433,7 +434,7 @@ void writeOnlineTemperature() {
             .addDouble("temp2", temp2)
             .addString("DateTime", String(clockRTC.dateFormat("H:i:s", clockRTC.getDateTime())));
 
-        if (Firebase.pushJSON(firebaseData, "History/Temperature/" + deviceDateKey, json)) {
+        if (Firebase.pushJSON(firebaseData, pathTemperatureHistory + deviceDateKey, json)) {
             Serial.printf_P(PSTR("Успешно\n"));
         } else {
             Serial.printf_P(PSTR("\nОшибка: %s\n"), firebaseData.errorReason().c_str());
