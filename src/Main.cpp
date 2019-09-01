@@ -41,7 +41,7 @@ DS3231 clockRTC;
 RTCDateTime dt;
 RtcDS3231 rtc;
 
-const char* WiFi_hostname = "ESP8266-0";
+const char* WiFi_hostname = "ESP8266";
 IPAddress timeServerIP;
 const char* ntpServerName = "pool.ntp.org";
 const int NTP_PACKET_SIZE = 48;
@@ -483,7 +483,7 @@ void checkUpdateSettings() {
                 Serial.printf_P(PSTR("Запрос на обновление всех настроек!!!\n"));
                 clearAlarms();
                 readOptionsFirebase();
-              //  startMainTimers();
+                //  startMainTimers();
                 if (!Firebase.setBool(data, pathUpdateSettings, false)) {
                     Serial.printf_P(PSTR("Не удалось вернуть флаг UpdateSettings: %s\n"), data.errorReason().c_str());
                 }
@@ -524,6 +524,7 @@ void setup() {
     } else {
         Serial.printf_P(PSTR("Успешное подключение к WiFi: %s\n"), WIFI_SSID);
         Serial.println("IP адрес: " + WiFi.localIP().toString() + "\n");
+        WiFi.hostname(WiFi_hostname);
         setClock();
         Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
         Firebase.reconnectWiFi(true);
