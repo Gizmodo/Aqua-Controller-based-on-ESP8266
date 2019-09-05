@@ -1,15 +1,14 @@
-#include <DS3231.h>  //Время
 #include <ESP8266WiFi.h>
 #include <FirebaseESP8266.h>
 #include <OneWire.h>
 #include <Wire.h>
+#include "DS3231.h"  //Время
 
-#include <RtcDS3231.h>
-#include <Ticker.h>
 #include <WiFiUdp.h>
-#include <uEEPROMLib.h>
 #include "EEPROMAnything.h"
+#include "RtcDS3231.h"
 #include "TimeAlarms.h"
+#include "uEEPROMLib.h"
 
 #define FIREBASE_HOST "aqua-3006a.firebaseio.com"
 #define FIREBASE_AUTH "eRxKqsNsandXnfrDtd3wjGMHMc05nUeo5yeKmuni"
@@ -25,7 +24,7 @@
 //Указанное кол-во надо увеличить в случае появления нового расписания для нового устройства, например, дозаторы, CO2, нагреватель и
 //прочие устройства которые будут запланированы на включение или выключение
 //----------------------------------------------------------------------------------
-uint8_t wifiMaxTry = 5;  //Попытки подключения к сети
+uint8_t wifiMaxTry = 10;  //Попытки подключения к сети
 uint8_t wifiConnectCount = 0;
 
 // uEEPROMLib eeprom;
@@ -40,7 +39,7 @@ int upD = 0;
 DS3231 clockRTC;
 RTCDateTime dt;
 RtcDS3231 rtc;
-
+bool shouldUpdateFlag = false;
 const char* WiFi_hostname = "ESP8266";
 IPAddress timeServerIP;
 const char* ntpServerName = "pool.ntp.org";
@@ -122,10 +121,12 @@ void getTemperature() {
     Serial.printf_P(PSTR("Датчик температуры 2: %s\n"), String(temp2).c_str());
 }
 void clearAlarms() {
-    uint8_t countAlarms = Alarm.count();
-    for (size_t i = 0; i < countAlarms; i++) {
-        Alarm.disable(i);
-        Alarm.free(i);
+    uint8_t ledsCount(sizeof(leds) / sizeof(*leds));
+    for (size_t i = 0; i < ledsCount; i++) {
+        Alarm.disable(leds[i].led.off);
+        Alarm.disable(leds[i].led.on);
+        Alarm.free(leds[i].led.off);
+        Alarm.free(leds[i].led.on);
     }
 }
 
@@ -315,12 +316,12 @@ void printLEDTime(ledPosition position) {
         }
     }
     if (!found) {
-        Serial.println("Not found led!!!");
+        Serial.println("Лампа не найдена!!!");
     } else {
-        Serial.printf_P(PSTR("Прожектор: %s. Вкл-%02d:%02d. Выкл-%02d:%02d. Состояние: %s. Доступен к использованию: %s\n"),
+        Serial.printf_P(PSTR("Прожектор: %s. Вкл-%02d:%02d. Выкл-%02d:%02d. Состояние: %s. Доступен к использованию: %s. PIN: %d\n"),
                         String(leds[index].led.russianName).c_str(), leds[index].led.HOn, leds[index].led.MOn, leds[index].led.HOff,
                         leds[index].led.MOff, ((leds[index].led.currentState == true) ? "включен" : "выключен"),
-                        ((leds[index].led.enabled == true) ? "да" : "нет")
+                        ((leds[index].led.enabled == true) ? "да" : "нет"), leds[index].led.pin
 
         );
     }
@@ -354,12 +355,10 @@ void setLEDTime(ledPosition position) {
                 String jsonData = "";
                 FirebaseJsonObject jsonParseResult;
                 jsonData = firebaseData.jsonData();
-                Serial.println(jsonData);
                 json.clear();
                 json.setJsonData(jsonData);
                 json.parse();
                 size_t count = json.getJsonObjectIteratorCount();
-                Serial.printf_P(PSTR("Количество объектов: %d\n"), count);
                 String key, value;
                 std::vector<String> vectorString;
                 for (size_t i = 0; i < count; i++) {
@@ -389,7 +388,8 @@ void setLEDTime(ledPosition position) {
                     if (key == "state") {
                         leds[index].led.currentState = jsonParseResult.boolValue;
                     }
-                    Serial.printf_P(PSTR("Key: %s, value:%s, type:%s\n"), key.c_str(), value.c_str(), jsonParseResult.type.c_str());
+                    //    Serial.printf_P(PSTR("Key: %s, value:%s, type:%s\n"), key.c_str(), value.c_str(),
+                    //    jsonParseResult.type.c_str());
                 }
                 leds[index].led.off =
                     Alarm.alarmRepeat(leds[index].led.HOff, leds[index].led.MOff, 0, ledOffHandler, leds[index].led.pin);
@@ -404,6 +404,7 @@ void setLEDTime(ledPosition position) {
     } else {
         Serial.println("Not found led!!!");
     }
+    json.clear();
 }
 void readOptionsFirebase() {
     Serial.printf_P(PSTR("Загрузка настроек из Firebase\n"));
@@ -459,20 +460,25 @@ void setClock() {
     gmtime_r(&now, &timeinfo);
 }
 
-void fiveMinuteTimer() {
+void Timer5Min() {
     getTemperature();
     writeOnlineTemperature();
 }
-void oneMinuteTimer() {
+void Timer1Min() {
     Serial.println(String(clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime())));
     uptime();
     getTemperature();
     checkUpdateSettings();
+    if (shouldUpdateFlag) {
+        readOptionsFirebase();
+        printAllLedsTime();
+        shouldUpdateFlag = false;
+    }
 }
 void startMainTimers() {
     Serial.printf_P(PSTR("Количество таймеров до: %d\n"), Alarm.count());
-    Alarm.timerRepeat(5 * 60, fiveMinuteTimer);  // сохраняем температуру в Firebase/EEPROM
-    Alarm.timerRepeat(60, oneMinuteTimer);       // вывод uptime и тмемпературу каждую минуту
+    Alarm.timerRepeat(5 * 60, Timer5Min);  // сохраняем температуру в Firebase/EEPROM
+    Alarm.timerRepeat(20, Timer1Min);      // вывод uptime и тмемпературу каждую минуту
     Serial.printf_P(PSTR("Количество таймеров после: %d\n"), Alarm.count());
 }
 void checkUpdateSettings() {
@@ -481,9 +487,8 @@ void checkUpdateSettings() {
         if (data.dataType() == "boolean") {
             if (data.boolData()) {
                 Serial.printf_P(PSTR("Запрос на обновление всех настроек!!!\n"));
+                shouldUpdateFlag = true;
                 clearAlarms();
-                readOptionsFirebase();
-                //  startMainTimers();
                 if (!Firebase.setBool(data, pathUpdateSettings, false)) {
                     Serial.printf_P(PSTR("Не удалось вернуть флаг UpdateSettings: %s\n"), data.errorReason().c_str());
                 }
@@ -518,8 +523,8 @@ void setup() {
     }
 
     if (WiFi.status() != WL_CONNECTED) {
-        wifiConnectCount = 5;
-        Serial.printf_P(PSTR("Не удалось подключиться к WiFi: %s"), WIFI_SSID);
+        wifiConnectCount = wifiConnectCount;
+        Serial.printf_P(PSTR("Не удалось подключиться к WiFi: %s\n"), WIFI_SSID);
         readOptionsEEPROM();
     } else {
         Serial.printf_P(PSTR("Успешное подключение к WiFi: %s\n"), WIFI_SSID);
@@ -533,7 +538,7 @@ void setup() {
         printAllLedsTime();
     }
     startMainTimers();
-    fiveMinuteTimer();
+    Timer5Min();
 }
 
 void loop() {
