@@ -30,19 +30,19 @@
 #define isleap(y) ((((y) % 4) == 0 && ((y) % 100) != 0) || ((y) % 400) == 0)
 
 /* Useful Macros for getting elapsed time */
-#define numberOfSeconds(_time_) (_time_ % SECS_PER_MIN)
-#define numberOfMinutes(_time_) ((_time_ / SECS_PER_MIN) % SECS_PER_MIN)
-#define numberOfHours(_time_) ((_time_ % SECS_PER_DAY) / SECS_PER_HOUR)
-#define dayOfWeek(_time_) (((_time_ / SECS_PER_DAY + 4) % DAYS_PER_WEEK) + 1)  // 1 = Sunday
-#define elapsedDays(_time_) (_time_ / SECS_PER_DAY)                            // this is number of days since Jan 1 1970
-#define elapsedSecsToday(_time_) (_time_ % SECS_PER_DAY)                       // the number of seconds since last midnight
+#define numberOfSeconds(_time_) ((_time_) % SECS_PER_MIN)
+#define numberOfMinutes(_time_) (((_time_) / SECS_PER_MIN) % SECS_PER_MIN)
+#define numberOfHours(_time_) (((_time_) % SECS_PER_DAY) / SECS_PER_HOUR)
+#define dayOfWeek(_time_) ((((_time_) / SECS_PER_DAY + 4) % DAYS_PER_WEEK) + 1)  // 1 = Sunday
+#define elapsedDays(_time_) ((_time_) / SECS_PER_DAY)                            // this is number of days since Jan 1 1970
+#define elapsedSecsToday(_time_) ((_time_) % SECS_PER_DAY)                       // the number of seconds since last midnight
 // The following macros are used in calculating alarms and assume the clock is set to a date later than Jan 1 1971
 // Always set the correct time before settting alarms
-#define previousMidnight(_time_) ((_time_ / SECS_PER_DAY) * SECS_PER_DAY)  // time at the start of the given day
+#define previousMidnight(_time_) (((_time_) / SECS_PER_DAY) * SECS_PER_DAY)  // time at the start of the given day
 #define nextMidnight(_time_) (previousMidnight(_time_) + SECS_PER_DAY)     // time at the end of the given day
 #define elapsedSecsThisWeek(_time_) \
     (elapsedSecsToday(_time_) + ((dayOfWeek(_time_) - 1) * SECS_PER_DAY))  // note that week starts on day 1
-#define previousSunday(_time_) (_time_ - elapsedSecsThisWeek(_time_))      // time at the start of the week for the given time
+#define previousSunday(_time_) ((_time_) - elapsedSecsThisWeek(_time_))      // time at the start of the week for the given time
 #define nextSunday(_time_) (previousSunday(_time_) + SECS_PER_WEEK)        // time at the end of the week for the given time
 
 static const int year_lengths[2] = {365, 366};
@@ -56,8 +56,8 @@ typedef struct {
     // biweekly/semimonthly/monthly/annual)
     // note that the current API only supports daily
     // or weekly alarm periods
-    uint8_t isEnabled : 1;  // the timer is only actioned if isEnabled is true
-    uint8_t isOneShot : 1;  // the timer will be de-allocated after trigger is processed
+    bool isEnabled : 1;  // the timer is only actioned if isEnabled is true
+    bool isOneShot : 1;  // the timer will be de-allocated after trigger is processed
 } AlarmMode_t;
 
 // new time based alarms should be added just before dtLastAlarmType
@@ -71,15 +71,15 @@ typedef enum {
 } dtAlarmPeriod_t;  // in future: dtBiweekly, dtMonthly, dtAnnual
 
 // macro to return true if the given type is a time based alarm, false if timer or not allocated
-#define dtIsAlarm(_type_) (_type_ >= dtExplicitAlarm && _type_ < dtLastAlarmType)
-#define dtUseAbsoluteValue(_type_) (_type_ == dtTimer || _type_ == dtExplicitAlarm)
+#define dtIsAlarm(_type_) ((_type_) >= dtExplicitAlarm && (_type_) < dtLastAlarmType)
+#define dtUseAbsoluteValue(_type_) ((_type_) == dtTimer || (_type_) == dtExplicitAlarm)
 
 typedef uint8_t AlarmID_t;
 typedef AlarmID_t AlarmId;  // Arduino friendly name
 
 #define dtINVALID_ALARM_ID 255
 #define dtINVALID_TIME (time_t)(-1)
-#define AlarmHMS(_hr_, _min_, _sec_) (_hr_ * SECS_PER_HOUR + _min_ * SECS_PER_MIN + _sec_)
+#define AlarmHMS(_hr_, _min_, _sec_) ((_hr_) * SECS_PER_HOUR + (_min_) * SECS_PER_MIN + (_sec_))
 
 #ifdef ARDUINO_ARCH_ESP8266
 #include <functional>
@@ -108,10 +108,10 @@ class TimeAlarmsClass {
    private:
     AlarmClass Alarm[dtNBR_ALARMS];
     void serviceAlarms();
-    uint8_t isServicing;
+    bool isServicing;
     uint8_t servicedAlarmId;  // the alarm currently being serviced
-    AlarmID_t create(time_t value, OnTick_t onTickHandler, uint8_t isOneShot, dtAlarmPeriod_t alarmType);
-    AlarmID_t createbyte(time_t value, OnTickByte_t onTickByteHandler, uint8_t isOneShot, dtAlarmPeriod_t alarmType, byte param);
+    AlarmID_t create(time_t value, OnTick_t onTickHandler, bool isOneShot, dtAlarmPeriod_t alarmType);
+    AlarmID_t createbyte(time_t value, OnTickByte_t onTickByteHandler, bool isOneShot, dtAlarmPeriod_t alarmType, byte param);
 
    public:
     TimeAlarmsClass();

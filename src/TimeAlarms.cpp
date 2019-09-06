@@ -27,10 +27,11 @@
 //* Alarm Class Constructor
 
 AlarmClass::AlarmClass() {
-    Mode.isEnabled = Mode.isOneShot = 0;
+    Mode.isEnabled = Mode.isOneShot = false;
     Mode.alarmType = dtNotAllocated;
     value = nextTrigger = 0;
     onTickHandler = NULL;  // prevent a callback until this pointer is explicitly set
+    onTickByteHandler = NULL;  // prevent a callback until this pointer is explicitly set
 }
 
 //**************************************************************
@@ -270,7 +271,7 @@ time_t TimeAlarmsClass::getNextTrigger(AlarmID_t ID) {
     }
 }
 // attempt to create an alarm and return true if successful
-AlarmID_t TimeAlarmsClass::create(time_t value, OnTick_t onTickHandler, uint8_t isOneShot, dtAlarmPeriod_t alarmType) {
+AlarmID_t TimeAlarmsClass::create(time_t value, OnTick_t onTickHandler, bool isOneShot, dtAlarmPeriod_t alarmType) {
     time_t now = time(nullptr);
     if (!((dtIsAlarm(alarmType) && now < SECS_PER_YEAR) || (dtUseAbsoluteValue(alarmType) && (value == 0)))) {
         // only create alarm ids if the time is at least Jan 1 1971
@@ -291,7 +292,7 @@ AlarmID_t TimeAlarmsClass::create(time_t value, OnTick_t onTickHandler, uint8_t 
 
 AlarmID_t TimeAlarmsClass::createbyte(time_t value,
                                       OnTickByte_t onTickByteHandler,
-                                      uint8_t isOneShot,
+                                      bool isOneShot,
                                       dtAlarmPeriod_t alarmType,
                                       byte param) {
     time_t now = time(nullptr);
