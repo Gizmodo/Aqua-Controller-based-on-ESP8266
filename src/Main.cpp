@@ -318,10 +318,11 @@ void printLEDTime(ledPosition position) {
     if (!found) {
         Serial.println("Прожектор не найден!!!");
     } else {
-        Serial.printf_P(PSTR("Прожектор: %s. Вкл-%02d:%02d. Выкл-%02d:%02d. Состояние: %s. Доступен к использованию: %s. PIN: %d\n"),
-                        String(leds[index].led.russianName).c_str(), leds[index].led.HOn, leds[index].led.MOn, leds[index].led.HOff,
-                        leds[index].led.MOff, ((leds[index].led.currentState == true) ? "включен" : "выключен"),
-                        ((leds[index].led.enabled == true) ? "да" : "нет"), leds[index].led.pin
+        Serial.printf_P(
+            PSTR("Прожектор: %s. Вкл-%02d:%02d. Выкл-%02d:%02d. Состояние: %s. Доступен к использованию: %s. PIN: %d\n"),
+            String(leds[index].led.russianName).c_str(), leds[index].led.HOn, leds[index].led.MOn, leds[index].led.HOff,
+            leds[index].led.MOff, ((leds[index].led.currentState == true) ? "включен" : "выключен"),
+            ((leds[index].led.enabled == true) ? "да" : "нет"), leds[index].led.pin
 
         );
     }
@@ -524,7 +525,7 @@ void setup() {
     }
 
     if (WiFi.status() != WL_CONNECTED) {
-        wifiConnectCount = wifiConnectCount;
+        wifiConnectCount = 0;
         Serial.printf_P(PSTR("Не удалось подключиться к WiFi: %s\n"), WIFI_SSID);
         readOptionsEEPROM();
     } else {
