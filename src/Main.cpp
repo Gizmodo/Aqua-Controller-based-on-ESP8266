@@ -316,7 +316,7 @@ void printLEDTime(ledPosition position) {
         }
     }
     if (!found) {
-        Serial.println("Лампа не найдена!!!");
+        Serial.println("Прожектор не найден!!!");
     } else {
         Serial.printf_P(PSTR("Прожектор: %s. Вкл-%02d:%02d. Выкл-%02d:%02d. Состояние: %s. Доступен к использованию: %s. PIN: %d\n"),
                         String(leds[index].led.russianName).c_str(), leds[index].led.HOn, leds[index].led.MOn, leds[index].led.HOff,
@@ -471,6 +471,7 @@ void Timer1Min() {
     checkUpdateSettings();
     if (shouldUpdateFlag) {
         readOptionsFirebase();
+        clearAlarms();
         printAllLedsTime();
         shouldUpdateFlag = false;
     }
