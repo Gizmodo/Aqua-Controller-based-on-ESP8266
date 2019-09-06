@@ -170,7 +170,7 @@ void eeprom_test() {
     // too logng for AVR 16 bits!
     int inttmp = 24543557;
 #endif
-    float floattmp = 3.1416;
+    float floattmp = 2.4687;
     char chartmp = 'A';
 
     char string[17] = "ForoElectro.Net\0";
@@ -282,7 +282,7 @@ void syncTime() {
         Serial.printf_P(PSTR("NTP эпоха: %d\n"), epoch);
 
         if (abs(rtcEpoch - epoch) > 2) {
-            Serial.printf_P(PSTR("Обновляем RTC (разница между эпохами = "));
+            Serial.printf_P(PSTR("%s"), "Обновляем RTC (разница между эпохами = ");
             if ((rtcEpoch - epoch) > 10000) {
                 Serial.printf_P(PSTR("%s\n"), abs(epoch - rtcEpoch));
             } else {
@@ -290,13 +290,13 @@ void syncTime() {
             }
             rtc.setEpoch(epoch);
         } else {
-            Serial.printf_P(PSTR("Дата и время RTC не требуют синхронизации\n"));
+            Serial.printf_P(PSTR("%s\n"), "Дата и время RTC не требуют синхронизации");
         }
     }
 }
 
 void readOptionsEEPROM() {
-    Serial.printf_P(PSTR("Загрузка настроек из внутренней памяти\n"));
+    Serial.printf_P(PSTR("%s\n"), "Загрузка настроек из внутренней памяти");
     // todo
 };
 void ledOnHandler(byte pin) {
@@ -328,7 +328,7 @@ void printLEDTime(ledPosition position) {
     }
 }
 void printAllLedsTime() {
-    Serial.printf_P(PSTR("Отображение текущих настроек всех прожекторов\n"));
+    Serial.printf_P(PSTR("%s\n"), "Отображение текущих настроек всех прожекторов");
     printLEDTime(LEFT);
     printLEDTime(CENTER);
     printLEDTime(RIGHT);
@@ -408,7 +408,7 @@ void setLEDTime(ledPosition position) {
     json.clear();
 }
 void readOptionsFirebase() {
-    Serial.printf_P(PSTR("Загрузка настроек из Firebase\n"));
+    Serial.printf_P(PSTR("%s\n"), "Загрузка настроек из Firebase");
     setLEDTime(LEFT);
     setLEDTime(CENTER);
     setLEDTime(RIGHT);
@@ -418,18 +418,18 @@ void writeOnlineTemperature() {
     if (WiFi.isConnected()) {
         FirebaseData firebaseData;
         FirebaseJson json;
-        Serial.printf_P(PSTR("Сохраняем в Firebase текущее показание температурных датчиков: "));
+        Serial.printf_P(PSTR("%s"), "Сохраняем в Firebase текущее показание температурных датчиков: ");
         json.addDouble("temp1", temp1)
             .addDouble("temp2", temp2)
             .addString("DateTime", String(clockRTC.dateFormat("H:i:s d.m.Y", dt)));
 
         if (Firebase.setJSON(firebaseData, pathTemperatureOnline, json)) {
-            Serial.printf_P(PSTR("Успешно\n"));
+            Serial.printf_P(PSTR("%s\n"), "Успешно");
         } else {
             Serial.printf_P(PSTR("\nОшибка: %s\n"), firebaseData.errorReason().c_str());
         }
 
-        Serial.printf_P(PSTR("Сохраняем в журнал Firebase текущее показание температурных датчиков: "));
+        Serial.printf_P(PSTR("%s"), "Сохраняем в журнал Firebase текущее показание температурных датчиков: ");
         String deviceDateKey = clockRTC.dateFormat("Y-m-d", clockRTC.getDateTime());
         json.clear();
         json.addDouble("temp1", temp1)
@@ -437,12 +437,12 @@ void writeOnlineTemperature() {
             .addString("DateTime", String(clockRTC.dateFormat("H:i:s", clockRTC.getDateTime())));
 
         if (Firebase.pushJSON(firebaseData, pathTemperatureHistory + deviceDateKey, json)) {
-            Serial.printf_P(PSTR("Успешно\n"));
+            Serial.printf_P(PSTR("%s\n"), "Успешно");
         } else {
-            Serial.printf_P(PSTR("\nОшибка: %s\n"), firebaseData.errorReason().c_str());
+            Serial.printf_P(PSTR("\n%s %s\n"), "Ошибка:", firebaseData.errorReason().c_str());
         }
     } else {
-        Serial.printf_P(PSTR("Сохраняем в EEPROM\n"));
+        Serial.printf_P(PSTR("%s\n"), "Сохраняем в EEPROM");
     }
 }
 
@@ -478,25 +478,25 @@ void Timer1Min() {
     }
 }
 void startMainTimers() {
-    Serial.printf_P(PSTR("Количество таймеров до: %d\n"), Alarm.count());
+    Serial.printf_P(PSTR("%s: %d\n"), "Количество таймеров до", Alarm.count());
     Alarm.timerRepeat(5 * 60, Timer5Min);  // сохраняем температуру в Firebase/EEPROM
     Alarm.timerRepeat(20, Timer1Min);      // вывод uptime и тмемпературу каждую минуту
-    Serial.printf_P(PSTR("Количество таймеров после: %d\n"), Alarm.count());
+    Serial.printf_P(PSTR("%s: %d\n"), "Количество таймеров после", Alarm.count());
 }
 void checkUpdateSettings() {
     FirebaseData data;
     if (Firebase.getBool(data, pathUpdateSettings)) {
         if (data.dataType() == "boolean") {
             if (data.boolData()) {
-                Serial.printf_P(PSTR("Запрос на обновление всех настроек!!!\n"));
+                Serial.printf_P(PSTR("%s\n"), "Запрос на обновление всех настроек!!!");
                 shouldUpdateFlag = true;
                 clearAlarms();
                 if (!Firebase.setBool(data, pathUpdateSettings, false)) {
-                    Serial.printf_P(PSTR("Не удалось вернуть флаг UpdateSettings: %s\n"), data.errorReason().c_str());
+                    Serial.printf_P(PSTR("%s: %s\n"), "Не удалось вернуть флаг UpdateSettings", data.errorReason().c_str());
                 }
             }
         } else {
-            Serial.printf_P(PSTR("UpdateSettings не boolean\n"));
+            Serial.printf_P(PSTR("%s\n"), "UpdateSettings не boolean");
         }
     } else {
         Serial.printf_P(PSTR("Ошибка: %s\n"), data.errorReason().c_str());
@@ -513,24 +513,22 @@ void setup() {
     lastmillis = millis();
 
     // eeprom_test();
-    Serial.printf_P(PSTR("Подключение к WiFi: %s\n"), WIFI_SSID);
+    Serial.printf_P(PSTR("%s: %s\n"), "Подключение к WiFi", WIFI_SSID);
     WiFi.mode(WIFI_STA);
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
     while ((WiFi.status() != WL_CONNECTED) && (wifiConnectCount != wifiMaxTry)) {
-        Serial.printf_P(PSTR("."));
+        Serial.printf_P(PSTR("%s\n"), ".");
         delay(1000);
-        Serial.printf_P(PSTR("\n"));
         wifiConnectCount++;
     }
 
     if (WiFi.status() != WL_CONNECTED) {
         wifiConnectCount = 0;
-        Serial.printf_P(PSTR("Не удалось подключиться к WiFi: %s\n"), WIFI_SSID);
+        Serial.printf_P(PSTR("%s: %s\n"), "Не удалось подключиться к WiFi", WIFI_SSID);
         readOptionsEEPROM();
     } else {
-        Serial.printf_P(PSTR("Успешное подключение к WiFi: %s\n"), WIFI_SSID);
-        Serial.println("IP адрес: " + WiFi.localIP().toString() + "\n");
+        Serial.printf_P(PSTR("%s: %s IP:%s\n"), "Успешное подключение к WiFi", WIFI_SSID, WiFi.localIP().toString().c_str());
         WiFi.hostname(WiFi_hostname);
         setClock();
         Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
