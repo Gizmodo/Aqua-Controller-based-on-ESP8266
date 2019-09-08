@@ -1,5 +1,5 @@
 #include <Arduino.h>  // for type definitions
-#include <EEPROM.h>
+/*#include <EEPROM.h>
 
 template <class T>
 int EEPROM_writeAnything(int ee, const T& value) {
@@ -18,6 +18,7 @@ int EEPROM_readAnything(int ee, T& value) {
         *p++ = EEPROM.read(ee++);
     return i;
 }
+*/
 std::vector<String> splitStringToVector(const String& msg) {
     std::vector<String> subStrings;
     uint32_t j = 0;

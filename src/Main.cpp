@@ -1,10 +1,10 @@
 #include <ESP8266WiFi.h>
 #include <FirebaseESP8266.h>
 #include <OneWire.h>
-#include <Wire.h>
-#include "DS3231.h"  //Время
-
 #include <WiFiUdp.h>
+#include <EEPROM.h>
+//#include <Wire.h>
+#include "DS3231.h"  //Время
 #include "EEPROMAnything.h"
 #include "RtcDS3231.h"
 #include "TimeAlarms.h"
@@ -14,7 +14,8 @@
 #define FIREBASE_AUTH "eRxKqsNsandXnfrDtd3wjGMHMc05nUeo5yeKmuni"
 
 #define WIFI_SSID "MikroTik"
-#define WIFI_PASSWORD "11111111"
+#define WIFI_PASSWORD "123"
+#define WIFI_PASSWORD2 "11111111"
 
 #define GMT 3
 
@@ -30,6 +31,7 @@ uint8_t wifiConnectCount = 0;
 // uEEPROMLib eeprom;
 uEEPROMLib eeprom(0x57);
 unsigned int pos;
+const uint16_t StartAddress = 16;
 
 uint32_t count = 0;
 unsigned long lastmillis;
@@ -84,12 +86,46 @@ struct ledStruct {
     uint8_t pin;
     String russianName;
 };
-typedef struct {
+typedef struct : public Printable {
     ledPosition position;
     String name;
     ledStruct led;
+
+    size_t printTo(Print& p) const {
+        size_t res = p.print(".position=") + p.println(position);
+        res += p.print(".Name") + p.println(name);
+        res += p.print(".Hon") + p.println(led.HOn);
+        res += p.print(".Mon") + p.println(led.MOn);
+        res += p.print(".HOff") + p.println(led.HOff);
+        res += p.print(".MOff") + p.println(led.MOff);
+        res += p.print(".Enabled") + p.println(led.enabled);
+        res += p.print(".CurrentState") + p.println(led.currentState);
+        res += p.print(".Pin") + p.println(led.pin);
+        res += p.print(".RussianName") + p.println(led.russianName);
+    }
 } ledDescription;
+
 ledDescription leds[3];
+ledDescription led_test;
+uint16_t ledAddress(const uint8_t num) {
+    return StartAddress + num * sizeof(ledDescription);
+}
+void writeEEPROMLed() {
+    uint8_t ledsCount(sizeof(leds) / sizeof(*leds));
+    for (size_t i = 0; i < ledsCount; i++) {
+       EEPROM.put(ledAddress(i),leds[i]);
+    }
+    
+    /*
+     EEPROM.begin(sizeof(ledStruct));
+       EEPROM.put(0, leds[0]);
+       EEPROM.put(sizeof(ledStruct), leds[1]);
+       EEPROM.put(sizeof(ledStruct) * 2, leds[2]);
+       EEPROM.commit();
+       led_test = EEPROM.get(0, leds[0]);
+       Serial.println(led_test.name);
+       */
+}
 void checkUpdateSettings();
 float DS18B20(byte* adres) {
     unsigned int raw;
@@ -295,10 +331,6 @@ void syncTime() {
     }
 }
 
-void readOptionsEEPROM() {
-    Serial.printf_P(PSTR("%s\n"), "Загрузка настроек из внутренней памяти");
-    // todo
-};
 void ledOnHandler(byte pin) {
 }
 void ledOffHandler(byte pin) {
@@ -407,11 +439,26 @@ void setLEDTime(ledPosition position) {
     }
     json.clear();
 }
+void readOptionsEEPROM() {
+    Serial.printf_P(PSTR("%s\n"), "Загрузка настроек из внутренней памяти");
+     uint8_t ledsCount(sizeof(leds) / sizeof(*leds));
+    for (size_t i = 0; i < ledsCount; i++) {
+       leds[i]=EEPROM.get(ledAddress(i),ledDescription);
+
+    }
+    /*
+       printAllLedsTime();
+       EEPROM.begin(sizeof(ledStruct));
+       EEPROM.get(0, leds[0]);
+       printAllLedsTime();
+       */
+};
 void readOptionsFirebase() {
     Serial.printf_P(PSTR("%s\n"), "Загрузка настроек из Firebase");
     setLEDTime(LEFT);
     setLEDTime(CENTER);
     setLEDTime(RIGHT);
+    writeEEPROMLed();
 };
 //Сохранение показаний датчиков температуры
 void writeOnlineTemperature() {
@@ -466,6 +513,7 @@ void Timer5Min() {
     writeOnlineTemperature();
 }
 void Timer1Min() {
+   Serial.println(sizeof(ledDescription));
     Serial.println(String(clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime())));
     uptime();
     getTemperature();
@@ -502,10 +550,11 @@ void checkUpdateSettings() {
         Serial.printf_P(PSTR("Ошибка: %s\n"), data.errorReason().c_str());
     }
 }
+
 void setup() {
     Serial.begin(115200);
     Serial.println();
-
+ 
     //Запуск часов реального времени
     initRTC();
     initLeds();
