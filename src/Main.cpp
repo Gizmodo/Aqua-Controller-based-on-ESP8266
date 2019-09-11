@@ -7,6 +7,7 @@
 #include "RtcDS3231.h"
 #include "TimeAlarms.h"
 #include "uEEPROMLib.h"
+#include "uptime_formatter.h"
 
 #define FIREBASE_HOST "aqua-3006a.firebaseio.com"
 #define FIREBASE_AUTH "eRxKqsNsandXnfrDtd3wjGMHMc05nUeo5yeKmuni"
@@ -30,11 +31,6 @@ uint8_t wifiConnectCount = 0;
 uEEPROMLib eeprom(0x57);
 unsigned int pos;
 const uint16_t StartAddress = 16;
-
-uint32_t count = 0;
-
-byte upM = 0, upH = 0;
-int upD = 0;
 
 DS3231 clockRTC;
 RTCDateTime dt;
@@ -150,19 +146,8 @@ void clearAlarms() {
 
 void uptime() {
     FirebaseData data;
-    char buffer[32];
-    upM++;
-    if (upM == 60) {
-        upM = 0;
-        upH++;
-    }
-    if (upH == 24) {
-        upH = 0;
-        upD++;
-    }
-    sprintf_P(buffer, PSTR("Uptime %d дн. %02d:%02d"), upD, upH, upM);
-    Serial.println(buffer);
-    if (!Firebase.setString(data, pathToUptime, buffer)) {
+    Serial.println("uptime " + uptime_formatter::getUptime());
+    if (!Firebase.setString(data, pathToUptime, uptime_formatter::getUptime())) {
         Serial.printf_P(PSTR("\nОшибка uptime: %s\n"), data.errorReason().c_str());
     };
 }
@@ -330,8 +315,8 @@ void printLEDTime(ledPosition position) {
     if (!found) {
         Serial.println("Прожектор не найден!!!");
     } else {
-        Serial.printf_P(PSTR("Вкл-%02d:%02d. Выкл-%02d:%02d. Состояние: %s. Разрешен: %s. PIN: %d\n"),
-                        leds[index].led.HOn, leds[index].led.MOn, leds[index].led.HOff, leds[index].led.MOff,
+        Serial.printf_P(PSTR("Вкл-%02d:%02d. Выкл-%02d:%02d. Состояние: %s. Разрешен: %s. PIN: %d\n"), leds[index].led.HOn,
+                        leds[index].led.MOn, leds[index].led.HOff, leds[index].led.MOff,
                         ((leds[index].led.currentState == true) ? "включен" : "выключен"),
                         ((leds[index].led.enabled == true) ? "да" : "нет"), leds[index].led.pin
 
