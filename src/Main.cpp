@@ -33,7 +33,6 @@ unsigned int pos;
 const uint16_t StartAddress = 16;
 
 DS3231 clockRTC;
-RTCDateTime dt;
 RtcDS3231 rtc;
 bool shouldUpdateFlag = false;
 const char* WiFi_hostname = "ESP8266";
@@ -153,8 +152,7 @@ void uptime() {
 }
 void initRTC() {
     clockRTC.begin();
-    dt = clockRTC.getDateTime();
-    Serial.println("Часы запущены. Время " + String(clockRTC.dateFormat("H:i:s Y-m-d", dt)));
+    Serial.println("Часы запущены. Время " + String(clockRTC.dateFormat("H:i:s Y-m-d", clockRTC.getDateTime())));
 }
 /*
 void eeprom_test() {
@@ -438,7 +436,7 @@ void writeTemperatureFirebase() {
         Serial.printf_P(PSTR("%s"), "Сохраняем в Firebase текущее показание температурных датчиков: ");
         json.addDouble("temp1", temp1)
             .addDouble("temp2", temp2)
-            .addString("DateTime", String(clockRTC.dateFormat("H:i:s d.m.Y", dt)));
+            .addString("DateTime", String(clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime())));
 
         if (Firebase.setJSON(firebaseData, pathTemperatureOnline, json)) {
             Serial.printf_P(PSTR("%s\n"), "Успешно");
