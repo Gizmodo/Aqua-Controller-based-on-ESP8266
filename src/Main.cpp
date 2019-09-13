@@ -8,7 +8,6 @@
 #include "TimeAlarms.h"
 #include "uEEPROMLib.h"
 #include "uptime_formatter.h"
-
 #define FIREBASE_HOST "aqua-3006a.firebaseio.com"
 #define FIREBASE_AUTH "eRxKqsNsandXnfrDtd3wjGMHMc05nUeo5yeKmuni"
 
@@ -70,25 +69,7 @@ float temp1, temp2;
 byte addr1[8] = {0x28, 0xFF, 0x17, 0xF0, 0x8B, 0x16, 0x03, 0x13};  //адрес датчика DS18B20
 byte addr2[8] = {0x28, 0xFF, 0x5F, 0x1E, 0x8C, 0x16, 0x03, 0xE2};  //адрес датчика DS18B20
 
-enum ledPosition { LEFT, CENTER, RIGHT };
-
-struct ledStruct_t {
-    byte HOn, HOff;
-    byte MOn, MOff;
-    byte enabled;
-    byte currentState;
-    AlarmId on, off;
-    byte pin;
-} ledStruct;
-
-struct ledDescription_t {
-    ledPosition position;
-    String name;
-    ledStruct_t led;
-} ledDescription;
-
 ledDescription_t leds[3];
-ledDescription_t led_test;
 
 std::vector<String> splitStringToVector(const String& msg) {
     std::vector<String> subStrings;
@@ -294,9 +275,54 @@ void syncTime() {
     }
 }
 
-void ledOnHandler(byte pin) {
+void ledOnHandler(ledDescription led) {
+    uint8_t ledsCount(sizeof(leds) / sizeof(*leds));
+    uint8_t index;
+    bool found = false;
+
+    for (size_t i = 0; i < ledsCount; i++) {
+        if (leds[i].led.pin == led.led.pin) {
+            index = i;
+            i = ledsCount;
+            found = true;
+        }
+    }
+    if (found) {
+        if (leds[index].led.enabled) {
+            leds[index].led.currentState = true;
+            Serial.print("Включение прожектора ");
+            Serial.println(led.led.pin);
+        } else {
+            Serial.println("Прожектор не доступен для изменения состояния");
+        }
+    } else {
+        Serial.println("Прожектор не найден");
+    }
 }
-void ledOffHandler(byte pin) {
+
+void ledOffHandler(ledDescription led) {
+    uint8_t ledsCount(sizeof(leds) / sizeof(*leds));
+    uint8_t index;
+    bool found = false;
+
+    for (size_t i = 0; i < ledsCount; i++) {
+        if (leds[i].led.pin == led.led.pin) {
+            index = i;
+            i = ledsCount;
+            found = true;
+        }
+    }
+    if (found) {
+        if (leds[index].led.enabled) {
+            leds[index].led.currentState = false;
+            Serial.print("Выключение прожектора ");
+            Serial.println(led.led.pin);
+        } else {
+            Serial.println("Прожектор не доступен для изменения состояния");
+        }
+    } else {
+        Serial.println("Прожектор не найден");
+    }
 }
 
 void printLEDTime(ledPosition position) {
@@ -313,7 +339,7 @@ void printLEDTime(ledPosition position) {
     if (!found) {
         Serial.println("Прожектор не найден!!!");
     } else {
-        Serial.printf_P(PSTR("Вкл-%02d:%02d. Выкл-%02d:%02d. Состояние: %s. Разрешен: %s. PIN: %d\n"), leds[index].led.HOn,
+        Serial.printf_P(PSTR(" Вкл-%02d:%02d. Выкл-%02d:%02d. Состояние: %s. Разрешен: %s. PIN: %d\n"), leds[index].led.HOn,
                         leds[index].led.MOn, leds[index].led.HOff, leds[index].led.MOff,
                         ((leds[index].led.currentState == true) ? "включен" : "выключен"),
                         ((leds[index].led.enabled == true) ? "да" : "нет"), leds[index].led.pin
@@ -335,14 +361,14 @@ void setLEDTime(ledPosition position) {
 
     uint8_t ledsCount = (sizeof(leds) / sizeof(*leds));
     String ledPath;
-    uint8_t index;
+    uint8_t i;
     bool found = false;
-    for (size_t i = 0; i < ledsCount; i++) {
-        if (leds[i].position == position) {
-            ledPath = leds[i].name;
-            index = i;
+    for (size_t k = 0; k < ledsCount; k++) {
+        if (leds[k].position == position) {
+            ledPath = leds[k].name;
+            i = k;
             found = true;
-            i = ledsCount;
+            k = ledsCount;
         }
     }
     if (found) {
@@ -357,44 +383,49 @@ void setLEDTime(ledPosition position) {
                 size_t count = json.getJsonObjectIteratorCount();
                 String key, value;
                 std::vector<String> vectorString;
-                for (size_t i = 0; i < count; i++) {
-                    json.jsonObjectiterator(i, key, value);
+                for (size_t k = 0; k < count; k++) {
+                    json.jsonObjectiterator(k, key, value);
                     jsonParseResult = json.parseResult();
 
                     if (key == "enabled") {
-                        leds[index].led.enabled = jsonParseResult.boolValue;
+                        leds[i].led.enabled = jsonParseResult.boolValue;
                     }
                     if (key == "off") {
                         vectorString.clear();
                         vectorString = splitStringToVector(value);
-                        leds[index].led.HOff = vectorString[0].toInt();
-                        leds[index].led.MOff = vectorString[1].toInt();
+                        leds[i].led.HOff = vectorString[0].toInt();
+                        leds[i].led.MOff = vectorString[1].toInt();
                     }
                     if (key == "on") {
                         vectorString.clear();
                         vectorString = splitStringToVector(value);
-                        leds[index].led.HOn = vectorString[0].toInt();
-                        leds[index].led.MOn = vectorString[1].toInt();
+                        leds[i].led.HOn = vectorString[0].toInt();
+                        leds[i].led.MOn = vectorString[1].toInt();
                     }
                     if (key == "pin") {
-                        leds[index].led.pin = jsonParseResult.intValue;
+                        leds[i].led.pin = jsonParseResult.intValue;
                     }
                     if (key == "state") {
-                        leds[index].led.currentState = jsonParseResult.boolValue;
+                        leds[i].led.currentState = jsonParseResult.boolValue;
                     }
                 }
-                leds[index].led.off =
-                    Alarm.alarmRepeat(leds[index].led.HOff, leds[index].led.MOff, 0, ledOffHandler, leds[index].led.pin);
-                leds[index].led.on =
-                    Alarm.alarmRepeat(leds[index].led.HOn, leds[index].led.MOn, 0, ledOnHandler, leds[index].led.pin);
+                leds[i].led.off = Alarm.alarmRepeat(leds[i].led.HOff, leds[i].led.MOff, 0, ledOffHandler, leds[i]);
+                leds[i].led.on = Alarm.alarmRepeat(leds[i].led.HOn, leds[i].led.MOn, 0, ledOnHandler, leds[i]);
+                if (leds[i].led.enabled) {
+                    Alarm.enable(leds[i].led.off);
+                    Alarm.enable(leds[i].led.on);
+                } else {
+                    Alarm.disable(leds[i].led.off);
+                    Alarm.disable(leds[i].led.on);
+                }
             } else {
-                Serial.println("Reply isn't JSON object!");
+                Serial.println("Ответ не является JSON объектом");
             }
         } else {
-            Serial.println("Firebase failed to get JSON");
+            Serial.println("Ошибка загрузки параметров прожектора");
         }
     } else {
-        Serial.println("Not found led!!!");
+        Serial.println("Прожектор не найден");
     }
     json.clear();
 }
@@ -405,18 +436,29 @@ void writeEEPROMLed() {
     uint8_t ledsCount(sizeof(leds) / sizeof(*leds));
     for (size_t i = 0; i < ledsCount; i++) {
         if (eeprom.eeprom_write(ledAddress(i), leds[i])) {
-            Serial.println("Параметры по прожектору сохранены в EEPROM");
+            Serial.println(" Параметры по прожектору " + leds[i].name + " сохранены в EEPROM");
         } else {
-            Serial.println("Ошибка сохранения параметров прожектора в EEPROM");
+            Serial.println(" Ошибка сохранения параметров прожектора " + leds[i].name + " в EEPROM");
         }
     }
 }
 void readOptionsEEPROM() {
+    ledDescription_t ledFromEEPROM;
     Serial.printf_P(PSTR("%s\n"), "Загрузка настроек из EEPROM");
     uint8_t ledsCount(sizeof(leds) / sizeof(*leds));
     for (size_t i = 0; i < ledsCount; i++) {
-        eeprom.eeprom_read(ledAddress(i), &led_test);
-        leds[i] = led_test;
+        eeprom.eeprom_read(ledAddress(i), &ledFromEEPROM);
+        leds[i] = ledFromEEPROM;
+        leds[i].led.off = Alarm.alarmRepeat(leds[i].led.HOff, leds[i].led.MOff, 0, ledOffHandler, leds[i]);
+        leds[i].led.on = Alarm.alarmRepeat(leds[i].led.HOn, leds[i].led.MOn, 0, ledOnHandler, leds[i]);
+
+        if (leds[i].led.enabled) {
+            Alarm.enable(leds[i].led.off);
+            Alarm.enable(leds[i].led.on);
+        } else {
+            Alarm.disable(leds[i].led.off);
+            Alarm.disable(leds[i].led.on);
+        }
     }
     printAllLedsTime();
 };
