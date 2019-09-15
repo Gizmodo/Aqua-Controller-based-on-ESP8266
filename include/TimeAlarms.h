@@ -85,11 +85,11 @@ typedef AlarmID_t AlarmId;  // Arduino friendly name
 #include <functional>
 typedef std::function<void()> OnTick_t;
 typedef std::function<void(byte)> OnTickByte_t;
-typedef std::function<void(ledDescription_t)> OnTickLed_t;
+typedef std::function<void(ledDescription_t&)> OnTickLed_t;
 #else
 typedef void (*OnTick_t)();  // alarm callback function typedef
 typedef void (*OnTickByte_t)(byte param);
-typedef void (*OnTickLed_t)(ledDescription_t param);
+typedef void (*OnTickLed_t)(ledDescription_t &param);
 #endif
 
 // class defining an alarm instance, only used by dtAlarmsClass

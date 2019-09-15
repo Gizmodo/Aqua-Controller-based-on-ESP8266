@@ -34,6 +34,7 @@ const uint16_t StartAddress = 16;
 DS3231 clockRTC;
 RtcDS3231 rtc;
 bool shouldUpdateFlag = false;
+std::vector<ledState_t> vectorState;
 const char* WiFi_hostname = "ESP8266";
 IPAddress timeServerIP;
 const char* ntpServerName = "pool.ntp.org";
@@ -111,8 +112,7 @@ void initLeds() {
 void getTemperature() {
     temp1 = DS18B20(addr1);
     temp2 = DS18B20(addr2);
-    Serial.printf_P(PSTR("Датчик температуры 1: %s\n"), String(temp1).c_str());
-    Serial.printf_P(PSTR("Датчик температуры 2: %s\n"), String(temp2).c_str());
+    Serial.printf_P(PSTR("[T1: %s°]  [T2: %s°]\n"), String(temp1).c_str(), String(temp2).c_str());
 }
 void clearAlarms() {
     uint8_t ledsCount(sizeof(leds) / sizeof(*leds));
@@ -275,53 +275,54 @@ void syncTime() {
     }
 }
 
-void ledOnHandler(ledDescription led) {
-    uint8_t ledsCount(sizeof(leds) / sizeof(*leds));
-    uint8_t index;
-    bool found = false;
-
-    for (size_t i = 0; i < ledsCount; i++) {
-        if (leds[i].led.pin == led.led.pin) {
-            index = i;
-            i = ledsCount;
-            found = true;
-        }
-    }
-    if (found) {
-        if (leds[index].led.enabled) {
-            leds[index].led.currentState = true;
-            Serial.print("Включение прожектора ");
-            Serial.println(led.led.pin);
-        } else {
-            Serial.println("Прожектор не доступен для изменения состояния");
-        }
+void setCurrentState(boolean state, const String& name) {
+    FirebaseData data;
+    if (!Firebase.setBool(data, pathLight + name + "/state", state)) {
+        Serial.println("Не удалось установить состояние прожектора " + name + " в " + state);
     } else {
-        Serial.println("Прожектор не найден");
+        Serial.println("Состояние прожектора " + name + " установлено в " + state);
     }
 }
 
-void ledOffHandler(ledDescription led) {
-    uint8_t ledsCount(sizeof(leds) / sizeof(*leds));
-    uint8_t index;
-    bool found = false;
+void ledOnHandler(ledDescription& led) {
+    if (led.led.enabled) {
+        Serial.print("Включение прожектора PIN=");
+        Serial.println(led.led.pin);
 
-    for (size_t i = 0; i < ledsCount; i++) {
-        if (leds[i].led.pin == led.led.pin) {
-            index = i;
-            i = ledsCount;
-            found = true;
-        }
-    }
-    if (found) {
-        if (leds[index].led.enabled) {
-            leds[index].led.currentState = false;
-            Serial.print("Выключение прожектора ");
-            Serial.println(led.led.pin);
-        } else {
-            Serial.println("Прожектор не доступен для изменения состояния");
-        }
+        Alarm.enable(led.led.off);
+        Alarm.enable(led.led.on);
+
+        led.led.currentState = true;
+
+        ledState_t state;
+        state.name = led.name;
+        state.state = true;
+        vectorState.push_back(state);
     } else {
-        Serial.println("Прожектор не найден");
+        Serial.println("Прожектор не доступен для изменения состояния");
+        Alarm.disable(led.led.off);
+        Alarm.disable(led.led.on);
+    }
+}
+
+void ledOffHandler(ledDescription& led) {
+    if (led.led.enabled) {
+        Serial.print("Выключение прожектора PIN=");
+        Serial.println(led.led.pin);
+
+        Alarm.enable(led.led.off);
+        Alarm.enable(led.led.on);
+
+        led.led.currentState = false;
+
+        ledState_t state;
+        state.name = led.name;
+        state.state = false;
+        vectorState.push_back(state);
+    } else {
+        Serial.println("Прожектор не доступен для изменения состояния");
+        Alarm.disable(led.led.off);
+        Alarm.disable(led.led.on);
     }
 }
 
@@ -411,12 +412,14 @@ void setLEDTime(ledPosition position) {
                 }
                 leds[i].led.off = Alarm.alarmRepeat(leds[i].led.HOff, leds[i].led.MOff, 0, ledOffHandler, leds[i]);
                 leds[i].led.on = Alarm.alarmRepeat(leds[i].led.HOn, leds[i].led.MOn, 0, ledOnHandler, leds[i]);
-                if (leds[i].led.enabled) {
-                    Alarm.enable(leds[i].led.off);
-                    Alarm.enable(leds[i].led.on);
+
+                uint8_t minutes = clockRTC.getDateTime().hour * 60 + clockRTC.getDateTime().minute;
+                uint8_t minutesOn = leds[i].led.HOn * 60 + leds[i].led.MOn;
+                uint8_t minutesOff = leds[i].led.HOff * 60 + leds[i].led.MOff;
+                if ((minutes > minutesOn) && (minutes < minutesOff)) {
+                    ledOnHandler(leds[i]);
                 } else {
-                    Alarm.disable(leds[i].led.off);
-                    Alarm.disable(leds[i].led.on);
+                    ledOffHandler(leds[i]);
                 }
             } else {
                 Serial.println("Ответ не является JSON объектом");
@@ -452,12 +455,13 @@ void readOptionsEEPROM() {
         leds[i].led.off = Alarm.alarmRepeat(leds[i].led.HOff, leds[i].led.MOff, 0, ledOffHandler, leds[i]);
         leds[i].led.on = Alarm.alarmRepeat(leds[i].led.HOn, leds[i].led.MOn, 0, ledOnHandler, leds[i]);
 
-        if (leds[i].led.enabled) {
-            Alarm.enable(leds[i].led.off);
-            Alarm.enable(leds[i].led.on);
+        uint8_t minutes = clockRTC.getDateTime().hour * 60 + clockRTC.getDateTime().minute;
+        uint8_t minutesOn = leds[i].led.HOn * 60 + leds[i].led.MOn;
+        uint8_t minutesOff = leds[i].led.HOff * 60 + leds[i].led.MOff;
+        if ((minutes > minutesOn) && (minutes < minutesOff)) {
+            ledOnHandler(leds[i]);
         } else {
-            Alarm.disable(leds[i].led.off);
-            Alarm.disable(leds[i].led.on);
+            ledOffHandler(leds[i]);
         }
     }
     printAllLedsTime();
@@ -527,6 +531,7 @@ void Timer5Min() {
 }
 
 void Timer1Min() {
+    ledState_t currentLed;
     Serial.println(String(clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime())));
     getTemperature();
     checkUpdateSettings();
@@ -535,6 +540,12 @@ void Timer1Min() {
         printAllLedsTime();
         shouldUpdateFlag = false;
     }
+    while (!vectorState.empty()) {
+        currentLed = vectorState.back();
+        setCurrentState(currentLed.state, currentLed.name);
+        vectorState.pop_back();
+    }
+    vectorState.clear();
 }
 void startMainTimers() {
     Serial.printf_P(PSTR("%s: %d\n"), "Количество таймеров до", Alarm.count());
