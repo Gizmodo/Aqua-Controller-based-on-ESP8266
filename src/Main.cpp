@@ -62,6 +62,7 @@ String pathTemperatureHistory = "Temperature/History/";
 String pathUpdateSettings = "UpdateSettings";
 String pathToLastOnline = "LastOnline";
 String pathToUptime = "Uptime";
+String pathToBootHistory = "BootHistory";
 
 OneWire ds(ONE_WIRE_BUS);
 byte data[12];
@@ -504,7 +505,14 @@ void writeTemperatureFirebase() {
         }
     }
 }
-
+void writeBootHistory() {
+    FirebaseData firebaseData;
+    if (Firebase.pushString(firebaseData, pathToBootHistory, String(clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime())))) {
+        Serial.printf_P(PSTR("%s\n"), "Успешно");
+    } else {
+        Serial.printf_P(PSTR("\n%s %s\n"), "writeBootHistory:", firebaseData.errorReason().c_str());
+    }
+}
 void setClock() {
     configTime(3 * 3600, 0, "pool.ntp.org", "time.nist.gov");
     time_t now = time(nullptr);
@@ -602,6 +610,7 @@ void setup() {
         setClock();
         Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
         Firebase.reconnectWiFi(true);
+        writeBootHistory();
         syncTime();  // синхронизируем время
         readOptionsFirebase();
         printAllLedsTime();
