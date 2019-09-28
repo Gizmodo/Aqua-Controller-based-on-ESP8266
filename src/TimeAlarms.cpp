@@ -1,23 +1,3 @@
-/*
-  TimeAlarms.cpp - Arduino Time alarms for use with Time library
-  Copyright (c) 2008-2011 Michael Margolis.
-
-  This library is free software; you can redistribute it and/or
-  modify it under the terms of the GNU Lesser General Public
-  License as published by the Free Software Foundation; either
-  version 2.1 of the License, or (at your option) any later version.
-
-  This library is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-  Lesser General Public License for more details.
-*/
-
-/*
-  2 July 2011 - replaced alarm types implied from alarm value with enums to make trigger logic more robust
-             - this fixes bug in repeating weekly alarms - thanks to Vincent Valdy and draythomp for testing
-*/
-
 #include "TimeAlarms.h"
 
 #define IS_ONESHOT true  // constants used in arguments to create method
@@ -30,8 +10,9 @@ AlarmClass::AlarmClass() {
     Mode.isEnabled = Mode.isOneShot = false;
     Mode.alarmType = dtNotAllocated;
     value = nextTrigger = 0;
-    onTickHandler = NULL;  // prevent a callback until this pointer is explicitly set
+    onTickHandler = NULL;      // prevent a callback until this pointer is explicitly set
     onTickByteHandler = NULL;  // prevent a callback until this pointer is explicitly set
+    onTickLedHandler = NULL;   // prevent a callback until this pointer is explicitly set
 }
 
 //**************************************************************
@@ -89,7 +70,7 @@ TimeAlarmsClass::TimeAlarmsClass() {
 void TimeAlarmsClass::enable(AlarmID_t ID) {
     if (isAllocated(ID)) {
         if ((!(dtUseAbsoluteValue(Alarm[ID].Mode.alarmType) && (Alarm[ID].value == 0))) &&
-            ((Alarm[ID].onTickHandler != NULL) || (Alarm[ID].onTickByteHandler != NULL))) {
+            ((Alarm[ID].onTickHandler != NULL) || (Alarm[ID].onTickByteHandler != NULL || (Alarm[ID].onTickLedHandler != NULL)))) {
             // only enable if value is non zero and a tick handler has been set
             // (is not NULL, value is non zero ONLY for dtTimer & dtExplicitAlarm
             // (the rest can have 0 to account for midnight))
@@ -139,6 +120,8 @@ void TimeAlarmsClass::free(AlarmID_t ID) {
         Alarm[ID].Mode.isEnabled = false;
         Alarm[ID].Mode.alarmType = dtNotAllocated;
         Alarm[ID].onTickHandler = NULL;
+        Alarm[ID].onTickByteHandler = NULL;
+        Alarm[ID].onTickLedHandler = NULL;
         Alarm[ID].value = 0;
         Alarm[ID].nextTrigger = 0;
     }
@@ -227,8 +210,7 @@ void TimeAlarmsClass::serviceAlarms() {
             if (Alarm[i].Mode.isEnabled && (now >= Alarm[i].nextTrigger)) {
                 OnTick_t TickHandler = Alarm[i].onTickHandler;
                 OnTickByte_t TickByteHandler = Alarm[i].onTickByteHandler;
-                byte param = Alarm[i].param;
-
+                OnTickLed_t TickLedHandler = Alarm[i].onTickLedHandler;
                 if (Alarm[i].Mode.isOneShot) {
                     free(i);  // free the ID if mode is OnShot
                 } else {
@@ -240,7 +222,11 @@ void TimeAlarmsClass::serviceAlarms() {
                 }
                 if (TickByteHandler != NULL) {
                     //(*TickByteHandler)(param);  // call the handler
-                    TickByteHandler(param);
+                    TickByteHandler(Alarm[i].param_byte);
+                }
+                if (TickLedHandler != NULL) {
+                    //(*TickByteHandler)(param);  // call the handler
+                    TickLedHandler(Alarm[i].param_led);
                 }
             }
         }
@@ -302,7 +288,30 @@ AlarmID_t TimeAlarmsClass::createbyte(time_t value,
             if (Alarm[id].Mode.alarmType == dtNotAllocated) {
                 // here if there is an Alarm id that is not allocated
                 Alarm[id].onTickByteHandler = onTickByteHandler;
-                Alarm[id].param = param;
+                Alarm[id].param_byte = param;
+                Alarm[id].Mode.isOneShot = isOneShot;
+                Alarm[id].Mode.alarmType = alarmType;
+                Alarm[id].value = value;
+                enable(id);
+                return id;  // alarm created ok
+            }
+        }
+    }
+    return dtINVALID_ALARM_ID;  // no IDs available or time is invalid
+}
+AlarmID_t TimeAlarmsClass::createled(time_t value,
+                                     OnTickLed_t onTickLedHandler,
+                                     bool isOneShot,
+                                     dtAlarmPeriod_t alarmType,
+                                     ledDescription_t param) {
+    time_t now = time(nullptr);
+    if (!((dtIsAlarm(alarmType) && now < SECS_PER_YEAR) || (dtUseAbsoluteValue(alarmType) && (value == 0)))) {
+        // only create alarm ids if the time is at least Jan 1 1971
+        for (uint8_t id = 0; id < dtNBR_ALARMS; id++) {
+            if (Alarm[id].Mode.alarmType == dtNotAllocated) {
+                // here if there is an Alarm id that is not allocated
+                Alarm[id].onTickLedHandler = onTickLedHandler;
+                Alarm[id].param_led = param;
                 Alarm[id].Mode.isOneShot = isOneShot;
                 Alarm[id].Mode.alarmType = alarmType;
                 Alarm[id].value = value;

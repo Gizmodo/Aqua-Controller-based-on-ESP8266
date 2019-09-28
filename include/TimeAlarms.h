@@ -1,5 +1,3 @@
-//  TimeAlarms.h - Arduino Time alarms header for use with Time library
-
 #ifndef TimeAlarms_h
 #define TimeAlarms_h
 
@@ -39,10 +37,10 @@
 // The following macros are used in calculating alarms and assume the clock is set to a date later than Jan 1 1971
 // Always set the correct time before settting alarms
 #define previousMidnight(_time_) (((_time_) / SECS_PER_DAY) * SECS_PER_DAY)  // time at the start of the given day
-#define nextMidnight(_time_) (previousMidnight(_time_) + SECS_PER_DAY)     // time at the end of the given day
+#define nextMidnight(_time_) (previousMidnight(_time_) + SECS_PER_DAY)       // time at the end of the given day
 #define elapsedSecsThisWeek(_time_) \
     (elapsedSecsToday(_time_) + ((dayOfWeek(_time_) - 1) * SECS_PER_DAY))  // note that week starts on day 1
-#define previousSunday(_time_) ((_time_) - elapsedSecsThisWeek(_time_))      // time at the start of the week for the given time
+#define previousSunday(_time_) ((_time_)-elapsedSecsThisWeek(_time_))      // time at the start of the week for the given time
 #define nextSunday(_time_) (previousSunday(_time_) + SECS_PER_WEEK)        // time at the end of the week for the given time
 
 static const int year_lengths[2] = {365, 366};
@@ -79,15 +77,19 @@ typedef AlarmID_t AlarmId;  // Arduino friendly name
 
 #define dtINVALID_ALARM_ID 255
 #define dtINVALID_TIME (time_t)(-1)
-#define AlarmHMS(_hr_, _min_, _sec_) ((_hr_) * SECS_PER_HOUR + (_min_) * SECS_PER_MIN + (_sec_))
+#define AlarmHMS(_hr_, _min_, _sec_) ((_hr_)*SECS_PER_HOUR + (_min_)*SECS_PER_MIN + (_sec_))
+
+#include "AquaTypes.h"
 
 #ifdef ARDUINO_ARCH_ESP8266
 #include <functional>
 typedef std::function<void()> OnTick_t;
 typedef std::function<void(byte)> OnTickByte_t;
+typedef std::function<void(ledDescription_t&)> OnTickLed_t;
 #else
 typedef void (*OnTick_t)();  // alarm callback function typedef
 typedef void (*OnTickByte_t)(byte param);
+typedef void (*OnTickLed_t)(ledDescription_t &param);
 #endif
 
 // class defining an alarm instance, only used by dtAlarmsClass
@@ -96,11 +98,13 @@ class AlarmClass {
     AlarmClass();
     OnTick_t onTickHandler;
     OnTickByte_t onTickByteHandler;
+    OnTickLed_t onTickLedHandler;
     void updateNextTrigger();
     time_t value;
     time_t nextTrigger;
     AlarmMode_t Mode;
-    byte param;
+    byte param_byte;
+    ledDescription_t param_led;
 };
 
 // class containing the collection of alarms
@@ -112,6 +116,11 @@ class TimeAlarmsClass {
     uint8_t servicedAlarmId;  // the alarm currently being serviced
     AlarmID_t create(time_t value, OnTick_t onTickHandler, bool isOneShot, dtAlarmPeriod_t alarmType);
     AlarmID_t createbyte(time_t value, OnTickByte_t onTickByteHandler, bool isOneShot, dtAlarmPeriod_t alarmType, byte param);
+    AlarmID_t createled(time_t value,
+                        OnTickLed_t onTickLedHandler,
+                        bool isOneShot,
+                        dtAlarmPeriod_t alarmType,
+                        ledDescription_t param);
 
    public:
     TimeAlarmsClass();
@@ -153,12 +162,20 @@ class TimeAlarmsClass {
             return dtINVALID_ALARM_ID;
         return createbyte(value, onTickByteHandler, false, dtDailyAlarm, param);
     }
+    AlarmID_t alarmRepeat(time_t value, OnTickLed_t onTickLedHandler, ledDescription param) {
+        if ((unsigned)value > SECS_PER_DAY)
+            return dtINVALID_ALARM_ID;
+        return createled(value, onTickLedHandler, false, dtDailyAlarm, param);
+    }
 
     AlarmID_t alarmRepeat(const int H, const int M, const int S, OnTick_t onTickHandler) {
         return alarmRepeat(AlarmHMS(H, M, S), onTickHandler);
     }
     AlarmID_t alarmRepeat(const int H, const int M, const int S, OnTickByte_t onTickByteHandler, byte param) {
         return alarmRepeat(AlarmHMS(H, M, S), onTickByteHandler, param);
+    }
+    AlarmID_t alarmRepeat(const int H, const int M, const int S, OnTickLed_t onTickLedHandler, ledDescription param) {
+        return alarmRepeat(AlarmHMS(H, M, S), onTickLedHandler, param);
     }
     // trigger weekly at a specific day and time
     AlarmID_t alarmRepeat(const timeDayOfWeek_t DOW, const int H, const int M, const int S, OnTick_t onTickHandler) {
@@ -179,6 +196,17 @@ class TimeAlarmsClass {
             return dtINVALID_ALARM_ID;
         return createbyte(value, onTickByteHandler, false, dtTimer, param);
     }
+    AlarmID_t alarmRepeat(const timeDayOfWeek_t DOW,
+                          const int H,
+                          const int M,
+                          const int S,
+                          OnTickLed_t onTickLedHandler,
+                          ledDescription param) {
+        time_t value = (DOW - 1) * SECS_PER_DAY + AlarmHMS(H, M, S);
+        if (value <= 0)
+            return dtINVALID_ALARM_ID;
+        return createled(value, onTickLedHandler, false, dtTimer, param);
+    }
 
     // trigger once after the given number of seconds
     AlarmID_t timerOnce(time_t value, OnTick_t onTickHandler) {
@@ -193,6 +221,11 @@ class TimeAlarmsClass {
         if (value <= 0)
             return dtINVALID_ALARM_ID;
         return createbyte(value, onTickByteHandler, true, dtTimer, param);
+    }
+    AlarmID_t timerOnce(time_t value, OnTickLed_t onTickLedHandler, ledDescription param) {
+        if (value <= 0)
+            return dtINVALID_ALARM_ID;
+        return createled(value, onTickLedHandler, true, dtTimer, param);
     }
     // trigger at a regular interval
     AlarmID_t timerRepeat(time_t value, OnTick_t onTickHandler) {
@@ -211,6 +244,14 @@ class TimeAlarmsClass {
     }
     AlarmID_t timerRepeat(const int H, const int M, const int S, OnTickByte_t onTickByteHandler, byte param) {
         return timerRepeat(AlarmHMS(H, M, S), onTickByteHandler, param);
+    }
+    AlarmID_t timerRepeat(time_t value, OnTickLed_t onTickLedHandler, ledDescription param) {
+        if (value <= 0)
+            return dtINVALID_ALARM_ID;
+        return createled(value, onTickLedHandler, false, dtTimer, param);
+    }
+    AlarmID_t timerRepeat(const int H, const int M, const int S, OnTickLed_t onTickLedHandler, ledDescription param) {
+        return timerRepeat(AlarmHMS(H, M, S), onTickLedHandler, param);
     }
     void delay(unsigned long ms);
 

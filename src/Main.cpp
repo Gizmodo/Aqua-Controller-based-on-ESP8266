@@ -1,19 +1,18 @@
+#include <EEPROM.h>
 #include <ESP8266WiFi.h>
 #include <FirebaseESP8266.h>
 #include <OneWire.h>
-#include <Wire.h>
-#include "DS3231.h"  //Время
-
 #include <WiFiUdp.h>
-#include "EEPROMAnything.h"
+#include "DS3231.h"  //Время
 #include "RtcDS3231.h"
 #include "TimeAlarms.h"
 #include "uEEPROMLib.h"
-
+#include "uptime_formatter.h"
 #define FIREBASE_HOST "aqua-3006a.firebaseio.com"
 #define FIREBASE_AUTH "eRxKqsNsandXnfrDtd3wjGMHMc05nUeo5yeKmuni"
 
 #define WIFI_SSID "MikroTik"
+#define WIFI_PASSWORD1 "123"
 #define WIFI_PASSWORD "11111111"
 
 #define GMT 3
@@ -30,16 +29,12 @@ uint8_t wifiConnectCount = 0;
 // uEEPROMLib eeprom;
 uEEPROMLib eeprom(0x57);
 unsigned int pos;
-
-uint32_t count = 0;
-unsigned long lastmillis;
-byte upM = 0, upH = 0;
-int upD = 0;
+const uint16_t StartAddress = 16;
 
 DS3231 clockRTC;
-RTCDateTime dt;
 RtcDS3231 rtc;
 bool shouldUpdateFlag = false;
+std::vector<ledState_t> vectorState;
 const char* WiFi_hostname = "ESP8266";
 IPAddress timeServerIP;
 const char* ntpServerName = "pool.ntp.org";
@@ -57,13 +52,17 @@ byte second1 = 0;
 
 WiFiUDP udp;
 
-unsigned long sendDataPrevMillis = 0;
+unsigned long currentMillis = 1UL;
+unsigned long previousMillis = 1UL;
 
 String pathLight = "Light/";
 String pathTemperatureOnline = "Temperature/Online/";
 String pathTemperatureHistory = "Temperature/History/";
 
 String pathUpdateSettings = "UpdateSettings";
+String pathToLastOnline = "LastOnline";
+String pathToUptime = "Uptime";
+String pathToBootHistory = "BootHistory";
 
 OneWire ds(ONE_WIRE_BUS);
 byte data[12];
@@ -72,24 +71,21 @@ float temp1, temp2;
 byte addr1[8] = {0x28, 0xFF, 0x17, 0xF0, 0x8B, 0x16, 0x03, 0x13};  //адрес датчика DS18B20
 byte addr2[8] = {0x28, 0xFF, 0x5F, 0x1E, 0x8C, 0x16, 0x03, 0xE2};  //адрес датчика DS18B20
 
-enum ledPosition { LEFT, CENTER, RIGHT };
+ledDescription_t leds[3];
 
-struct ledStruct {
-    uint8_t HOn, HOff;
-    uint8_t MOn, MOff;
-    bool enabled;
-    bool currentState;
-    // ledPosition position;
-    AlarmId on, off;
-    uint8_t pin;
-    String russianName;
-};
-typedef struct {
-    ledPosition position;
-    String name;
-    ledStruct led;
-} ledDescription;
-ledDescription leds[3];
+std::vector<String> splitStringToVector(const String& msg) {
+    std::vector<String> subStrings;
+    uint32_t j = 0;
+    for (uint32_t i = 0; i < msg.length(); i++) {
+        if (msg.charAt(i) == ':') {
+            subStrings.push_back(msg.substring(j, i));
+            j = i + 1;
+        }
+    }
+    subStrings.push_back(msg.substring(j, msg.length()));  // to grab the last value of the string
+    return subStrings;
+}
+
 void checkUpdateSettings();
 float DS18B20(byte* adres) {
     unsigned int raw;
@@ -117,8 +113,7 @@ void initLeds() {
 void getTemperature() {
     temp1 = DS18B20(addr1);
     temp2 = DS18B20(addr2);
-    Serial.printf_P(PSTR("Датчик температуры 1: %s\n"), String(temp1).c_str());
-    Serial.printf_P(PSTR("Датчик температуры 2: %s\n"), String(temp2).c_str());
+    Serial.printf_P(PSTR("[T1: %s°]  [T2: %s°]\n"), String(temp1).c_str(), String(temp2).c_str());
 }
 void clearAlarms() {
     uint8_t ledsCount(sizeof(leds) / sizeof(*leds));
@@ -131,33 +126,18 @@ void clearAlarms() {
 }
 
 void uptime() {
-    if (lastmillis + 60000 < millis()) {
-        lastmillis = millis();
-        upM++;
-        if (upM == 60) {
-            upM = 0;
-            upH++;
-        }
-        if (upH == 24) {
-            upH = 0;
-            upD++;
-        }
-        Serial.printf_P(PSTR("Uptime %d дн. %02d:%02d\n"), upD, upH, upM);
-    }
+    FirebaseData data;
+    Serial.println("uptime " + uptime_formatter::getUptime());
+    if (!Firebase.setString(data, pathToUptime, uptime_formatter::getUptime())) {
+        Serial.printf_P(PSTR("\nОшибка uptime: %s\n"), data.errorReason().c_str());
+    };
 }
 void initRTC() {
     clockRTC.begin();
-    dt = clockRTC.getDateTime();
-    Serial.println("Часы запущены. Время " + String(clockRTC.dateFormat("H:i:s Y-m-d", dt)));
+    Serial.println("Часы запущены. Время " + String(clockRTC.dateFormat("H:i:s Y-m-d", clockRTC.getDateTime())));
 }
+/*
 void eeprom_test() {
-    delay(2000);
-
-    Serial.println("Serial OK");
-
-    delay(2500);
-    Serial.println("Delay OK");
-
 #ifdef ARDUINO_ARCH_ESP8266
     Wire.begin();  // D3 and D4 on ESP8266
 #else
@@ -181,53 +161,54 @@ void eeprom_test() {
     } else {
         Serial.println("INT correctly stored");
     }
-    if (!eeprom.eeprom_write(4, floattmp)) {
-        Serial.println("Failed to store FLOAT");
-    } else {
-        Serial.println("FLOAT correctly stored");
-    }
-    if (!eeprom.eeprom_write(8, chartmp)) {
-        Serial.println("Failed to store CHAR");
-    } else {
-        Serial.println("CHAR correctly stored");
-    }
+      if (!eeprom.eeprom_write(4, floattmp)) {
+          Serial.println("Failed to store FLOAT");
+      } else {
+          Serial.println("FLOAT correctly stored");
+      }
+      if (!eeprom.eeprom_write(8, chartmp)) {
+          Serial.println("Failed to store CHAR");
+      } else {
+          Serial.println("CHAR correctly stored");
+      }
 
-    if (!eeprom.eeprom_write(9, (byte*)&string[0], 16)) {
-        Serial.println("Failed to store STRING");
-    } else {
-        Serial.println("STRING correctly stored");
-    }
+      if (!eeprom.eeprom_write(9, (byte*)&string[0], 16)) {
+          Serial.println("Failed to store STRING");
+      } else {
+          Serial.println("STRING correctly stored");
+      }
 
-    inttmp = 0;
-    floattmp = 0;
-    chartmp = 0;
-    string[0] = string[1] = string[2] = string[3] = string[4] = 0;
+      inttmp = 0;
+      floattmp = 0;
+      chartmp = 0;
+      string[0] = string[1] = string[2] = string[3] = string[4] = 0;
 
-    Serial.print("int: ");
-    eeprom.eeprom_read(0, &inttmp);
-    Serial.println(inttmp);
+      Serial.print("int: ");
+      eeprom.eeprom_read(0, &inttmp);
+      Serial.println(inttmp);
 
-    Serial.print("float: ");
-    eeprom.eeprom_read(4, &floattmp);
-    Serial.println((float)floattmp);
+      Serial.print("float: ");
+      eeprom.eeprom_read(4, &floattmp);
+      Serial.println((float)floattmp);
 
-    Serial.print("char: ");
-    eeprom.eeprom_read(8, &chartmp);
-    Serial.println(chartmp);
+      Serial.print("char: ");
+      eeprom.eeprom_read(8, &chartmp);
+      Serial.println(chartmp);
 
-    Serial.print("chararray: ");
-    eeprom.eeprom_read(9, (byte*)&string[0], 16);
-    Serial.println(string);
+      Serial.print("chararray: ");
+      eeprom.eeprom_read(9, (byte*)&string[0], 16);
+      Serial.println(string);
 
-    Serial.println();
+      Serial.println();
 
-    for (pos = 26; pos < 1000; pos++) {
-        eeprom.eeprom_write(pos, (unsigned char)(pos % 256));
-    }
+      for (pos = 26; pos < 1000; pos++) {
+          eeprom.eeprom_write(pos, (unsigned char)(pos % 256));
+      }
 
-    pos = 0;
+      pos = 0;
+      
 }
-
+*/
 void sendNTPpacket(IPAddress& address) {
     memset(packetBuffer, 0, NTP_PACKET_SIZE);
     packetBuffer[0] = 0b11100011;
@@ -295,13 +276,55 @@ void syncTime() {
     }
 }
 
-void readOptionsEEPROM() {
-    Serial.printf_P(PSTR("%s\n"), "Загрузка настроек из внутренней памяти");
-    // todo
-};
-void ledOnHandler(byte pin) {
+void setCurrentState(boolean state, const String& name) {
+    FirebaseData data;
+    if (!Firebase.setBool(data, pathLight + name + "/state", state)) {
+        Serial.println("Не удалось установить состояние прожектора " + name + " в " + state);
+    } else {
+        Serial.println("Состояние прожектора " + name + " установлено в " + state);
+    }
 }
-void ledOffHandler(byte pin) {
+
+void ledOnHandler(ledDescription& led) {
+    if (led.led.enabled) {
+        Serial.print("Включение прожектора PIN=");
+        Serial.println(led.led.pin);
+
+        Alarm.enable(led.led.off);
+        Alarm.enable(led.led.on);
+
+        led.led.currentState = true;
+
+        ledState_t state;
+        state.name = led.name;
+        state.state = true;
+        vectorState.push_back(state);
+    } else {
+        Serial.println("Прожектор не доступен для изменения состояния");
+        Alarm.disable(led.led.off);
+        Alarm.disable(led.led.on);
+    }
+}
+
+void ledOffHandler(ledDescription& led) {
+    if (led.led.enabled) {
+        Serial.print("Выключение прожектора PIN=");
+        Serial.println(led.led.pin);
+
+        Alarm.enable(led.led.off);
+        Alarm.enable(led.led.on);
+
+        led.led.currentState = false;
+
+        ledState_t state;
+        state.name = led.name;
+        state.state = false;
+        vectorState.push_back(state);
+    } else {
+        Serial.println("Прожектор не доступен для изменения состояния");
+        Alarm.disable(led.led.off);
+        Alarm.disable(led.led.on);
+    }
 }
 
 void printLEDTime(ledPosition position) {
@@ -318,15 +341,15 @@ void printLEDTime(ledPosition position) {
     if (!found) {
         Serial.println("Прожектор не найден!!!");
     } else {
-        Serial.printf_P(
-            PSTR("Прожектор: %s. Вкл-%02d:%02d. Выкл-%02d:%02d. Состояние: %s. Доступен к использованию: %s. PIN: %d\n"),
-            String(leds[index].led.russianName).c_str(), leds[index].led.HOn, leds[index].led.MOn, leds[index].led.HOff,
-            leds[index].led.MOff, ((leds[index].led.currentState == true) ? "включен" : "выключен"),
-            ((leds[index].led.enabled == true) ? "да" : "нет"), leds[index].led.pin
+        Serial.printf_P(PSTR(" Вкл-%02d:%02d. Выкл-%02d:%02d. Состояние: %s. Разрешен: %s. PIN: %d\n"), leds[index].led.HOn,
+                        leds[index].led.MOn, leds[index].led.HOff, leds[index].led.MOff,
+                        ((leds[index].led.currentState == true) ? "включен" : "выключен"),
+                        ((leds[index].led.enabled == true) ? "да" : "нет"), leds[index].led.pin
 
         );
     }
 }
+
 void printAllLedsTime() {
     Serial.printf_P(PSTR("%s\n"), "Отображение текущих настроек всех прожекторов");
     printLEDTime(LEFT);
@@ -340,14 +363,14 @@ void setLEDTime(ledPosition position) {
 
     uint8_t ledsCount = (sizeof(leds) / sizeof(*leds));
     String ledPath;
-    uint8_t index;
+    uint8_t i;
     bool found = false;
-    for (size_t i = 0; i < ledsCount; i++) {
-        if (leds[i].position == position) {
-            ledPath = leds[i].name;
-            index = i;
+    for (size_t k = 0; k < ledsCount; k++) {
+        if (leds[k].position == position) {
+            ledPath = leds[k].name;
+            i = k;
             found = true;
-            i = ledsCount;
+            k = ledsCount;
         }
     }
     if (found) {
@@ -362,73 +385,114 @@ void setLEDTime(ledPosition position) {
                 size_t count = json.getJsonObjectIteratorCount();
                 String key, value;
                 std::vector<String> vectorString;
-                for (size_t i = 0; i < count; i++) {
-                    json.jsonObjectiterator(i, key, value);
+                for (size_t k = 0; k < count; k++) {
+                    json.jsonObjectiterator(k, key, value);
                     jsonParseResult = json.parseResult();
+
                     if (key == "enabled") {
-                        leds[index].led.enabled = jsonParseResult.boolValue;
+                        leds[i].led.enabled = jsonParseResult.boolValue;
                     }
                     if (key == "off") {
                         vectorString.clear();
                         vectorString = splitStringToVector(value);
-                        leds[index].led.HOff = vectorString[0].toInt();
-                        leds[index].led.MOff = vectorString[1].toInt();
+                        leds[i].led.HOff = vectorString[0].toInt();
+                        leds[i].led.MOff = vectorString[1].toInt();
                     }
                     if (key == "on") {
                         vectorString.clear();
                         vectorString = splitStringToVector(value);
-                        leds[index].led.HOn = vectorString[0].toInt();
-                        leds[index].led.MOn = vectorString[1].toInt();
+                        leds[i].led.HOn = vectorString[0].toInt();
+                        leds[i].led.MOn = vectorString[1].toInt();
                     }
                     if (key == "pin") {
-                        leds[index].led.pin = jsonParseResult.intValue;
-                    }
-                    if (key == "position") {
-                        leds[index].led.russianName = jsonParseResult.stringValue;
+                        leds[i].led.pin = jsonParseResult.intValue;
                     }
                     if (key == "state") {
-                        leds[index].led.currentState = jsonParseResult.boolValue;
+                        leds[i].led.currentState = jsonParseResult.boolValue;
                     }
-                    //    Serial.printf_P(PSTR("Key: %s, value:%s, type:%s\n"), key.c_str(), value.c_str(),
-                    //    jsonParseResult.type.c_str());
                 }
-                leds[index].led.off =
-                    Alarm.alarmRepeat(leds[index].led.HOff, leds[index].led.MOff, 0, ledOffHandler, leds[index].led.pin);
-                leds[index].led.on =
-                    Alarm.alarmRepeat(leds[index].led.HOn, leds[index].led.MOn, 0, ledOnHandler, leds[index].led.pin);
+                leds[i].led.off = Alarm.alarmRepeat(leds[i].led.HOff, leds[i].led.MOff, 0, ledOffHandler, leds[i]);
+                leds[i].led.on = Alarm.alarmRepeat(leds[i].led.HOn, leds[i].led.MOn, 0, ledOnHandler, leds[i]);
+
+                uint8_t minutes = clockRTC.getDateTime().hour * 60 + clockRTC.getDateTime().minute;
+                uint8_t minutesOn = leds[i].led.HOn * 60 + leds[i].led.MOn;
+                uint8_t minutesOff = leds[i].led.HOff * 60 + leds[i].led.MOff;
+                if ((minutes > minutesOn) && (minutes < minutesOff)) {
+                    ledOnHandler(leds[i]);
+                } else {
+                    ledOffHandler(leds[i]);
+                }
             } else {
-                Serial.println("Reply isn't JSON object!");
+                Serial.println("Ответ не является JSON объектом");
             }
         } else {
-            Serial.println("Firebase failed to get JSON");
+            Serial.println("Ошибка загрузки параметров прожектора");
         }
     } else {
-        Serial.println("Not found led!!!");
+        Serial.println("Прожектор не найден");
     }
     json.clear();
 }
+uint16_t ledAddress(const uint8_t num) {
+    return StartAddress + num * sizeof(ledDescription);
+}
+void writeEEPROMLed() {
+    uint8_t ledsCount(sizeof(leds) / sizeof(*leds));
+    for (size_t i = 0; i < ledsCount; i++) {
+        if (eeprom.eeprom_write(ledAddress(i), leds[i])) {
+            Serial.println(" Параметры по прожектору " + leds[i].name + " сохранены в EEPROM");
+        } else {
+            Serial.println(" Ошибка сохранения параметров прожектора " + leds[i].name + " в EEPROM");
+        }
+    }
+}
+void readOptionsEEPROM() {
+    ledDescription_t ledFromEEPROM;
+    Serial.printf_P(PSTR("%s\n"), "Загрузка настроек из EEPROM");
+    uint8_t ledsCount(sizeof(leds) / sizeof(*leds));
+    for (size_t i = 0; i < ledsCount; i++) {
+        eeprom.eeprom_read(ledAddress(i), &ledFromEEPROM);
+        leds[i] = ledFromEEPROM;
+        leds[i].led.off = Alarm.alarmRepeat(leds[i].led.HOff, leds[i].led.MOff, 0, ledOffHandler, leds[i]);
+        leds[i].led.on = Alarm.alarmRepeat(leds[i].led.HOn, leds[i].led.MOn, 0, ledOnHandler, leds[i]);
+
+        uint8_t minutes = clockRTC.getDateTime().hour * 60 + clockRTC.getDateTime().minute;
+        uint8_t minutesOn = leds[i].led.HOn * 60 + leds[i].led.MOn;
+        uint8_t minutesOff = leds[i].led.HOff * 60 + leds[i].led.MOff;
+        if ((minutes > minutesOn) && (minutes < minutesOff)) {
+            ledOnHandler(leds[i]);
+        } else {
+            ledOffHandler(leds[i]);
+        }
+    }
+    printAllLedsTime();
+};
 void readOptionsFirebase() {
-    Serial.printf_P(PSTR("%s\n"), "Загрузка настроек из Firebase");
+    Serial.printf_P(PSTR("%s\n"), "Загрузка из Firebase");
     setLEDTime(LEFT);
     setLEDTime(CENTER);
     setLEDTime(RIGHT);
+    Serial.printf_P(PSTR("%s\n"), "Запись в EEPROM");
+    writeEEPROMLed();
 };
 //Сохранение показаний датчиков температуры
-void writeOnlineTemperature() {
+void writeTemperatureFirebase() {
     if (WiFi.isConnected()) {
         FirebaseData firebaseData;
         FirebaseJson json;
-        Serial.printf_P(PSTR("%s"), "Сохраняем в Firebase текущее показание температурных датчиков: ");
+        Serial.printf_P(PSTR("%s"), "Сохраняем в Firebase текущее показание температурных датчиков: \n");
+        Serial.println(ESP.getFreeHeap());
         json.addDouble("temp1", temp1)
             .addDouble("temp2", temp2)
-            .addString("DateTime", String(clockRTC.dateFormat("H:i:s d.m.Y", dt)));
-
+            .addString("DateTime", String(clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime())));
+        Serial.println(ESP.getFreeHeap());
+        Serial.printf_P(PSTR("%s\n"), "JSON сформирован");
         if (Firebase.setJSON(firebaseData, pathTemperatureOnline, json)) {
-            Serial.printf_P(PSTR("%s\n"), "Успешно");
+            //    Serial.printf_P(PSTR("%s\n"), "Успешно");
         } else {
-            Serial.printf_P(PSTR("\nОшибка: %s\n"), firebaseData.errorReason().c_str());
+            Serial.printf_P(PSTR("\nОшибка writeTemperatureFirebase: %s\n"), firebaseData.errorReason().c_str());
         }
-
+        Serial.println(ESP.getFreeHeap());
         Serial.printf_P(PSTR("%s"), "Сохраняем в журнал Firebase текущее показание температурных датчиков: ");
         String deviceDateKey = clockRTC.dateFormat("Y-m-d", clockRTC.getDateTime());
         json.clear();
@@ -441,11 +505,16 @@ void writeOnlineTemperature() {
         } else {
             Serial.printf_P(PSTR("\n%s %s\n"), "Ошибка:", firebaseData.errorReason().c_str());
         }
-    } else {
-        Serial.printf_P(PSTR("%s\n"), "Сохраняем в EEPROM");
     }
 }
-
+void writeBootHistory() {
+    FirebaseData firebaseData;
+    if (Firebase.pushString(firebaseData, pathToBootHistory, String(clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime())))) {
+        Serial.printf_P(PSTR("%s\n"), "Успешно");
+    } else {
+        Serial.printf_P(PSTR("\n%s %s\n"), "writeBootHistory:", firebaseData.errorReason().c_str());
+    }
+}
 void setClock() {
     configTime(3 * 3600, 0, "pool.ntp.org", "time.nist.gov");
     time_t now = time(nullptr);
@@ -460,22 +529,34 @@ void setClock() {
     struct tm timeinfo;
     gmtime_r(&now, &timeinfo);
 }
-
-void Timer5Min() {
-    getTemperature();
-    writeOnlineTemperature();
+void lastOnline() {
+    FirebaseData data;
+    Firebase.setString(data, pathToLastOnline, String(clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime())));
 }
-void Timer1Min() {
-    Serial.println(String(clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime())));
+void Timer5Min() {
     uptime();
+    lastOnline();
+    getTemperature();
+    writeTemperatureFirebase();
+}
+
+void Timer1Min() {
+    ledState_t currentLed;
+    Serial.println(String(clockRTC.dateFormat("H:i:s", clockRTC.getDateTime())));
+    Serial.println(ESP.getFreeHeap());
     getTemperature();
     checkUpdateSettings();
     if (shouldUpdateFlag) {
         readOptionsFirebase();
-        clearAlarms();
         printAllLedsTime();
         shouldUpdateFlag = false;
     }
+    while (!vectorState.empty()) {
+        currentLed = vectorState.back();
+        setCurrentState(currentLed.state, currentLed.name);
+        vectorState.pop_back();
+    }
+    vectorState.clear();
 }
 void startMainTimers() {
     Serial.printf_P(PSTR("%s: %d\n"), "Количество таймеров до", Alarm.count());
@@ -499,9 +580,10 @@ void checkUpdateSettings() {
             Serial.printf_P(PSTR("%s\n"), "UpdateSettings не boolean");
         }
     } else {
-        Serial.printf_P(PSTR("Ошибка: %s\n"), data.errorReason().c_str());
+        Serial.printf_P(PSTR("Ошибка checkUpdateSettings: %s\n"), data.errorReason().c_str());
     }
 }
+
 void setup() {
     Serial.begin(115200);
     Serial.println();
@@ -510,16 +592,14 @@ void setup() {
     initRTC();
     initLeds();
     getTemperature();
-    lastmillis = millis();
 
-    // eeprom_test();
     Serial.printf_P(PSTR("%s: %s\n"), "Подключение к WiFi", WIFI_SSID);
     WiFi.mode(WIFI_STA);
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-
+    WiFi.setAutoReconnect(true);
     while ((WiFi.status() != WL_CONNECTED) && (wifiConnectCount != wifiMaxTry)) {
-        Serial.printf_P(PSTR("%s\n"), ".");
-        delay(1000);
+        Serial.printf_P(PSTR("%s"), ".");
+        delay(500);
         wifiConnectCount++;
     }
 
@@ -533,6 +613,7 @@ void setup() {
         setClock();
         Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
         Firebase.reconnectWiFi(true);
+        writeBootHistory();
         syncTime();  // синхронизируем время
         readOptionsFirebase();
         printAllLedsTime();
@@ -540,7 +621,33 @@ void setup() {
     startMainTimers();
     Timer5Min();
 }
+void prWiFiStatus(int s) {
+#define VALCASE(x)                    \
+    case x:                           \
+        Serial.print("WiFi.status "); \
+        Serial.println(#x);           \
+        break;
 
+    switch (s) {
+        VALCASE(WL_NO_SHIELD);
+        VALCASE(WL_IDLE_STATUS);
+        VALCASE(WL_NO_SSID_AVAIL);
+        VALCASE(WL_SCAN_COMPLETED);
+        VALCASE(WL_CONNECTED);
+        VALCASE(WL_CONNECT_FAILED);
+        VALCASE(WL_CONNECTION_LOST);
+        VALCASE(WL_DISCONNECTED);
+        default:
+            Serial.println(s);
+            break;
+    }
+}
 void loop() {
     Alarm.delay(10);
+    currentMillis = millis();
+
+    if (currentMillis - previousMillis > 60000UL) {
+        previousMillis = currentMillis;
+        prWiFiStatus(WiFi.status());
+    }
 }
