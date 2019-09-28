@@ -62,6 +62,7 @@ String pathTemperatureHistory = "Temperature/History/";
 String pathUpdateSettings = "UpdateSettings";
 String pathToLastOnline = "LastOnline";
 String pathToUptime = "Uptime";
+String pathToBootHistory = "BootHistory";
 
 OneWire ds(ONE_WIRE_BUS);
 byte data[12];
@@ -479,17 +480,19 @@ void writeTemperatureFirebase() {
     if (WiFi.isConnected()) {
         FirebaseData firebaseData;
         FirebaseJson json;
-        Serial.printf_P(PSTR("%s"), "Сохраняем в Firebase текущее показание температурных датчиков: ");
+        Serial.printf_P(PSTR("%s"), "Сохраняем в Firebase текущее показание температурных датчиков: \n");
+        Serial.println(ESP.getFreeHeap());
         json.addDouble("temp1", temp1)
             .addDouble("temp2", temp2)
             .addString("DateTime", String(clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime())));
-
+        Serial.println(ESP.getFreeHeap());
+        Serial.printf_P(PSTR("%s\n"), "JSON сформирован");
         if (Firebase.setJSON(firebaseData, pathTemperatureOnline, json)) {
-            Serial.printf_P(PSTR("%s\n"), "Успешно");
+            //    Serial.printf_P(PSTR("%s\n"), "Успешно");
         } else {
             Serial.printf_P(PSTR("\nОшибка writeTemperatureFirebase: %s\n"), firebaseData.errorReason().c_str());
         }
-
+        Serial.println(ESP.getFreeHeap());
         Serial.printf_P(PSTR("%s"), "Сохраняем в журнал Firebase текущее показание температурных датчиков: ");
         String deviceDateKey = clockRTC.dateFormat("Y-m-d", clockRTC.getDateTime());
         json.clear();
@@ -504,7 +507,14 @@ void writeTemperatureFirebase() {
         }
     }
 }
-
+void writeBootHistory() {
+    FirebaseData firebaseData;
+    if (Firebase.pushString(firebaseData, pathToBootHistory, String(clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime())))) {
+        Serial.printf_P(PSTR("%s\n"), "Успешно");
+    } else {
+        Serial.printf_P(PSTR("\n%s %s\n"), "writeBootHistory:", firebaseData.errorReason().c_str());
+    }
+}
 void setClock() {
     configTime(3 * 3600, 0, "pool.ntp.org", "time.nist.gov");
     time_t now = time(nullptr);
@@ -532,7 +542,8 @@ void Timer5Min() {
 
 void Timer1Min() {
     ledState_t currentLed;
-    Serial.println(String(clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime())));
+    Serial.println(String(clockRTC.dateFormat("H:i:s", clockRTC.getDateTime())));
+    Serial.println(ESP.getFreeHeap());
     getTemperature();
     checkUpdateSettings();
     if (shouldUpdateFlag) {
@@ -602,6 +613,7 @@ void setup() {
         setClock();
         Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
         Firebase.reconnectWiFi(true);
+        writeBootHistory();
         syncTime();  // синхронизируем время
         readOptionsFirebase();
         printAllLedsTime();
