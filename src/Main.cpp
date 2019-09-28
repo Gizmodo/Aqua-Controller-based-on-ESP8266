@@ -480,17 +480,19 @@ void writeTemperatureFirebase() {
     if (WiFi.isConnected()) {
         FirebaseData firebaseData;
         FirebaseJson json;
-        Serial.printf_P(PSTR("%s"), "Сохраняем в Firebase текущее показание температурных датчиков: ");
+        Serial.printf_P(PSTR("%s"), "Сохраняем в Firebase текущее показание температурных датчиков: \n");
+        Serial.println(ESP.getFreeHeap());
         json.addDouble("temp1", temp1)
             .addDouble("temp2", temp2)
             .addString("DateTime", String(clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime())));
-
+        Serial.println(ESP.getFreeHeap());
+        Serial.printf_P(PSTR("%s\n"), "JSON сформирован");
         if (Firebase.setJSON(firebaseData, pathTemperatureOnline, json)) {
-            Serial.printf_P(PSTR("%s\n"), "Успешно");
+            //    Serial.printf_P(PSTR("%s\n"), "Успешно");
         } else {
             Serial.printf_P(PSTR("\nОшибка writeTemperatureFirebase: %s\n"), firebaseData.errorReason().c_str());
         }
-
+        Serial.println(ESP.getFreeHeap());
         Serial.printf_P(PSTR("%s"), "Сохраняем в журнал Firebase текущее показание температурных датчиков: ");
         String deviceDateKey = clockRTC.dateFormat("Y-m-d", clockRTC.getDateTime());
         json.clear();
@@ -540,7 +542,8 @@ void Timer5Min() {
 
 void Timer1Min() {
     ledState_t currentLed;
-    Serial.println(String(clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime())));
+    Serial.println(String(clockRTC.dateFormat("H:i:s", clockRTC.getDateTime())));
+    Serial.println(ESP.getFreeHeap());
     getTemperature();
     checkUpdateSettings();
     if (shouldUpdateFlag) {
