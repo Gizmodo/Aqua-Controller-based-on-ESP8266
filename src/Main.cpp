@@ -1,3 +1,4 @@
+#include <ArduinoJson.h>
 #include <EEPROM.h>
 #include <ESP8266WiFi.h>
 #include <FirebaseESP8266.h>
@@ -8,6 +9,7 @@
 #include "TimeAlarms.h"
 #include "uEEPROMLib.h"
 #include "uptime_formatter.h"
+
 #define FIREBASE_HOST "aqua-3006a.firebaseio.com"
 #define FIREBASE_AUTH "eRxKqsNsandXnfrDtd3wjGMHMc05nUeo5yeKmuni"
 
@@ -477,36 +479,41 @@ void readOptionsFirebase() {
 };
 //Сохранение показаний датчиков температуры
 void writeTemperatureFirebase() {
-    if (WiFi.isConnected()) {
-        FirebaseData firebaseData;
-        FirebaseJson json;
-        Serial.printf_P(PSTR("%s"), "Сохраняем в Firebase текущее показание температурных датчиков: \n");
-        Serial.println(ESP.getFreeHeap());
-        json.addDouble("temp1", temp1)
-            .addDouble("temp2", temp2)
-            .addString("DateTime", String(clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime())));
-        Serial.println(ESP.getFreeHeap());
-        Serial.printf_P(PSTR("%s\n"), "JSON сформирован");
-        if (Firebase.setJSON(firebaseData, pathTemperatureOnline, json)) {
-            //    Serial.printf_P(PSTR("%s\n"), "Успешно");
-        } else {
-            Serial.printf_P(PSTR("\nОшибка writeTemperatureFirebase: %s\n"), firebaseData.errorReason().c_str());
-        }
-        Serial.println(ESP.getFreeHeap());
-        Serial.printf_P(PSTR("%s"), "Сохраняем в журнал Firebase текущее показание температурных датчиков: ");
-        String deviceDateKey = clockRTC.dateFormat("Y-m-d", clockRTC.getDateTime());
-        json.clear();
-        json.addDouble("temp1", temp1)
-            .addDouble("temp2", temp2)
-            .addString("DateTime", String(clockRTC.dateFormat("H:i:s", clockRTC.getDateTime())));
+    if (!WiFi.isConnected())
+        return;
+    const size_t capacity = JSON_OBJECT_SIZE(3);
+    StaticJsonDocument<70> docOnline;
+    StaticJsonDocument<70> docHistory;
+    String bufferOnline, bufferHistory;
+    FirebaseData firebaseData;
+    String deviceDateKey = clockRTC.dateFormat("Y-m-d", clockRTC.getDateTime());
 
-        if (Firebase.pushJSON(firebaseData, pathTemperatureHistory + deviceDateKey, json)) {
-            Serial.printf_P(PSTR("%s\n"), "Успешно");
-        } else {
-            Serial.printf_P(PSTR("\n%s %s\n"), "Ошибка:", firebaseData.errorReason().c_str());
-        }
+    docOnline["DateTime"] = clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime());
+    docOnline["temp1"] = temp1;
+    docOnline["temp2"] = temp2;
+    serializeJson(docOnline, bufferOnline);
+
+    docHistory["DateTime"] = clockRTC.dateFormat("H:i:s", clockRTC.getDateTime());
+    docHistory["temp1"] = temp1;
+    docHistory["temp2"] = temp2;
+    serializeJson(docHistory, bufferHistory);
+
+    Serial.printf_P(PSTR("%s"), "Отправляем температуру в ветку Online\n");
+    if (Firebase.setJSON(firebaseData, pathTemperatureOnline, bufferOnline)) {
+        Serial.printf_P(PSTR("%s\n"), "Запись выполнена");
+    } else {
+        Serial.printf_P(PSTR("\nОшибка записи: %s\n"), firebaseData.errorReason().c_str());
     }
+    docOnline.clear();
+
+    if (Firebase.pushJSON(firebaseData, pathTemperatureHistory + deviceDateKey, bufferHistory)) {
+        Serial.printf_P(PSTR("%s\n"), "Запись выполнена");
+    } else {
+        Serial.printf_P(PSTR("\nОшибка записи: %s\n"), firebaseData.errorReason().c_str());
+    }
+    docHistory.clear();
 }
+
 void writeBootHistory() {
     FirebaseData firebaseData;
     if (Firebase.pushString(firebaseData, pathToBootHistory, String(clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime())))) {
