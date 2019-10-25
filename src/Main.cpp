@@ -75,7 +75,7 @@ byte addr2[8] = {0x28, 0xFF, 0x5F, 0x1E, 0x8C, 0x16, 0x03, 0xE2};  //адрес 
 
 ledDescription_t leds[3];
 
-std::vector<String> splitStringToVector(const String& msg) {
+std::vector<String> splitVector(const String& msg) {
     std::vector<String> subStrings;
     uint32_t j = 0;
     for (uint32_t i = 0; i < msg.length(); i++) {
@@ -361,8 +361,6 @@ void printAllLedsTime() {
 //Загрузка времени включения/выключения прожектора
 void setLEDTime(ledPosition position) {
     FirebaseData firebaseData;
-    FirebaseJson json;
-
     uint8_t ledsCount = (sizeof(leds) / sizeof(*leds));
     String ledPath;
     uint8_t i;
@@ -375,44 +373,37 @@ void setLEDTime(ledPosition position) {
             k = ledsCount;
         }
     }
-    if (found) {
-        if (Firebase.getJSON(firebaseData, pathLight + ledPath)) {
-            if (firebaseData.dataType() == "json") {
-                String jsonData = "";
-                FirebaseJsonObject jsonParseResult;
-                jsonData = firebaseData.jsonData();
-                json.clear();
-                json.setJsonData(jsonData);
-                json.parse();
-                size_t count = json.getJsonObjectIteratorCount();
-                String key, value;
+    if (!found) {
+        Serial.println("Прожектор не найден");
+        return;
+    } else {
+        if (!Firebase.getJSON(firebaseData, pathLight + ledPath)) {
+            Serial.println("Ошибка загрузки параметров прожектора");
+            return;
+        } else {
+            if (!(firebaseData.dataType() == "json")) {
+                Serial.println("Ответ не является JSON объектом");
+                return;
+            } else {
+                String json = firebaseData.jsonData();
+                StaticJsonDocument<180> doc;
                 std::vector<String> vectorString;
-                for (size_t k = 0; k < count; k++) {
-                    json.jsonObjectiterator(k, key, value);
-                    jsonParseResult = json.parseResult();
+                deserializeJson(doc, json);
 
-                    if (key == "enabled") {
-                        leds[i].led.enabled = jsonParseResult.boolValue;
-                    }
-                    if (key == "off") {
-                        vectorString.clear();
-                        vectorString = splitStringToVector(value);
-                        leds[i].led.HOff = vectorString[0].toInt();
-                        leds[i].led.MOff = vectorString[1].toInt();
-                    }
-                    if (key == "on") {
-                        vectorString.clear();
-                        vectorString = splitStringToVector(value);
-                        leds[i].led.HOn = vectorString[0].toInt();
-                        leds[i].led.MOn = vectorString[1].toInt();
-                    }
-                    if (key == "pin") {
-                        leds[i].led.pin = jsonParseResult.intValue;
-                    }
-                    if (key == "state") {
-                        leds[i].led.currentState = jsonParseResult.boolValue;
-                    }
-                }
+                leds[i].led.enabled = doc["enabled"];
+                leds[i].led.pin = doc["pin"];
+                leds[i].led.currentState = doc["state"];
+
+                vectorString.clear();
+                vectorString = splitVector(doc["off"]);
+                leds[i].led.HOff = vectorString[0].toInt();
+                leds[i].led.MOff = vectorString[1].toInt();
+
+                vectorString.clear();
+                vectorString = splitVector(doc["on"]);
+                leds[i].led.HOn = vectorString[0].toInt();
+                leds[i].led.MOn = vectorString[1].toInt();
+
                 leds[i].led.off = Alarm.alarmRepeat(leds[i].led.HOff, leds[i].led.MOff, 0, ledOffHandler, leds[i]);
                 leds[i].led.on = Alarm.alarmRepeat(leds[i].led.HOn, leds[i].led.MOn, 0, ledOnHandler, leds[i]);
 
@@ -424,16 +415,10 @@ void setLEDTime(ledPosition position) {
                 } else {
                     ledOffHandler(leds[i]);
                 }
-            } else {
-                Serial.println("Ответ не является JSON объектом");
+                doc.clear();
             }
-        } else {
-            Serial.println("Ошибка загрузки параметров прожектора");
         }
-    } else {
-        Serial.println("Прожектор не найден");
     }
-    json.clear();
 }
 uint16_t ledAddress(const uint8_t num) {
     return StartAddress + num * sizeof(ledDescription);
@@ -481,7 +466,6 @@ void readOptionsFirebase() {
 void writeTemperatureFirebase() {
     if (!WiFi.isConnected())
         return;
-    const size_t capacity = JSON_OBJECT_SIZE(3);
     StaticJsonDocument<70> docOnline;
     StaticJsonDocument<70> docHistory;
     String bufferOnline, bufferHistory;
@@ -506,6 +490,7 @@ void writeTemperatureFirebase() {
     }
     docOnline.clear();
 
+    Serial.printf_P(PSTR("%s"), "Отправляем температуру в ветку History\n");
     if (Firebase.pushJSON(firebaseData, pathTemperatureHistory + deviceDateKey, bufferHistory)) {
         Serial.printf_P(PSTR("%s\n"), "Запись выполнена");
     } else {
