@@ -116,7 +116,7 @@ void initLeds() {
 void getTemperature() {
     temp1 = DS18B20(addr1);
     temp2 = DS18B20(addr2);
-    Serial.printf_P(PSTR("[T1: %s°]  [T2: %s°]\n"), String(temp1).c_str(), String(temp2).c_str());
+    Serial.printf_P(PSTR(" [T1: %s°]  [T2: %s°]\n"), String(temp1).c_str(), String(temp2).c_str());
 }
 void clearAlarms() {
     uint8_t ledsCount(sizeof(leds) / sizeof(*leds));
@@ -531,8 +531,7 @@ void Timer5Min() {
 
 void Timer1Min() {
     ledState_t currentLed;
-    Serial.println(String(clockRTC.dateFormat("H:i:s", clockRTC.getDateTime())));
-    Serial.println(ESP.getFreeHeap());
+    Serial.print(String(clockRTC.dateFormat("H:i:s", clockRTC.getDateTime())));
     getTemperature();
     checkUpdateSettings();
     if (shouldUpdateFlag) {
