@@ -54,6 +54,7 @@ byte second1 = 0;
 
 WiFiUDP udp;
 
+FirebaseData data;
 unsigned long currentMillis = 1UL;
 unsigned long previousMillis = 1UL;
 
@@ -67,7 +68,7 @@ String pathToUptime = "Uptime";
 String pathToBootHistory = "BootHistory";
 
 OneWire ds(ONE_WIRE_BUS);
-byte data[12];
+byte sensorData[12];
 float temp1, temp2;
 
 byte addr1[8] = {0x28, 0xFF, 0x17, 0xF0, 0x8B, 0x16, 0x03, 0x13};  //адрес датчика DS18B20
@@ -98,9 +99,9 @@ float DS18B20(byte* adres) {
     ds.select(adres);
     ds.write(0xBE);
     for (byte i = 0; i < 9; i++) {
-        data[i] = ds.read();
+        sensorData[i] = ds.read();
     }
-    raw = (data[1] << 8) | data[0];
+    raw = (sensorData[1] << 8) | sensorData[0];
     float celsius = (float)raw / 16.0;
     return celsius;
 }
@@ -128,7 +129,6 @@ void clearAlarms() {
 }
 
 void uptime() {
-    FirebaseData data;
     Serial.println("uptime " + uptime_formatter::getUptime());
     if (!Firebase.setString(data, pathToUptime, uptime_formatter::getUptime())) {
         Serial.printf_P(PSTR("\nОшибка uptime: %s\n"), data.errorReason().c_str());
@@ -279,7 +279,6 @@ void syncTime() {
 }
 
 void setCurrentState(boolean state, const String& name) {
-    FirebaseData data;
     if (!Firebase.setBool(data, pathLight + name + "/state", state)) {
         Serial.println("Не удалось установить состояние прожектора " + name + " в " + state);
     } else {
@@ -360,7 +359,6 @@ void printAllLedsTime() {
 }
 //Загрузка времени включения/выключения прожектора
 void setLEDTime(ledPosition position) {
-    FirebaseData firebaseData;
     uint8_t ledsCount = (sizeof(leds) / sizeof(*leds));
     String ledPath;
     uint8_t i;
@@ -373,51 +371,53 @@ void setLEDTime(ledPosition position) {
             k = ledsCount;
         }
     }
-    if (!found) {
-        Serial.println("Прожектор не найден");
-        return;
-    } else {
-        if (!Firebase.getJSON(firebaseData, pathLight + ledPath)) {
-            Serial.println("Ошибка загрузки параметров прожектора");
-            return;
-        } else {
-            if (!(firebaseData.dataType() == "json")) {
-                Serial.println("Ответ не является JSON объектом");
-                return;
-            } else {
-                String json = firebaseData.jsonData();
+    if (found) {
+        if (Firebase.getJSON(data, pathLight + ledPath)) {
+            if ((data.dataType() == "json")) {
+                String json = data.jsonString();
                 StaticJsonDocument<180> doc;
                 std::vector<String> vectorString;
-                deserializeJson(doc, json);
-
-                leds[i].led.enabled = doc["enabled"];
-                leds[i].led.pin = doc["pin"];
-                leds[i].led.currentState = doc["state"];
-
-                vectorString.clear();
-                vectorString = splitVector(doc["off"]);
-                leds[i].led.HOff = vectorString[0].toInt();
-                leds[i].led.MOff = vectorString[1].toInt();
-
-                vectorString.clear();
-                vectorString = splitVector(doc["on"]);
-                leds[i].led.HOn = vectorString[0].toInt();
-                leds[i].led.MOn = vectorString[1].toInt();
-
-                leds[i].led.off = Alarm.alarmRepeat(leds[i].led.HOff, leds[i].led.MOff, 0, ledOffHandler, leds[i]);
-                leds[i].led.on = Alarm.alarmRepeat(leds[i].led.HOn, leds[i].led.MOn, 0, ledOnHandler, leds[i]);
-
-                uint8_t minutes = clockRTC.getDateTime().hour * 60 + clockRTC.getDateTime().minute;
-                uint8_t minutesOn = leds[i].led.HOn * 60 + leds[i].led.MOn;
-                uint8_t minutesOff = leds[i].led.HOff * 60 + leds[i].led.MOff;
-                if ((minutes > minutesOn) && (minutes < minutesOff)) {
-                    ledOnHandler(leds[i]);
+                DeserializationError err = deserializeJson(doc, json);
+                if (err) {
+                    Serial.print(F("Ошибка десериализации: "));
+                    Serial.println(err.c_str());
                 } else {
-                    ledOffHandler(leds[i]);
+                    leds[i].led.enabled = doc["enabled"];
+                    leds[i].led.pin = doc["pin"];
+                    leds[i].led.currentState = doc["state"];
+
+                    vectorString.clear();
+                    vectorString = splitVector(doc["off"]);
+                    leds[i].led.HOff = vectorString[0].toInt();
+                    leds[i].led.MOff = vectorString[1].toInt();
+
+                    vectorString.clear();
+                    vectorString = splitVector(doc["on"]);
+                    leds[i].led.HOn = vectorString[0].toInt();
+                    leds[i].led.MOn = vectorString[1].toInt();
+
+                    leds[i].led.off = Alarm.alarmRepeat(leds[i].led.HOff, leds[i].led.MOff, 0, ledOffHandler, leds[i]);
+                    leds[i].led.on = Alarm.alarmRepeat(leds[i].led.HOn, leds[i].led.MOn, 0, ledOnHandler, leds[i]);
+
+                    uint8_t minutes = clockRTC.getDateTime().hour * 60 + clockRTC.getDateTime().minute;
+                    uint8_t minutesOn = leds[i].led.HOn * 60 + leds[i].led.MOn;
+                    uint8_t minutesOff = leds[i].led.HOff * 60 + leds[i].led.MOff;
+                    if ((minutes > minutesOn) && (minutes < minutesOff)) {
+                        ledOnHandler(leds[i]);
+                    } else {
+                        ledOffHandler(leds[i]);
+                    }
+                    doc.clear();
                 }
-                doc.clear();
+            } else {
+                Serial.println("Ответ не является JSON объектом");
             }
+        } else {
+            Serial.println("Ошибка загрузки параметров прожектора");
+            Serial.println(data.errorReason());
         }
+    } else {
+        Serial.println("Прожектор не найден");
     }
 }
 uint16_t ledAddress(const uint8_t num) {
@@ -469,7 +469,6 @@ void writeTemperatureFirebase() {
     StaticJsonDocument<70> docOnline;
     StaticJsonDocument<70> docHistory;
     String bufferOnline, bufferHistory;
-    FirebaseData firebaseData;
     String deviceDateKey = clockRTC.dateFormat("Y-m-d", clockRTC.getDateTime());
 
     docOnline["DateTime"] = clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime());
@@ -483,28 +482,27 @@ void writeTemperatureFirebase() {
     serializeJson(docHistory, bufferHistory);
 
     Serial.printf_P(PSTR("%s"), "Отправляем температуру в ветку Online\n");
-    if (Firebase.setJSON(firebaseData, pathTemperatureOnline, bufferOnline)) {
+    if (Firebase.setJSON(data, pathTemperatureOnline, bufferOnline)) {
         Serial.printf_P(PSTR("%s\n"), "Запись выполнена");
     } else {
-        Serial.printf_P(PSTR("\nОшибка записи: %s\n"), firebaseData.errorReason().c_str());
+        Serial.printf_P(PSTR("\nОшибка записи: %s\n"), data.errorReason().c_str());
     }
     docOnline.clear();
 
     Serial.printf_P(PSTR("%s"), "Отправляем температуру в ветку History\n");
-    if (Firebase.pushJSON(firebaseData, pathTemperatureHistory + deviceDateKey, bufferHistory)) {
+    if (Firebase.pushJSON(data, pathTemperatureHistory + deviceDateKey, bufferHistory)) {
         Serial.printf_P(PSTR("%s\n"), "Запись выполнена");
     } else {
-        Serial.printf_P(PSTR("\nОшибка записи: %s\n"), firebaseData.errorReason().c_str());
+        Serial.printf_P(PSTR("\nОшибка записи: %s\n"), data.errorReason().c_str());
     }
     docHistory.clear();
 }
 
 void writeBootHistory() {
-    FirebaseData firebaseData;
-    if (Firebase.pushString(firebaseData, pathToBootHistory, String(clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime())))) {
+    if (Firebase.pushString(data, pathToBootHistory, String(clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime())))) {
         Serial.printf_P(PSTR("%s\n"), "Успешно");
     } else {
-        Serial.printf_P(PSTR("\n%s %s\n"), "writeBootHistory:", firebaseData.errorReason().c_str());
+        Serial.printf_P(PSTR("\n%s %s\n"), "writeBootHistory:", data.errorReason().c_str());
     }
 }
 void setClock() {
@@ -522,7 +520,6 @@ void setClock() {
     gmtime_r(&now, &timeinfo);
 }
 void lastOnline() {
-    FirebaseData data;
     Firebase.setString(data, pathToLastOnline, String(clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime())));
 }
 void Timer5Min() {
@@ -557,7 +554,6 @@ void startMainTimers() {
     Serial.printf_P(PSTR("%s: %d\n"), "Количество таймеров после", Alarm.count());
 }
 void checkUpdateSettings() {
-    FirebaseData data;
     if (Firebase.getBool(data, pathUpdateSettings)) {
         if (data.dataType() == "boolean") {
             if (data.boolData()) {
