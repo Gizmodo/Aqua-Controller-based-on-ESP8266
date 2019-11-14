@@ -12,9 +12,15 @@
 
 #define FIREBASE_HOST "aqua-3006a.firebaseio.com"
 #define FIREBASE_AUTH "eRxKqsNsandXnfrDtd3wjGMHMc05nUeo5yeKmuni"
+#define FIREBASE_FCM_SERVER_KEY                                                                             \
+    "AAAAXMB0htY:APA91bHWX0TsxqBxol0i-1eSJKn0y6e9TpxAfwmyVO6x7BWfwrU0Bmpp_BNun1x6RWLo8lDa98A0WXfKoxzCBhoC_" \
+    "SzDdzk1ZiizAWQceyClzHC79_Rw9u_9t85p6jHTRGc5qD4WpMwd"
+#define FIREBASE_FCM_DEVICE_TOKEN                                                                                                  \
+    "f9LZ68h4adI:"                                                                                                                 \
+    "APA91bHDpiNHPCytTH6sQBLV7s97VwWTVKPrZN8P7nsLn73MbNIZxPnZRxn5ot6UlywQl7uNi5NhNtSdnrficBXabuPSdbgAIcEJH6oFRElckf9h3kE9p6H0OVR7" \
+    "IJBLcPAlZFPEO2bz"
 
 #define WIFI_SSID "MikroTik"
-#define WIFI_PASSWORD1 "123"
 #define WIFI_PASSWORD "11111111"
 
 #define GMT 3
@@ -118,6 +124,27 @@ void getTemperature() {
     temp2 = DS18B20(addr2);
     Serial.printf_P(PSTR(" [T1: %s°]  [T2: %s°]\n"), String(temp1).c_str(), String(temp2).c_str());
 }
+void sendMessage() {
+    data.fcm.setNotifyMessage("Перезагрузка", String(clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime())));
+
+    if (Firebase.broadcastMessage(data)) {
+        Serial.printf_P(PSTR("Сообщение отправлено\n"));
+    } else {
+        Serial.printf_P(PSTR("Ошибка отправки сообщения: %s\n"), data.errorReason().c_str());
+    }
+}
+void sendMessage(ledDescription& led, bool state) {
+    char dataMsg[100];
+    String stateString = state ? "Включение" : "Выключение";
+    sprintf(dataMsg, "Прожектор %s в %s", led.name.c_str(), String(clockRTC.dateFormat("H:i:s", clockRTC.getDateTime())).c_str());
+    data.fcm.setNotifyMessage(stateString, dataMsg);
+
+    if (Firebase.broadcastMessage(data)) {
+        Serial.printf_P(PSTR("Сообщение отправлено\n"));
+    } else {
+        Serial.printf_P(PSTR("Ошибка отправки сообщения: %s\n"), data.errorReason().c_str());
+    }
+}
 void clearAlarms() {
     uint8_t ledsCount(sizeof(leds) / sizeof(*leds));
     for (size_t i = 0; i < ledsCount; i++) {
@@ -129,14 +156,14 @@ void clearAlarms() {
 }
 
 void uptime() {
-    Serial.println("uptime " + uptime_formatter::getUptime());
+    Serial.printf_P(PSTR("Время работы устройства: %s\n"), uptime_formatter::getUptime().c_str());
     if (!Firebase.setString(data, pathToUptime, uptime_formatter::getUptime())) {
         Serial.printf_P(PSTR("\nОшибка uptime: %s\n"), data.errorReason().c_str());
     };
 }
 void initRTC() {
     clockRTC.begin();
-    Serial.println("Часы запущены. Время " + String(clockRTC.dateFormat("H:i:s Y-m-d", clockRTC.getDateTime())));
+    Serial.printf_P(PSTR("Время: %s\n"), String(clockRTC.dateFormat("H:i:s Y-m-d", clockRTC.getDateTime())).c_str());
 }
 /*
 void eeprom_test() {
@@ -261,8 +288,8 @@ void syncTime() {
         rtc.dateTimeToStr(str);
         Serial.printf_P(PSTR("%s\n"), str);
         uint32_t rtcEpoch = rtc.getEpoch();
-        Serial.printf_P(PSTR("RTC эпоха: %d\n"), rtcEpoch);
-        Serial.printf_P(PSTR("NTP эпоха: %d\n"), epoch);
+        Serial.printf_P(PSTR("RTC: %d\n"), rtcEpoch);
+        Serial.printf_P(PSTR("NTP: %d\n"), epoch);
 
         if (abs(rtcEpoch - epoch) > 2) {
             Serial.printf_P(PSTR("%s"), "Обновляем RTC (разница между эпохами = ");
@@ -279,18 +306,18 @@ void syncTime() {
 }
 
 void setCurrentState(boolean state, const String& name) {
+    String stateString = state ? "ON" : "OFF";
     if (!Firebase.setBool(data, pathLight + name + "/state", state)) {
-        Serial.println("Не удалось установить состояние прожектора " + name + " в " + state);
+        Serial.printf_P(PSTR("Не удалось установить состояние прожектора %s в %s\n"), name.c_str(), stateString.c_str());
     } else {
-        Serial.println("Состояние прожектора " + name + " установлено в " + state);
+        Serial.printf_P(PSTR("Состояние прожектора %s установлено в %s\n"), name.c_str(), stateString.c_str());
     }
 }
 
 void ledOnHandler(ledDescription& led) {
     if (led.led.enabled) {
-        Serial.print("Включение прожектора PIN=");
-        Serial.println(led.led.pin);
-
+        Serial.printf_P(PSTR("Включение прожектора PIN %d\n"), led.led.pin);
+        sendMessage(led, true);
         Alarm.enable(led.led.off);
         Alarm.enable(led.led.on);
 
@@ -301,7 +328,7 @@ void ledOnHandler(ledDescription& led) {
         state.state = true;
         vectorState.push_back(state);
     } else {
-        Serial.println("Прожектор не доступен для изменения состояния");
+        Serial.printf_P(PSTR("%s\n"), "Прожектор не доступен для изменения состояния");
         Alarm.disable(led.led.off);
         Alarm.disable(led.led.on);
     }
@@ -309,9 +336,8 @@ void ledOnHandler(ledDescription& led) {
 
 void ledOffHandler(ledDescription& led) {
     if (led.led.enabled) {
-        Serial.print("Выключение прожектора PIN=");
-        Serial.println(led.led.pin);
-
+        Serial.printf_P(PSTR("Выключение прожектора PIN %d\n"), led.led.pin);
+        sendMessage(led, false);
         Alarm.enable(led.led.off);
         Alarm.enable(led.led.on);
 
@@ -322,7 +348,7 @@ void ledOffHandler(ledDescription& led) {
         state.state = false;
         vectorState.push_back(state);
     } else {
-        Serial.println("Прожектор не доступен для изменения состояния");
+        Serial.printf_P(PSTR("%s\n"), "Прожектор не доступен для изменения состояния");
         Alarm.disable(led.led.off);
         Alarm.disable(led.led.on);
     }
@@ -340,7 +366,7 @@ void printLEDTime(ledPosition position) {
         }
     }
     if (!found) {
-        Serial.println("Прожектор не найден!!!");
+        Serial.printf_P(PSTR("%s\n"), "Прожектор не найден!!!");
     } else {
         Serial.printf_P(PSTR(" Вкл-%02d:%02d. Выкл-%02d:%02d. Состояние: %s. Разрешен: %s. PIN: %d\n"), leds[index].led.HOn,
                         leds[index].led.MOn, leds[index].led.HOff, leds[index].led.MOff,
@@ -379,8 +405,7 @@ void setLEDTime(ledPosition position) {
                 std::vector<String> vectorString;
                 DeserializationError err = deserializeJson(doc, json);
                 if (err) {
-                    Serial.print(F("Ошибка десериализации: "));
-                    Serial.println(err.c_str());
+                    Serial.printf_P(PSTR("Ошибка десериализации: %s\n"), err.c_str());
                 } else {
                     leds[i].led.enabled = doc["enabled"];
                     leds[i].led.pin = doc["pin"];
@@ -410,14 +435,13 @@ void setLEDTime(ledPosition position) {
                     doc.clear();
                 }
             } else {
-                Serial.println("Ответ не является JSON объектом");
+                Serial.printf_P(PSTR("%s\n"), "Ответ не является JSON объектом");
             }
         } else {
-            Serial.println("Ошибка загрузки параметров прожектора");
-            Serial.println(data.errorReason());
+            Serial.printf_P(PSTR("%s: %s\n"), "Ошибка загрузки параметров прожектора", data.errorReason().c_str());
         }
     } else {
-        Serial.println("Прожектор не найден");
+        Serial.printf_P(PSTR("%s\n"), "Прожектор не найден");
     }
 }
 uint16_t ledAddress(const uint8_t num) {
@@ -427,9 +451,9 @@ void writeEEPROMLed() {
     uint8_t ledsCount(sizeof(leds) / sizeof(*leds));
     for (size_t i = 0; i < ledsCount; i++) {
         if (eeprom.eeprom_write(ledAddress(i), leds[i])) {
-            Serial.println(" Параметры по прожектору " + leds[i].name + " сохранены в EEPROM");
+            Serial.printf_P(PSTR(" Параметры по прожектору %s сохранены в EEPROM\n"), leds[i].name.c_str());
         } else {
-            Serial.println(" Ошибка сохранения параметров прожектора " + leds[i].name + " в EEPROM");
+            Serial.printf_P(PSTR(" Ошибка сохранения параметров прожектора %s в EEPROM\n"), leds[i].name.c_str());
         }
     }
 }
@@ -462,47 +486,46 @@ void readOptionsFirebase() {
     Serial.printf_P(PSTR("%s\n"), "Запись в EEPROM");
     writeEEPROMLed();
 };
+double floatToDouble(float x) {
+    return static_cast<double>(x);
+}
 //Сохранение показаний датчиков температуры
 void writeTemperatureFirebase() {
     if (!WiFi.isConnected())
         return;
-    StaticJsonDocument<70> docOnline;
-    StaticJsonDocument<70> docHistory;
-    String bufferOnline, bufferHistory;
     String deviceDateKey = clockRTC.dateFormat("Y-m-d", clockRTC.getDateTime());
 
-    docOnline["DateTime"] = clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime());
-    docOnline["temp1"] = temp1;
-    docOnline["temp2"] = temp2;
-    serializeJson(docOnline, bufferOnline);
+    FirebaseJson jsonOnline, jsonHistory;
+    jsonOnline.add("DateTime", String(clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime())));
+    jsonOnline.add("temp1", floatToDouble(temp1));
+    jsonOnline.add("temp2", floatToDouble(temp2));
 
-    docHistory["DateTime"] = clockRTC.dateFormat("H:i:s", clockRTC.getDateTime());
-    docHistory["temp1"] = temp1;
-    docHistory["temp2"] = temp2;
-    serializeJson(docHistory, bufferHistory);
+    jsonHistory.add("DateTime", String(clockRTC.dateFormat("H:i:s", clockRTC.getDateTime())));
+    jsonHistory.add("temp1", floatToDouble(temp1));
+    jsonHistory.add("temp2", floatToDouble(temp2));
 
     Serial.printf_P(PSTR("%s"), "Отправляем температуру в ветку Online\n");
-    if (Firebase.setJSON(data, pathTemperatureOnline, bufferOnline)) {
+    if (Firebase.setJSON(data, pathTemperatureOnline, jsonOnline)) {
         Serial.printf_P(PSTR("%s\n"), "Запись выполнена");
     } else {
         Serial.printf_P(PSTR("\nОшибка записи: %s\n"), data.errorReason().c_str());
     }
-    docOnline.clear();
+    jsonOnline.clear();
 
     Serial.printf_P(PSTR("%s"), "Отправляем температуру в ветку History\n");
-    if (Firebase.pushJSON(data, pathTemperatureHistory + deviceDateKey, bufferHistory)) {
+    if (Firebase.pushJSON(data, pathTemperatureHistory + deviceDateKey, jsonHistory)) {
         Serial.printf_P(PSTR("%s\n"), "Запись выполнена");
     } else {
         Serial.printf_P(PSTR("\nОшибка записи: %s\n"), data.errorReason().c_str());
     }
-    docHistory.clear();
+    jsonHistory.clear();
 }
 
 void writeBootHistory() {
     if (Firebase.pushString(data, pathToBootHistory, String(clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime())))) {
-        Serial.printf_P(PSTR("%s\n"), "Успешно");
+        Serial.printf_P(PSTR("%s\n"), "Запись времени старта");
     } else {
-        Serial.printf_P(PSTR("\n%s %s\n"), "writeBootHistory:", data.errorReason().c_str());
+        Serial.printf_P(PSTR("\n%s %s\n"), "Ошибка записи времени старта:", data.errorReason().c_str());
     }
 }
 void setClock() {
@@ -531,7 +554,7 @@ void Timer5Min() {
 
 void Timer1Min() {
     ledState_t currentLed;
-    Serial.print(String(clockRTC.dateFormat("H:i:s", clockRTC.getDateTime())));
+    Serial.printf_P(PSTR("%s\n"), String(clockRTC.dateFormat("H:i:s", clockRTC.getDateTime())).c_str());
     getTemperature();
     checkUpdateSettings();
     if (shouldUpdateFlag) {
@@ -547,27 +570,27 @@ void Timer1Min() {
     vectorState.clear();
 }
 void startMainTimers() {
-    Serial.printf_P(PSTR("%s: %d\n"), "Количество таймеров до", Alarm.count());
+    Serial.printf_P(PSTR("%s: %d\n"), "Таймеры: основные", Alarm.count());
     Alarm.timerRepeat(5 * 60, Timer5Min);  // сохраняем температуру в Firebase/EEPROM
     Alarm.timerRepeat(20, Timer1Min);      // вывод uptime и тмемпературу каждую минуту
-    Serial.printf_P(PSTR("%s: %d\n"), "Количество таймеров после", Alarm.count());
+    Serial.printf_P(PSTR("%s: %d\n"), "Таймеры: основные и прожекторные", Alarm.count());
 }
 void checkUpdateSettings() {
     if (Firebase.getBool(data, pathUpdateSettings)) {
         if (data.dataType() == "boolean") {
             if (data.boolData()) {
-                Serial.printf_P(PSTR("%s\n"), "Запрос на обновление всех настроек!!!");
+                Serial.printf_P(PSTR("%s\n"), "Запрос на обновление всех настроек");
                 shouldUpdateFlag = true;
                 clearAlarms();
                 if (!Firebase.setBool(data, pathUpdateSettings, false)) {
-                    Serial.printf_P(PSTR("%s: %s\n"), "Не удалось вернуть флаг UpdateSettings", data.errorReason().c_str());
+                    Serial.printf_P(PSTR("%s: %s\n"), "Не удалось отключить флаг сброса настроек", data.errorReason().c_str());
                 }
             }
         } else {
-            Serial.printf_P(PSTR("%s\n"), "UpdateSettings не boolean");
+            Serial.printf_P(PSTR("%s\n"), "Флаг сброса настроек UpdateSettings должен быть типа boolean");
         }
     } else {
-        Serial.printf_P(PSTR("Ошибка checkUpdateSettings: %s\n"), data.errorReason().c_str());
+        Serial.printf_P(PSTR("Ошибка чтения флага сброса настроек UpdateSettings: %s\n"), data.errorReason().c_str());
     }
 }
 
@@ -600,6 +623,13 @@ void setup() {
         setClock();
         Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
         Firebase.reconnectWiFi(true);
+
+        data.fcm.begin(FIREBASE_FCM_SERVER_KEY);
+        data.fcm.addDeviceToken(FIREBASE_FCM_DEVICE_TOKEN);
+        data.fcm.setPriority("high");
+        data.fcm.setTimeToLive(1000);
+
+        sendMessage();
         writeBootHistory();
         syncTime();  // синхронизируем время
         readOptionsFirebase();
