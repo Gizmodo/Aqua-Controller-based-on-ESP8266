@@ -504,19 +504,19 @@ void writeTemperatureFirebase() {
     jsonHistory.add("temp1", floatToDouble(temp1));
     jsonHistory.add("temp2", floatToDouble(temp2));
 
-    Serial.printf_P(PSTR("%s"), "Отправляем температуру в ветку Online\n");
+    Serial.printf_P(PSTR("%s"), "Отправляем температуру в ветку Online -> ");
     if (Firebase.setJSON(data, pathTemperatureOnline, jsonOnline)) {
-        Serial.printf_P(PSTR("%s\n"), "Запись выполнена");
+        Serial.printf_P(PSTR("%s\n"), "OK");
     } else {
-        Serial.printf_P(PSTR("\nОшибка записи: %s\n"), data.errorReason().c_str());
+        Serial.printf_P(PSTR("Ошибка: %s\n"), data.errorReason().c_str());
     }
     jsonOnline.clear();
 
-    Serial.printf_P(PSTR("%s"), "Отправляем температуру в ветку History\n");
+    Serial.printf_P(PSTR("%s"), "Отправляем температуру в ветку History -> ");
     if (Firebase.pushJSON(data, pathTemperatureHistory + deviceDateKey, jsonHistory)) {
-        Serial.printf_P(PSTR("%s\n"), "Запись выполнена");
+        Serial.printf_P(PSTR("%s\n"), "OK");
     } else {
-        Serial.printf_P(PSTR("\nОшибка записи: %s\n"), data.errorReason().c_str());
+        Serial.printf_P(PSTR("Ошибка: %s\n"), data.errorReason().c_str());
     }
     jsonHistory.clear();
 }
@@ -554,7 +554,7 @@ void Timer5Min() {
 
 void Timer1Min() {
     ledState_t currentLed;
-    Serial.printf_P(PSTR("%s\n"), String(clockRTC.dateFormat("H:i:s", clockRTC.getDateTime())).c_str());
+    Serial.printf_P(PSTR("%s "), String(clockRTC.dateFormat("H:i:s", clockRTC.getDateTime())).c_str());
     getTemperature();
     checkUpdateSettings();
     if (shouldUpdateFlag) {
@@ -570,10 +570,10 @@ void Timer1Min() {
     vectorState.clear();
 }
 void startMainTimers() {
-    Serial.printf_P(PSTR("%s: %d\n"), "Таймеры: основные", Alarm.count());
+    Serial.printf_P(PSTR("%s -> %d\n"), "Таймеры: основные", Alarm.count());
     Alarm.timerRepeat(5 * 60, Timer5Min);  // сохраняем температуру в Firebase/EEPROM
     Alarm.timerRepeat(20, Timer1Min);      // вывод uptime и тмемпературу каждую минуту
-    Serial.printf_P(PSTR("%s: %d\n"), "Таймеры: основные и прожекторные", Alarm.count());
+    Serial.printf_P(PSTR("%s -> %d\n"), "Таймеры: основные и прожекторные", Alarm.count());
 }
 void checkUpdateSettings() {
     if (Firebase.getBool(data, pathUpdateSettings)) {
@@ -618,7 +618,7 @@ void setup() {
         Serial.printf_P(PSTR("%s: %s\n"), "Не удалось подключиться к WiFi", WIFI_SSID);
         readOptionsEEPROM();
     } else {
-        Serial.printf_P(PSTR("%s: %s IP:%s\n"), "Успешное подключение к WiFi", WIFI_SSID, WiFi.localIP().toString().c_str());
+        Serial.printf_P(PSTR("\n%s: %s IP: %s\n"), "Успешное подключение к WiFi", WIFI_SSID, WiFi.localIP().toString().c_str());
         WiFi.hostname(WiFi_hostname);
         setClock();
         Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
@@ -665,6 +665,6 @@ void loop() {
 
     if (currentMillis - previousMillis > 60000UL) {
         previousMillis = currentMillis;
-        prWiFiStatus(WiFi.status());
+        //prWiFiStatus(WiFi.status());
     }
 }
