@@ -27,7 +27,7 @@
 
 #define ONE_WIRE_BUS 14  //Пин, к которому подключены датчики DS18B20 D5 GPIO14
 
-#define ALARMS_COUNT 6  //Количество таймеров, которые нужно удалять. Помимо их есть еще два основных - каждую минуту и каждые пять.
+//#define ALARMS_COUNT 6  //Количество таймеров, которые нужно удалять. Помимо их есть еще два основных - каждую минуту и каждые пять.
 //Указанное кол-во надо увеличить в случае появления нового расписания для нового устройства, например, дозаторы, CO2, нагреватель и
 //прочие устройства которые будут запланированы на включение или выключение
 //----------------------------------------------------------------------------------
@@ -80,7 +80,7 @@ float temp1, temp2;
 byte addr1[8] = {0x28, 0xFF, 0x17, 0xF0, 0x8B, 0x16, 0x03, 0x13};  //адрес датчика DS18B20
 byte addr2[8] = {0x28, 0xFF, 0x5F, 0x1E, 0x8C, 0x16, 0x03, 0xE2};  //адрес датчика DS18B20
 
-ledDescription_t leds[3];
+ledDescription_t leds[6];
 
 std::vector<String> splitVector(const String& msg) {
     std::vector<String> subStrings;
@@ -112,12 +112,18 @@ float DS18B20(byte* adres) {
     return celsius;
 }
 void initLeds() {
-    leds[0].name = "Left";
-    leds[0].position = LEFT;
-    leds[1].name = "Center";
-    leds[1].position = CENTER;
-    leds[2].name = "Right";
-    leds[2].position = RIGHT;
+    leds[0].name = "One";
+    leds[0].position = ONE;
+    leds[1].name = "Two";
+    leds[1].position = TWO;
+    leds[2].name = "Three";
+    leds[2].position = THREE;
+    leds[3].name = "Four";
+    leds[3].position = FOUR;
+    leds[4].name = "Five";
+    leds[4].position = FIVE;
+    leds[5].name = "Six";
+    leds[5].position = SIX;
 }
 void getTemperature() {
     temp1 = DS18B20(addr1);
@@ -235,7 +241,7 @@ void eeprom_test() {
       }
 
       pos = 0;
-      
+
 }
 */
 void sendNTPpacket(IPAddress& address) {
@@ -379,9 +385,12 @@ void printLEDTime(ledPosition position) {
 
 void printAllLedsTime() {
     Serial.printf_P(PSTR("%s\n"), "Отображение текущих настроек всех прожекторов");
-    printLEDTime(LEFT);
-    printLEDTime(CENTER);
-    printLEDTime(RIGHT);
+    printLEDTime(ONE);
+    printLEDTime(TWO);
+    printLEDTime(THREE);
+    printLEDTime(FOUR);
+    printLEDTime(FIVE);
+    printLEDTime(SIX);
 }
 //Загрузка времени включения/выключения прожектора
 void setLEDTime(ledPosition position) {
@@ -480,9 +489,12 @@ void readOptionsEEPROM() {
 };
 void readOptionsFirebase() {
     Serial.printf_P(PSTR("%s\n"), "Загрузка из Firebase");
-    setLEDTime(LEFT);
-    setLEDTime(CENTER);
-    setLEDTime(RIGHT);
+    setLEDTime(ONE);
+    setLEDTime(TWO);
+    setLEDTime(THREE);
+    setLEDTime(FOUR);
+    setLEDTime(FIVE);
+    setLEDTime(SIX);
     Serial.printf_P(PSTR("%s\n"), "Запись в EEPROM");
     writeEEPROMLed();
 };
@@ -665,6 +677,6 @@ void loop() {
 
     if (currentMillis - previousMillis > 60000UL) {
         previousMillis = currentMillis;
-        //prWiFiStatus(WiFi.status());
+        // prWiFiStatus(WiFi.status());
     }
 }

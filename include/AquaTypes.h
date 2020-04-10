@@ -1,6 +1,6 @@
 #include "TimeAlarms.h"
 
-enum ledPosition { LEFT, CENTER, RIGHT };
+enum ledPosition { ONE, TWO, THREE, FOUR, FIVE, SIX };
 typedef struct ledStruct_t {
     byte HOn, HOff;
     byte MOn, MOff;
