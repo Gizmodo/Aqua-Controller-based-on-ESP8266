@@ -183,9 +183,10 @@ void DS3231::setDateTime(const char* date, const char* time) {
     setDateTime(year + 2000, month, day, hour, minute, second);
 }
 
-const char* DS3231::dateFormat(const char* dateFormat, RTCDateTime dt) {
-    char buffer[255];
-
+char* DS3231::dateFormat(const char* dateFormat, RTCDateTime dt) {
+   // char buffer1[255];
+    char *buffer = (char*)malloc(sizeof(char)*255);
+if (buffer != nullptr) {
     buffer[0] = 0;
 
     char helper[11];
@@ -305,7 +306,7 @@ const char* DS3231::dateFormat(const char* dateFormat, RTCDateTime dt) {
         }
         dateFormat++;
     }
-
+}
     return buffer;
 }
 

@@ -114,7 +114,7 @@ class DS3231 {
 
     void setBattery(bool timeBattery, bool squareBattery);
 
-    const char* dateFormat(const char* dateFormat, RTCDateTime dt);
+    char* dateFormat(const char* dateFormat, RTCDateTime dt);
     const char* dateFormat(const char* dateFormat, RTCAlarmTime dt);
 
    private:
