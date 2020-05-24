@@ -114,16 +114,16 @@ class DS3231 {
 
     void setBattery(bool timeBattery, bool squareBattery);
 
-    char* dateFormat(const char* dateFormat, RTCDateTime dt);
-    char* dateFormat(const char* dateFormat, RTCAlarmTime dt);
+    const char* dateFormat(const char* dateFormat, RTCDateTime dt);
+    const char* dateFormat(const char* dateFormat, RTCAlarmTime dt);
 
    private:
     RTCDateTime t;
 
-    char* strDayOfWeek(uint8_t dayOfWeek);
-    char* strMonth(uint8_t month);
-    char* strAmPm(uint8_t hour, bool uppercase);
-    char* strDaySufix(uint8_t day);
+    const char* strDayOfWeek(uint8_t dayOfWeek);
+    const char* strMonth(uint8_t month);
+    const char* strAmPm(uint8_t hour, bool uppercase);
+    const char* strDaySufix(uint8_t day);
 
     uint8_t hour12(uint8_t hour24);
     uint8_t bcd2dec(uint8_t bcd);
