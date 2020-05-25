@@ -141,14 +141,11 @@ void DS3231::setDateTime(const char* date, const char* time) {
 
     switch (date[0]) {
         case 'J':
-            if (date[1]=='a' && date[2] == 'n')
-            {
+            if (date[1] == 'a' && date[2] == 'n') {
                 month = 1;
-            } else if (date[1]=='u' && date[2] == 'n')
-            {
+            } else if (date[1] == 'u' && date[2] == 'n') {
                 month = 6;
-            } else
-            {
+            } else {
                 month = 7;
             }
             break;
@@ -173,6 +170,10 @@ void DS3231::setDateTime(const char* date, const char* time) {
         case 'D':
             month = 12;
             break;
+        default:
+            year = conv2d(date + 8);
+            day = conv2d(date);
+            month = conv2d(date + 3);
     }
 
     day = conv2d(date + 4);
@@ -184,211 +185,211 @@ void DS3231::setDateTime(const char* date, const char* time) {
 }
 
 char* DS3231::dateFormat(const char* dateFormat, RTCDateTime dt) {
-   // char buffer1[255];
-    char *buffer = (char*)malloc(sizeof(char)*255);
-if (buffer != nullptr) {
-    buffer[0] = 0;
+    // char buffer1[255];
+    char* buffer = (char*)malloc(sizeof(char) * 255);
+    if (buffer != nullptr) {
+        buffer[0] = 0;
 
-    char helper[11];
+        char helper[11];
 
-    while (*dateFormat != '\0') {
-        switch (dateFormat[0]) {
-            // Day decoder
-            case 'd':
-                sprintf(helper, "%02d", dt.day);
-                strcat(buffer, (const char*)helper);
-                break;
-            case 'j':
-                sprintf(helper, "%d", dt.day);
-                strcat(buffer, (const char*)helper);
-                break;
-            case 'l':
-                strcat(buffer, (const char*)strDayOfWeek(dt.dayOfWeek));
-                break;
-            case 'D':
-                strncat(buffer, strDayOfWeek(dt.dayOfWeek), 3);
-                break;
-            case 'N':
-                sprintf(helper, "%d", dt.dayOfWeek);
-                strcat(buffer, (const char*)helper);
-                break;
-            case 'w':
-                sprintf(helper, "%d", (dt.dayOfWeek + 7) % 7);
-                strcat(buffer, (const char*)helper);
-                break;
-            case 'z':
-                sprintf(helper, "%d", dayInYear(dt.year, dt.month, dt.day));
-                strcat(buffer, (const char*)helper);
-                break;
-            case 'S':
-                strcat(buffer, (const char*)strDaySufix(dt.day));
-                break;
+        while (*dateFormat != '\0') {
+            switch (dateFormat[0]) {
+                // Day decoder
+                case 'd':
+                    sprintf(helper, "%02d", dt.day);
+                    strcat(buffer, (const char*)helper);
+                    break;
+                case 'j':
+                    sprintf(helper, "%d", dt.day);
+                    strcat(buffer, (const char*)helper);
+                    break;
+                case 'l':
+                    strcat(buffer, (const char*)strDayOfWeek(dt.dayOfWeek));
+                    break;
+                case 'D':
+                    strncat(buffer, strDayOfWeek(dt.dayOfWeek), 3);
+                    break;
+                case 'N':
+                    sprintf(helper, "%d", dt.dayOfWeek);
+                    strcat(buffer, (const char*)helper);
+                    break;
+                case 'w':
+                    sprintf(helper, "%d", (dt.dayOfWeek + 7) % 7);
+                    strcat(buffer, (const char*)helper);
+                    break;
+                case 'z':
+                    sprintf(helper, "%d", dayInYear(dt.year, dt.month, dt.day));
+                    strcat(buffer, (const char*)helper);
+                    break;
+                case 'S':
+                    strcat(buffer, (const char*)strDaySufix(dt.day));
+                    break;
 
-            // Month decoder
-            case 'm':
-                sprintf(helper, "%02d", dt.month);
-                strcat(buffer, static_cast<const char*>(helper));
-                break;
-            case 'n':
-                sprintf(helper, "%d", dt.month);
-                strcat(buffer, static_cast<const char*>(helper));
-                break;
-            case 'F':
-                strcat(buffer, static_cast<const char*>(strMonth(dt.month)));
-                break;
-            case 'M':
-                strncat(buffer, static_cast<const char*>(strMonth(dt.month)), 3);
-                break;
-            case 't':
-                sprintf(helper, "%d", daysInMonth(dt.year, dt.month));
-                strcat(buffer, static_cast<const char*>(helper));
-                break;
+                // Month decoder
+                case 'm':
+                    sprintf(helper, "%02d", dt.month);
+                    strcat(buffer, static_cast<const char*>(helper));
+                    break;
+                case 'n':
+                    sprintf(helper, "%d", dt.month);
+                    strcat(buffer, static_cast<const char*>(helper));
+                    break;
+                case 'F':
+                    strcat(buffer, static_cast<const char*>(strMonth(dt.month)));
+                    break;
+                case 'M':
+                    strncat(buffer, static_cast<const char*>(strMonth(dt.month)), 3);
+                    break;
+                case 't':
+                    sprintf(helper, "%d", daysInMonth(dt.year, dt.month));
+                    strcat(buffer, static_cast<const char*>(helper));
+                    break;
 
-            // Year decoder
-            case 'Y':
-                sprintf(helper, "%d", dt.year);
-                strcat(buffer, static_cast<const char*>(helper));
-                break;
-            case 'y':
-                sprintf(helper, "%02d", dt.year - 2000);
-                strcat(buffer, static_cast<const char*>(helper));
-                break;
-            case 'L':
-                sprintf(helper, "%d", isLeapYear(dt.year));
-                strcat(buffer, static_cast<const char*>(helper));
-                break;
+                // Year decoder
+                case 'Y':
+                    sprintf(helper, "%d", dt.year);
+                    strcat(buffer, static_cast<const char*>(helper));
+                    break;
+                case 'y':
+                    sprintf(helper, "%02d", dt.year - 2000);
+                    strcat(buffer, static_cast<const char*>(helper));
+                    break;
+                case 'L':
+                    sprintf(helper, "%d", isLeapYear(dt.year));
+                    strcat(buffer, static_cast<const char*>(helper));
+                    break;
 
-            // Hour decoder
-            case 'H':
-                sprintf(helper, "%02d", dt.hour);
-                strcat(buffer, static_cast<const char*>(helper));
-                break;
-            case 'G':
-                sprintf(helper, "%d", dt.hour);
-                strcat(buffer, static_cast<const char*>(helper));
-                break;
-            case 'h':
-                sprintf(helper, "%02d", hour12(dt.hour));
-                strcat(buffer, static_cast<const char*>(helper));
-                break;
-            case 'g':
-                sprintf(helper, "%d", hour12(dt.hour));
-                strcat(buffer, static_cast<const char*>(helper));
-                break;
-            case 'A':
-                strcat(buffer, (const char*)strAmPm(dt.hour, true));
-                break;
-            case 'a':
-                strcat(buffer, (const char*)strAmPm(dt.hour, false));
-                break;
+                // Hour decoder
+                case 'H':
+                    sprintf(helper, "%02d", dt.hour);
+                    strcat(buffer, static_cast<const char*>(helper));
+                    break;
+                case 'G':
+                    sprintf(helper, "%d", dt.hour);
+                    strcat(buffer, static_cast<const char*>(helper));
+                    break;
+                case 'h':
+                    sprintf(helper, "%02d", hour12(dt.hour));
+                    strcat(buffer, static_cast<const char*>(helper));
+                    break;
+                case 'g':
+                    sprintf(helper, "%d", hour12(dt.hour));
+                    strcat(buffer, static_cast<const char*>(helper));
+                    break;
+                case 'A':
+                    strcat(buffer, (const char*)strAmPm(dt.hour, true));
+                    break;
+                case 'a':
+                    strcat(buffer, (const char*)strAmPm(dt.hour, false));
+                    break;
 
-            // Minute decoder
-            case 'i':
-                sprintf(helper, "%02d", dt.minute);
-                strcat(buffer, static_cast<const char*>(helper));
-                break;
+                // Minute decoder
+                case 'i':
+                    sprintf(helper, "%02d", dt.minute);
+                    strcat(buffer, static_cast<const char*>(helper));
+                    break;
 
-            // Second decoder
-            case 's':
-                sprintf(helper, "%02d", dt.second);
-                strcat(buffer, static_cast<const char*>(helper));
-                break;
+                // Second decoder
+                case 's':
+                    sprintf(helper, "%02d", dt.second);
+                    strcat(buffer, static_cast<const char*>(helper));
+                    break;
 
-            // Misc decoder
-            case 'U':
-                sprintf(helper, "%u", dt.unixtime);
-                strcat(buffer, (const char*)helper);
-                break;
+                // Misc decoder
+                case 'U':
+                    sprintf(helper, "%u", dt.unixtime);
+                    strcat(buffer, (const char*)helper);
+                    break;
 
-            default:
-                strncat(buffer, dateFormat, 1);
-                break;
+                default:
+                    strncat(buffer, dateFormat, 1);
+                    break;
+            }
+            dateFormat++;
         }
-        dateFormat++;
     }
-}
     return buffer;
 }
 
 const char* DS3231::dateFormat(const char* dateFormat, RTCAlarmTime dt) {
-    char buffer[255];
-
+    // char buffer[255];
+    char* buffer = (char*)malloc(sizeof(char) * 255);
     buffer[0] = 0;
-
     char helper[11];
 
-    while (*dateFormat != '\0') {
-        switch (dateFormat[0]) {
-            // Day decoder
-            case 'd':
-                sprintf(helper, "%02d", dt.day);
-                strcat(buffer, static_cast<const char*>(helper));
-                break;
-            case 'j':
-                sprintf(helper, "%d", dt.day);
-                strcat(buffer, static_cast<const char*>(helper));
-                break;
-            case 'l':
-                strcat(buffer, (const char*)strDayOfWeek(dt.day));
-                break;
-            case 'D':
-                strncat(buffer, strDayOfWeek(dt.day), 3);
-                break;
-            case 'N':
-                sprintf(helper, "%d", dt.day);
-                strcat(buffer, static_cast<const char*>(helper));
-                break;
-            case 'w':
-                sprintf(helper, "%d", (dt.day + 7) % 7);
-                strcat(buffer, static_cast<const char*>(helper));
-                break;
-            case 'S':
-                strcat(buffer, (const char*)strDaySufix(dt.day));
-                break;
+    if (buffer != nullptr) {
+        while (*dateFormat != '\0') {
+            switch (dateFormat[0]) {
+                // Day decoder
+                case 'd':
+                    sprintf(helper, "%02d", dt.day);
+                    strcat(buffer, static_cast<const char*>(helper));
+                    break;
+                case 'j':
+                    sprintf(helper, "%d", dt.day);
+                    strcat(buffer, static_cast<const char*>(helper));
+                    break;
+                case 'l':
+                    strcat(buffer, (const char*)strDayOfWeek(dt.day));
+                    break;
+                case 'D':
+                    strncat(buffer, strDayOfWeek(dt.day), 3);
+                    break;
+                case 'N':
+                    sprintf(helper, "%d", dt.day);
+                    strcat(buffer, static_cast<const char*>(helper));
+                    break;
+                case 'w':
+                    sprintf(helper, "%d", (dt.day + 7) % 7);
+                    strcat(buffer, static_cast<const char*>(helper));
+                    break;
+                case 'S':
+                    strcat(buffer, (const char*)strDaySufix(dt.day));
+                    break;
 
-            // Hour decoder
-            case 'H':
-                sprintf(helper, "%02d", dt.hour);
-                strcat(buffer, static_cast<const char*>(helper));
-                break;
-            case 'G':
-                sprintf(helper, "%d", dt.hour);
-                strcat(buffer, static_cast<const char*>(helper));
-                break;
-            case 'h':
-                sprintf(helper, "%02d", hour12(dt.hour));
-                strcat(buffer, static_cast<const char*>(helper));
-                break;
-            case 'g':
-                sprintf(helper, "%d", hour12(dt.hour));
-                strcat(buffer, static_cast<const char*>(helper));
-                break;
-            case 'A':
-                strcat(buffer, (const char*)strAmPm(dt.hour, true));
-                break;
-            case 'a':
-                strcat(buffer, (const char*)strAmPm(dt.hour, false));
-                break;
+                // Hour decoder
+                case 'H':
+                    sprintf(helper, "%02d", dt.hour);
+                    strcat(buffer, static_cast<const char*>(helper));
+                    break;
+                case 'G':
+                    sprintf(helper, "%d", dt.hour);
+                    strcat(buffer, static_cast<const char*>(helper));
+                    break;
+                case 'h':
+                    sprintf(helper, "%02d", hour12(dt.hour));
+                    strcat(buffer, static_cast<const char*>(helper));
+                    break;
+                case 'g':
+                    sprintf(helper, "%d", hour12(dt.hour));
+                    strcat(buffer, static_cast<const char*>(helper));
+                    break;
+                case 'A':
+                    strcat(buffer, (const char*)strAmPm(dt.hour, true));
+                    break;
+                case 'a':
+                    strcat(buffer, (const char*)strAmPm(dt.hour, false));
+                    break;
 
-            // Minute decoder
-            case 'i':
-                sprintf(helper, "%02d", dt.minute);
-                strcat(buffer, static_cast<const char*>(helper));
-                break;
+                // Minute decoder
+                case 'i':
+                    sprintf(helper, "%02d", dt.minute);
+                    strcat(buffer, static_cast<const char*>(helper));
+                    break;
 
-            // Second decoder
-            case 's':
-                sprintf(helper, "%02d", dt.second);
-                strcat(buffer, static_cast<const char*>(helper));
-                break;
+                // Second decoder
+                case 's':
+                    sprintf(helper, "%02d", dt.second);
+                    strcat(buffer, static_cast<const char*>(helper));
+                    break;
 
-            default:
-                strncat(buffer, dateFormat, 1);
-                break;
+                default:
+                    strncat(buffer, dateFormat, 1);
+                    break;
+            }
+            dateFormat++;
         }
-        dateFormat++;
     }
-
     return buffer;
 }
 
@@ -1143,7 +1144,7 @@ uint8_t DS3231::readRegister8(uint8_t reg) {
 #if ARDUINO >= 100
     value = Wire.read();
 #else
-    value = Wire.receive()z
+    value = Wire.receive() z
 #endif
     Wire.endTransmission();
 
