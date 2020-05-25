@@ -4,6 +4,7 @@
 #include <FirebaseESP8266.h>
 #include <OneWire.h>
 #include <WiFiUdp.h>
+
 #include "DS3231.h"  //Время
 #include "RtcDS3231.h"
 #include "TimeAlarms.h"
@@ -27,9 +28,9 @@
 
 #define ONE_WIRE_BUS 14  //Пин, к которому подключены датчики DS18B20 D5 GPIO14
 
-//#define ALARMS_COUNT 6  //Количество таймеров, которые нужно удалять. Помимо их есть еще два основных - каждую минуту и каждые пять.
-//Указанное кол-во надо увеличить в случае появления нового расписания для нового устройства, например, дозаторы, CO2, нагреватель и
-//прочие устройства которые будут запланированы на включение или выключение
+//#define ALARMS_COUNT 6  //Количество таймеров, которые нужно удалять. Помимо их есть еще два основных - каждую минуту и каждые
+//пять. Указанное кол-во надо увеличить в случае появления нового расписания для нового устройства, например, дозаторы, CO2,
+//нагреватель и прочие устройства которые будут запланированы на включение или выключение
 //----------------------------------------------------------------------------------
 uint8_t wifiMaxTry = 10;  //Попытки подключения к сети
 uint8_t wifiConnectCount = 0;
@@ -131,8 +132,9 @@ void getTemperature() {
     Serial.printf_P(PSTR(" [T1: %s°]  [T2: %s°]\n"), String(temp1).c_str(), String(temp2).c_str());
 }
 void sendMessage() {
-    data.fcm.setNotifyMessage("Перезагрузка", String(clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime())));
-
+    char* p = clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime());
+    data.fcm.setNotifyMessage("Перезагрузка", String(p));
+    free(p);
     if (Firebase.broadcastMessage(data)) {
         Serial.printf_P(PSTR("Сообщение отправлено\n"));
     } else {
@@ -142,7 +144,9 @@ void sendMessage() {
 void sendMessage(ledDescription& led, bool state) {
     char dataMsg[100];
     String stateString = state ? "Включение" : "Выключение";
-    sprintf(dataMsg, "Прожектор %s в %s", led.name.c_str(), String(clockRTC.dateFormat("H:i:s", clockRTC.getDateTime())).c_str());
+    char* p = clockRTC.dateFormat("H:i:s", clockRTC.getDateTime());
+    sprintf(dataMsg, "Прожектор %s в %s", led.name.c_str(), String(p).c_str());
+    free(p);
     data.fcm.setNotifyMessage(stateString, dataMsg);
 
     if (Firebase.broadcastMessage(data)) {
@@ -169,7 +173,9 @@ void uptime() {
 }
 void initRTC() {
     clockRTC.begin();
-    Serial.printf_P(PSTR("Время: %s\n"), String(clockRTC.dateFormat("H:i:s Y-m-d", clockRTC.getDateTime())).c_str());
+    char* p = clockRTC.dateFormat("H:i:s Y-m-d", clockRTC.getDateTime());
+    Serial.printf_P(PSTR("Время: %s\n"), String(p).c_str());
+    free(p);
 }
 /*
 void eeprom_test() {
@@ -505,17 +511,22 @@ double floatToDouble(float x) {
 void writeTemperatureFirebase() {
     if (!WiFi.isConnected())
         return;
-    String deviceDateKey = clockRTC.dateFormat("Y-m-d", clockRTC.getDateTime());
+
+    char* p1 = clockRTC.dateFormat("Y-m-d", clockRTC.getDateTime());
+    String deviceDateKey = p1;
+    free(p1);
 
     FirebaseJson jsonOnline, jsonHistory;
-    jsonOnline.add("DateTime", String(clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime())));
+    char* p2 = clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime());
+    jsonOnline.add("DateTime", String(p2));
     jsonOnline.add("temp1", floatToDouble(temp1));
     jsonOnline.add("temp2", floatToDouble(temp2));
-
-    jsonHistory.add("DateTime", String(clockRTC.dateFormat("H:i:s", clockRTC.getDateTime())));
+    free(p2);
+    char* p3 = clockRTC.dateFormat("H:i:s", clockRTC.getDateTime());
+    jsonHistory.add("DateTime", String(p3));
     jsonHistory.add("temp1", floatToDouble(temp1));
     jsonHistory.add("temp2", floatToDouble(temp2));
-
+    free(p3);
     Serial.printf_P(PSTR("%s"), "Отправляем температуру в ветку Online -> ");
     if (Firebase.setJSON(data, pathTemperatureOnline, jsonOnline)) {
         Serial.printf_P(PSTR("%s\n"), "OK");
@@ -534,11 +545,13 @@ void writeTemperatureFirebase() {
 }
 
 void writeBootHistory() {
-    if (Firebase.pushString(data, pathToBootHistory, String(clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime())))) {
+    char* p = clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime());
+    if (Firebase.pushString(data, pathToBootHistory, String(p))) {
         Serial.printf_P(PSTR("%s\n"), "Запись времени старта");
     } else {
         Serial.printf_P(PSTR("\n%s %s\n"), "Ошибка записи времени старта:", data.errorReason().c_str());
     }
+    free(p);
 }
 void setClock() {
     configTime(3 * 3600, 0, "pool.ntp.org", "time.nist.gov");
@@ -555,7 +568,9 @@ void setClock() {
     gmtime_r(&now, &timeinfo);
 }
 void lastOnline() {
-    Firebase.setString(data, pathToLastOnline, String(clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime())));
+    char* p = clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime());
+    Firebase.setString(data, pathToLastOnline, String(p));
+    free(p);
 }
 void Timer5Min() {
     uptime();
@@ -566,7 +581,11 @@ void Timer5Min() {
 
 void Timer1Min() {
     ledState_t currentLed;
-    Serial.printf_P(PSTR("%s "), String(clockRTC.dateFormat("H:i:s", clockRTC.getDateTime())).c_str());
+    Serial.println(ESP.getFreeHeap());
+    char* p = clockRTC.dateFormat("H:i:s", clockRTC.getDateTime());
+    Serial.printf_P(PSTR("%s "), String(p).c_str());
+    free(p);
+    Serial.println(ESP.getFreeHeap());
     getTemperature();
     checkUpdateSettings();
     if (shouldUpdateFlag) {
