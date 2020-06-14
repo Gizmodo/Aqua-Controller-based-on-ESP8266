@@ -25,6 +25,10 @@ typedef struct ledState_t {
 typedef struct doser_t {
     byte dirPin;
     byte stepPin;
+    byte enablePin;
     doserType type;
-
+    String name;
+    byte hour, minute;
+    AlarmId alarm;
+    byte volume;
 } doser;
