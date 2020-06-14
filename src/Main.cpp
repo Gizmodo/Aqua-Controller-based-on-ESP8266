@@ -5,7 +5,7 @@
 #include <OneWire.h>
 #include <WiFiUdp.h>
 
-#include "BasicStepperDriver.h"
+#include "DRV8825.h"
 #include "DS3231.h"  //Время
 #include "RtcDS3231.h"
 #include "TimeAlarms.h"
@@ -24,12 +24,20 @@
 // All the wires needed for full functionality
 #define DIR 8
 #define STEP 9
+
 // Uncomment line to use enable/disable functionality
-//#define SLEEP 13
+#define SLEEP 13
+
+#define MODE0 10
+#define MODE1 11
+#define MODE2 12
 
 // 2-wire basic config, microstepping is hardwired on the driver
-BasicStepperDriver stepper(MOTOR_STEPS, DIR, STEP);
-
+DRV8825 doserK(MOTOR_STEPS, DIR, STEP, SLEEP, MODE0, MODE1, MODE2);
+DRV8825 doserNP(MOTOR_STEPS, DIR, STEP, SLEEP, MODE0, MODE1, MODE2);
+DRV8825 doserFe(MOTOR_STEPS, DIR, STEP, SLEEP, MODE0, MODE1, MODE2);
+std::unique_ptr<DRV8825> dos{};
+//std::optional<DRV8825> dos2{};
 // Uncomment line to use enable/disable functionality
 // BasicStepperDriver stepper(MOTOR_STEPS, DIR, STEP, SLEEP);
 
@@ -646,6 +654,18 @@ void checkUpdateSettings() {
         Serial.printf_P(PSTR("Ошибка чтения флага сброса настроек UpdateSettings: %s\n"), data.errorReason().c_str());
     }
 }
+void startDoser(){
+  // blink the led, to indicate motor1 has started
+ /* digitalWrite(0, HIGH);
+  stepper1.begin(rpm.data, 16);
+  stepper1.rotate(360);
+  digitalWrite(0, LOW);
+  */
+}
+void initDosers(){
+    Serial.printf_P(PSTR("%s\n"), "Загрузка настроек дозаторов из Firebase");
+    
+}
 
 void setup() {
     Serial.begin(115200);
@@ -688,9 +708,11 @@ void setup() {
         readOptionsFirebase();
         printAllLedsTime();
     }
+    initDosers();
     startMainTimers();
     Timer5Min();
-    stepper.begin(RPM, MICROSTEPS);
+    //stepper.begin(RPM, MICROSTEPS);
+    //stepper.move(11);
 }
 void prWiFiStatus(int s) {
 #define VALCASE(x)                    \
@@ -726,12 +748,12 @@ void loop() {
         /*
          * Moving motor one full revolution using the degree notation
          */
-        stepper.rotate(360);
+        //stepper.rotate(360);
 
         /*
          * Moving motor to original position using steps
          */
-        stepper.move(-MOTOR_STEPS * MICROSTEPS);
+        //stepper.move(-MOTOR_STEPS * MICROSTEPS);
 
         // pause and allow the motor to be moved by hand
         // stepper.disable();
