@@ -4,14 +4,13 @@
 #include <FirebaseESP8266.h>
 #include <OneWire.h>
 #include <WiFiUdp.h>
-
+#include <memory>
 #include "DRV8825.h"
 #include "DS3231.h"  //Время
 #include "RtcDS3231.h"
 #include "TimeAlarms.h"
 #include "uEEPROMLib.h"
 #include "uptime_formatter.h"
-
 // Motor steps per revolution. Most steppers are 200 steps or 1.8 degrees/step
 #define MOTOR_STEPS 200
 #define RPM 120
@@ -33,10 +32,9 @@
 #define MODE2 12
 
 // 2-wire basic config, microstepping is hardwired on the driver
-DRV8825 doserK(MOTOR_STEPS, DIR, STEP, SLEEP, MODE0, MODE1, MODE2);
-DRV8825 doserNP(MOTOR_STEPS, DIR, STEP, SLEEP, MODE0, MODE1, MODE2);
-DRV8825 doserFe(MOTOR_STEPS, DIR, STEP, SLEEP, MODE0, MODE1, MODE2);
-std::unique_ptr<DRV8825> dos{};
+std::unique_ptr<DRV8825> doserK{};
+std::unique_ptr<DRV8825> doserNP{};
+std::unique_ptr<DRV8825> doserFe{};
 // std::optional<DRV8825> dos2{};
 // Uncomment line to use enable/disable functionality
 // BasicStepperDriver stepper(MOTOR_STEPS, DIR, STEP, SLEEP);
@@ -497,7 +495,27 @@ void setDoser(doserType dosertype) {
                     vectorString = splitVector(doc["time"]);
                     dosers[i].hour = vectorString[0].toInt();
                     dosers[i].minute = vectorString[1].toInt();
-                    // TODO Add timer
+                    // TODO Add timer and DRV8825
+                    switch (dosertype) {
+                        case K:
+                            if (!doserK) {
+                                doserK = std::make_unique<DRV8825>(MOTOR_STEPS, DIR, STEP, SLEEP, MODE0, MODE1, MODE2);
+                            }
+                            break;
+                        case NP:
+                            if (!doserNP) {
+                                doserNP = std::make_unique<DRV8825>(MOTOR_STEPS, DIR, STEP, SLEEP, MODE0, MODE1, MODE2);
+                            }
+                            break;
+                        case Fe:
+                            if (!doserFe) {
+                                doserFe = std::make_unique<DRV8825>(MOTOR_STEPS, DIR, STEP, SLEEP, MODE0, MODE1, MODE2);
+                            }
+                            break;
+                        default:
+                            break;
+                    }
+
                     /*
                     dosers[i].alarm=Alarm.alarmRepeat(dosers[i].hour,dosers[i].minute,0,)
                     leds[i].led.off = Alarm.alarmRepeat(leds[i].led.HOff, leds[i].led.MOff, 0, ledOffHandler, leds[i]);
