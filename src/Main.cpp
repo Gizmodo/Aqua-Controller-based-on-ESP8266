@@ -195,6 +195,11 @@ void clearAlarms() {
         Alarm.free(leds[i].led.off);
         Alarm.free(leds[i].led.on);
     }
+    uint8_t dosersCount(sizeof(dosers) / sizeof(*dosers));
+    for (size_t i = 0; i < dosersCount; i++) {
+        Alarm.disable(dosers[i].alarm);
+        Alarm.free(dosers[i].alarm);
+    }
 }
 
 void uptime() {
@@ -357,7 +362,30 @@ void setCurrentState(boolean state, const String& name) {
         Serial.printf_P(PSTR("Состояние прожектора %s установлено в %s\n"), name.c_str(), stateString.c_str());
     }
 }
-
+void doserHandler(doser& dos) {
+    switch (dos.type) {
+        case K:
+            doserK->begin(RPM, MICROSTEPS);
+            doserK->setEnableActiveState(LOW);
+            doserK->move(dos.volume);
+            doserK->setEnableActiveState(HIGH);
+            break;
+        case NP:
+            doserNP->begin(RPM, MICROSTEPS);
+            doserNP->setEnableActiveState(LOW);
+            doserNP->move(dos.volume);
+            doserNP->setEnableActiveState(HIGH);
+            break;
+        case Fe:
+            doserFe->begin(RPM, MICROSTEPS);
+            doserFe->setEnableActiveState(LOW);
+            doserFe->move(dos.volume);
+            doserFe->setEnableActiveState(HIGH);
+            break;
+        default:
+            break;
+    }
+}
 void ledOnHandler(ledDescription& led) {
     if (led.led.enabled) {
         Serial.printf_P(PSTR("Включение прожектора PIN %d\n"), led.led.pin);
@@ -492,7 +520,7 @@ void setDoser(doserType dosertype) {
                     vectorString = splitVector(doc["time"]);
                     dosers[i].hour = vectorString[0].toInt();
                     dosers[i].minute = vectorString[1].toInt();
-                    
+
                     switch (dosertype) {
                         case K:
                             if (!doserK) {
@@ -522,25 +550,8 @@ void setDoser(doserType dosertype) {
                             Serial.printf_P(PSTR("%s %s"), "Неизвестный тип дозатора", ToString(dosertype));
                             break;
                     }
-                    // TODO Add timer and DRV8825
-                    dosers[i].alarm =
-                        Alarm
-                            .alarmRepeat(dosers[i].hour, dosers[i].minute, 0, )
-                        /*
-                        dosers[i].alarm=Alarm.alarmRepeat(dosers[i].hour,dosers[i].minute,0,)
-                        leds[i].led.off = Alarm.alarmRepeat(leds[i].led.HOff, leds[i].led.MOff, 0, ledOffHandler, leds[i]);
-                        leds[i].led.on = Alarm.alarmRepeat(leds[i].led.HOn, leds[i].led.MOn, 0, ledOnHandler, leds[i]);
-
-                        uint8_t minutes = clockRTC.getDateTime().hour * 60 + clockRTC.getDateTime().minute;
-                        uint8_t minutesOn = leds[i].led.HOn * 60 + leds[i].led.MOn;
-                        uint8_t minutesOff = leds[i].led.HOff * 60 + leds[i].led.MOff;
-                        if ((minutes > minutesOn) && (minutes < minutesOff)) {
-                            ledOnHandler(leds[i]);
-                        } else {
-                            ledOffHandler(leds[i]);
-                        }
-                        */
-                        doc.clear();
+                    dosers[i].alarm = Alarm.alarmRepeat(dosers[i].hour, dosers[i].minute, 0, doserHandler, dosers[i]);
+                    doc.clear();
                 }
             } else {
                 Serial.printf_P(PSTR("%s\n"), "Ответ не является JSON объектом");
@@ -660,7 +671,7 @@ void readOptionsEEPROM() {
     for (size_t i = 0; i < dosersCount; i++) {
         eeprom.eeprom_read(doserAddress(i), &doserFromEEPROM);
         dosers[i] = doserFromEEPROM;
-        // TODO Add timer
+        dosers[i].alarm = Alarm.alarmRepeat(dosers[i].hour, dosers[i].minute, 0, doserHandler, dosers[i]);
     }
     printAllLedsTime();
     printAllDosers();
@@ -680,6 +691,7 @@ void readOptionsFirebase() {
     setDoser(Fe);
     Serial.printf_P(PSTR("%s\n"), "Запись в EEPROM");
     writeEEPROMLed();
+    writeEEPROMDoser();
 }
 double floatToDouble(float x) {
     return static_cast<double>(x);
@@ -802,14 +814,7 @@ void checkUpdateSettings() {
         Serial.printf_P(PSTR("Ошибка чтения флага сброса настроек UpdateSettings: %s\n"), data.errorReason().c_str());
     }
 }
-void startDoser() {
-    // blink the led, to indicate motor1 has started
-    /* digitalWrite(0, HIGH);
-     stepper1.begin(rpm.data, 16);
-     stepper1.rotate(360);
-     digitalWrite(0, LOW);
-     */
-}
+
 void setup() {
     Serial.begin(115200);
     Serial.println();
@@ -855,9 +860,8 @@ void setup() {
     }
     startMainTimers();
     Timer5Min();
-    // stepper.begin(RPM, MICROSTEPS);
-    // stepper.move(11);
 }
+
 void prWiFiStatus(int s) {
 #define VALCASE(x)                    \
     case x:                           \
@@ -886,22 +890,5 @@ void loop() {
     if (currentMillis - previousMillis > 60000UL) {
         previousMillis = currentMillis;
         // prWiFiStatus(WiFi.status());
-        // energize coils - the motor will hold position
-        // stepper.enable();
-
-        /*
-         * Moving motor one full revolution using the degree notation
-         */
-        // stepper.rotate(360);
-
-        /*
-         * Moving motor to original position using steps
-         */
-        // stepper.move(-MOTOR_STEPS * MICROSTEPS);
-
-        // pause and allow the motor to be moved by hand
-        // stepper.disable();
-
-        // delay(5000);
     }
 }
