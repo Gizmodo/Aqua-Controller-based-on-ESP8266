@@ -20,10 +20,6 @@
 // 1=full step, 2=half step etc.
 #define MICROSTEPS 1
 
-// All the wires needed for full functionality
-#define DIR 8
-#define STEP 9
-
 // Uncomment line to use enable/disable functionality
 #define SLEEP 13
 
@@ -490,47 +486,61 @@ void setDoser(doserType dosertype) {
                     dosers[i].dirPin = doc["dirPin"];
                     dosers[i].stepPin = doc["stepPin"];
                     dosers[i].enablePin = doc["enablePin"];
+                    dosers[i].sleepPin = doc["sleepPin"];
                     dosers[i].volume = doc["volume"];
 
                     vectorString = splitVector(doc["time"]);
                     dosers[i].hour = vectorString[0].toInt();
                     dosers[i].minute = vectorString[1].toInt();
-                    // TODO Add timer and DRV8825
+                    
                     switch (dosertype) {
                         case K:
                             if (!doserK) {
-                                doserK = std::make_unique<DRV8825>(MOTOR_STEPS, DIR, STEP, SLEEP, MODE0, MODE1, MODE2);
+                                doserK = std::make_unique<DRV8825>(MOTOR_STEPS, dosers[i].dirPin, dosers[i].stepPin,
+                                                                   dosers[i].sleepPin, MODE0, MODE1, MODE2);
+                            } else {
+                                Serial.printf_P(PSTR("%s %s"), "Не удалось выделить память для дозатора", ToString(dosertype));
                             }
                             break;
                         case NP:
                             if (!doserNP) {
-                                doserNP = std::make_unique<DRV8825>(MOTOR_STEPS, DIR, STEP, SLEEP, MODE0, MODE1, MODE2);
+                                doserNP = std::make_unique<DRV8825>(MOTOR_STEPS, dosers[i].dirPin, dosers[i].stepPin,
+                                                                    dosers[i].sleepPin, MODE0, MODE1, MODE2);
+                            } else {
+                                Serial.printf_P(PSTR("%s %s"), "Не удалось выделить память для дозатора", ToString(dosertype));
                             }
                             break;
                         case Fe:
                             if (!doserFe) {
-                                doserFe = std::make_unique<DRV8825>(MOTOR_STEPS, DIR, STEP, SLEEP, MODE0, MODE1, MODE2);
+                                doserFe = std::make_unique<DRV8825>(MOTOR_STEPS, dosers[i].dirPin, dosers[i].stepPin,
+                                                                    dosers[i].sleepPin, MODE0, MODE1, MODE2);
+                            } else {
+                                Serial.printf_P(PSTR("%s %s"), "Не удалось выделить память для дозатора", ToString(dosertype));
                             }
                             break;
                         default:
+                            Serial.printf_P(PSTR("%s %s"), "Неизвестный тип дозатора", ToString(dosertype));
                             break;
                     }
+                    // TODO Add timer and DRV8825
+                    dosers[i].alarm =
+                        Alarm
+                            .alarmRepeat(dosers[i].hour, dosers[i].minute, 0, )
+                        /*
+                        dosers[i].alarm=Alarm.alarmRepeat(dosers[i].hour,dosers[i].minute,0,)
+                        leds[i].led.off = Alarm.alarmRepeat(leds[i].led.HOff, leds[i].led.MOff, 0, ledOffHandler, leds[i]);
+                        leds[i].led.on = Alarm.alarmRepeat(leds[i].led.HOn, leds[i].led.MOn, 0, ledOnHandler, leds[i]);
 
-                    /*
-                    dosers[i].alarm=Alarm.alarmRepeat(dosers[i].hour,dosers[i].minute,0,)
-                    leds[i].led.off = Alarm.alarmRepeat(leds[i].led.HOff, leds[i].led.MOff, 0, ledOffHandler, leds[i]);
-                    leds[i].led.on = Alarm.alarmRepeat(leds[i].led.HOn, leds[i].led.MOn, 0, ledOnHandler, leds[i]);
-
-                    uint8_t minutes = clockRTC.getDateTime().hour * 60 + clockRTC.getDateTime().minute;
-                    uint8_t minutesOn = leds[i].led.HOn * 60 + leds[i].led.MOn;
-                    uint8_t minutesOff = leds[i].led.HOff * 60 + leds[i].led.MOff;
-                    if ((minutes > minutesOn) && (minutes < minutesOff)) {
-                        ledOnHandler(leds[i]);
-                    } else {
-                        ledOffHandler(leds[i]);
-                    }
-                    */
-                    doc.clear();
+                        uint8_t minutes = clockRTC.getDateTime().hour * 60 + clockRTC.getDateTime().minute;
+                        uint8_t minutesOn = leds[i].led.HOn * 60 + leds[i].led.MOn;
+                        uint8_t minutesOff = leds[i].led.HOff * 60 + leds[i].led.MOff;
+                        if ((minutes > minutesOn) && (minutes < minutesOff)) {
+                            ledOnHandler(leds[i]);
+                        } else {
+                            ledOffHandler(leds[i]);
+                        }
+                        */
+                        doc.clear();
                 }
             } else {
                 Serial.printf_P(PSTR("%s\n"), "Ответ не является JSON объектом");

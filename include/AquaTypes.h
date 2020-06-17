@@ -34,7 +34,20 @@ typedef struct doser_t {
     byte hour, minute;
     AlarmId alarm;
     byte volume;
+    byte sleepPin;
 } doser;
+inline const char* ToString(doserType v) {
+    switch (v) {
+        case K:
+            return "K";
+        case NP:
+            return "NP";
+        case Fe:
+            return "Fe";
+        default:
+            return "Unknown";
+    }
+}
 namespace std {
 template <class T>
 struct _Unique_if {
