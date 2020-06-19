@@ -505,7 +505,7 @@ void setDoser(doserType dosertype) {
         } else {
             if ((data.dataType() == "json")) {
                 String json = data.jsonString();
-                StaticJsonDocument<166> doc;
+                StaticJsonDocument<200> doc;
                 std::vector<String> vectorString;
                 DeserializationError err = deserializeJson(doc, json);
                 if (err) {
