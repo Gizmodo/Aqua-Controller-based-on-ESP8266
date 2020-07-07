@@ -5,7 +5,7 @@
 #include <OneWire.h>
 #include <WiFiUdp.h>
 #include <memory>
-#include "DRV8825.h"
+#include "GBasic.h"
 #include "DS3231.h"  //Время
 #include "RtcDS3231.h"
 #include "TimeAlarms.h"
@@ -28,9 +28,9 @@
 #define MODE2 12
 
 // 2-wire basic config, microstepping is hardwired on the driver
-std::unique_ptr<DRV8825> doserK{};
-std::unique_ptr<DRV8825> doserNP{};
-std::unique_ptr<DRV8825> doserFe{};
+std::unique_ptr<GBasic> doserK{};
+std::unique_ptr<GBasic> doserNP{};
+std::unique_ptr<GBasic> doserFe{};
 // std::optional<DRV8825> dos2{};
 // Uncomment line to use enable/disable functionality
 // BasicStepperDriver stepper(MOTOR_STEPS, DIR, STEP, SLEEP);
