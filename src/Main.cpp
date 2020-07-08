@@ -5,35 +5,24 @@
 #include <OneWire.h>
 #include <WiFiUdp.h>
 #include <memory>
-#include "GBasic.h"
 #include "DS3231.h"  //Время
+#include "GBasic.h"
 #include "RtcDS3231.h"
+#include "Shiftduino.h"
 #include "TimeAlarms.h"
 #include "uEEPROMLib.h"
 #include "uptime_formatter.h"
-// Motor steps per revolution. Most steppers are 200 steps or 1.8 degrees/step
-#define MOTOR_STEPS 200
-#define RPM 120
 
-// Since microstepping is set externally, make sure this matches the selected mode
-// If it doesn't, the motor will move at a different RPM than chosen
-// 1=full step, 2=half step etc.
-#define MICROSTEPS 1
+// Shift register pinout
+#define dataPin 10
+#define clockPin 14
+#define latchPin 16
+#define numOfRegisters 3
+Shiftduino shiftRegister(dataPin, clockPin, latchPin, numOfRegisters);
 
-// Uncomment line to use enable/disable functionality
-#define SLEEP 13
-
-#define MODE0 10
-#define MODE1 11
-#define MODE2 12
-
-// 2-wire basic config, microstepping is hardwired on the driver
 std::unique_ptr<GBasic> doserK{};
 std::unique_ptr<GBasic> doserNP{};
 std::unique_ptr<GBasic> doserFe{};
-// std::optional<DRV8825> dos2{};
-// Uncomment line to use enable/disable functionality
-// BasicStepperDriver stepper(MOTOR_STEPS, DIR, STEP, SLEEP);
 
 #define FIREBASE_HOST "aqua-3006a.firebaseio.com"
 #define FIREBASE_AUTH "eRxKqsNsandXnfrDtd3wjGMHMc05nUeo5yeKmuni"
@@ -365,21 +354,21 @@ void setCurrentState(boolean state, const String& name) {
 void doserHandler(doser& dos) {
     switch (dos.type) {
         case K:
-            doserK->begin(RPM, MICROSTEPS);
+            doserK->begin();
             doserK->setEnableActiveState(LOW);
-            doserK->move(dos.volume);
+            doserK->move(dos.steps);
             doserK->setEnableActiveState(HIGH);
             break;
         case NP:
-            doserNP->begin(RPM, MICROSTEPS);
+            doserNP->begin();
             doserNP->setEnableActiveState(LOW);
-            doserNP->move(dos.volume);
+            doserNP->move(dos.steps);
             doserNP->setEnableActiveState(HIGH);
             break;
         case Fe:
-            doserFe->begin(RPM, MICROSTEPS);
+            doserFe->begin();
             doserFe->setEnableActiveState(LOW);
-            doserFe->move(dos.volume);
+            doserFe->move(dos.steps);
             doserFe->setEnableActiveState(HIGH);
             break;
         default:
@@ -505,7 +494,7 @@ void setDoser(doserType dosertype) {
         } else {
             if ((data.dataType() == "json")) {
                 String json = data.jsonString();
-                StaticJsonDocument<200> doc;
+                StaticJsonDocument<290> doc;
                 std::vector<String> vectorString;
                 DeserializationError err = deserializeJson(doc, json);
                 if (err) {
@@ -515,7 +504,11 @@ void setDoser(doserType dosertype) {
                     dosers[i].stepPin = doc["stepPin"];
                     dosers[i].enablePin = doc["enablePin"];
                     dosers[i].sleepPin = doc["sleepPin"];
-                    dosers[i].volume = doc["volume"];
+                    dosers[i].steps = doc["steps"];
+                    dosers[i].mode0_pin = doc["mode0_pin"];
+                    dosers[i].mode1_pin = doc["mode1_pin"];
+                    dosers[i].mode2_pin = doc["mode2_pin"];
+                    dosers[i].index = doc["index"];
 
                     vectorString = splitVector(doc["time"]);
                     dosers[i].hour = vectorString[0].toInt();
@@ -524,24 +517,27 @@ void setDoser(doserType dosertype) {
                     switch (dosertype) {
                         case K:
                             if (!doserK) {
-                                doserK = std::make_unique<DRV8825>(MOTOR_STEPS, dosers[i].dirPin, dosers[i].stepPin,
-                                                                   dosers[i].sleepPin, MODE0, MODE1, MODE2);
+                                doserK = std::make_unique<GBasic>(dosers[i].steps, dosers[i].dirPin, dosers[i].stepPin,
+                                                                  dosers[i].enablePin, dosers[i].mode0_pin, dosers[i].mode1_pin,
+                                                                  dosers[i].mode2_pin, shiftRegister, dosers[i].index);
                             } else {
                                 Serial.printf_P(PSTR("%s %s"), "Не удалось выделить память для дозатора", ToString(dosertype));
                             }
                             break;
                         case NP:
                             if (!doserNP) {
-                                doserNP = std::make_unique<DRV8825>(MOTOR_STEPS, dosers[i].dirPin, dosers[i].stepPin,
-                                                                    dosers[i].sleepPin, MODE0, MODE1, MODE2);
+                                doserNP = std::make_unique<GBasic>(dosers[i].steps, dosers[i].dirPin, dosers[i].stepPin,
+                                                                   dosers[i].enablePin, dosers[i].mode0_pin, dosers[i].mode1_pin,
+                                                                   dosers[i].mode2_pin, shiftRegister, dosers[i].index);
                             } else {
                                 Serial.printf_P(PSTR("%s %s"), "Не удалось выделить память для дозатора", ToString(dosertype));
                             }
                             break;
                         case Fe:
                             if (!doserFe) {
-                                doserFe = std::make_unique<DRV8825>(MOTOR_STEPS, dosers[i].dirPin, dosers[i].stepPin,
-                                                                    dosers[i].sleepPin, MODE0, MODE1, MODE2);
+                                doserFe = std::make_unique<GBasic>(dosers[i].steps, dosers[i].dirPin, dosers[i].stepPin,
+                                                                   dosers[i].enablePin, dosers[i].mode0_pin, dosers[i].mode1_pin,
+                                                                   dosers[i].mode2_pin, shiftRegister, dosers[i].index);
                             } else {
                                 Serial.printf_P(PSTR("%s %s"), "Не удалось выделить память для дозатора", ToString(dosertype));
                             }

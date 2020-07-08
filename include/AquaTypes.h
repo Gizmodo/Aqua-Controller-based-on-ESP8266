@@ -29,12 +29,17 @@ typedef struct doser_t {
     byte dirPin;
     byte stepPin;
     byte enablePin;
+    byte sleepPin;
     doserType type;
     String name;
     byte hour, minute;
     AlarmId alarm;
     byte volume;
-    byte sleepPin;
+    byte mode0_pin;
+    byte mode1_pin;
+    byte mode2_pin;
+    byte index;
+    word steps;
 } doser;
 inline const char* ToString(doserType v) {
     switch (v) {
