@@ -94,6 +94,9 @@ float temp1, temp2;
 byte addr1[8] = {0x28, 0xFF, 0x17, 0xF0, 0x8B, 0x16, 0x03, 0x13};  //адрес датчика DS18B20
 byte addr2[8] = {0x28, 0xFF, 0x5F, 0x1E, 0x8C, 0x16, 0x03, 0xE2};  //адрес датчика DS18B20
 
+typedef Iterator<ledPosition, ledPosition::ONE, ledPosition::SIX> ledPositionIterator;
+typedef Iterator<doserType, doserType::K, doserType::Fe> doserTypeIterator;
+
 ledDescription_t leds[6];
 doser_t dosers[3];
 std::vector<String> splitVector(const String& msg) {
@@ -461,9 +464,11 @@ void printDoser(doserType dosertype) {
     if (!found) {
         Serial.printf_P(PSTR("%s\n"), "Дозатор не найден!!!");
     } else {
-        Serial.printf_P(PSTR("%s: Вкл-%02d:%02d. Dir: %d. Step: %d. Enable: %d. Объём: %d.\n"), dosers[index].name.c_str(),
-                        dosers[index].hour, dosers[index].minute, dosers[index].dirPin, dosers[index].stepPin,
-                        dosers[index].enablePin, dosers[index].volume);
+        Serial.printf_P(
+            PSTR("%02d => %s: Вкл %02d:%02d. Pins: dir=%d step=%d enable=%d sleep=%d.\nОбъём: %d. Modes:%d.%d.%d Steps:%d\n"),
+            dosers[index].index, dosers[index].name.c_str(), dosers[index].hour, dosers[index].minute, dosers[index].dirPin,
+            dosers[index].stepPin, dosers[index].enablePin, dosers[index].sleepPin, dosers[index].volume, dosers[index].mode0_pin,
+            dosers[index].mode1_pin, dosers[index].mode2_pin, dosers[index].steps);
     }
 }
 
@@ -516,31 +521,19 @@ void setDoser(doserType dosertype) {
 
                     switch (dosertype) {
                         case K:
-                            if (!doserK) {
-                                doserK = std::make_unique<GBasic>(dosers[i].steps, dosers[i].dirPin, dosers[i].stepPin,
-                                                                  dosers[i].enablePin, dosers[i].mode0_pin, dosers[i].mode1_pin,
-                                                                  dosers[i].mode2_pin, shiftRegister, dosers[i].index);
-                            } else {
-                                Serial.printf_P(PSTR("%s %s"), "Не удалось выделить память для дозатора", ToString(dosertype));
-                            }
+                            doserK = std::make_unique<GBasic>(dosers[i].steps, dosers[i].dirPin, dosers[i].stepPin,
+                                                              dosers[i].enablePin, dosers[i].mode0_pin, dosers[i].mode1_pin,
+                                                              dosers[i].mode2_pin, shiftRegister, dosers[i].index);
                             break;
                         case NP:
-                            if (!doserNP) {
-                                doserNP = std::make_unique<GBasic>(dosers[i].steps, dosers[i].dirPin, dosers[i].stepPin,
-                                                                   dosers[i].enablePin, dosers[i].mode0_pin, dosers[i].mode1_pin,
-                                                                   dosers[i].mode2_pin, shiftRegister, dosers[i].index);
-                            } else {
-                                Serial.printf_P(PSTR("%s %s"), "Не удалось выделить память для дозатора", ToString(dosertype));
-                            }
+                            doserNP = std::make_unique<GBasic>(dosers[i].steps, dosers[i].dirPin, dosers[i].stepPin,
+                                                               dosers[i].enablePin, dosers[i].mode0_pin, dosers[i].mode1_pin,
+                                                               dosers[i].mode2_pin, shiftRegister, dosers[i].index);
                             break;
                         case Fe:
-                            if (!doserFe) {
-                                doserFe = std::make_unique<GBasic>(dosers[i].steps, dosers[i].dirPin, dosers[i].stepPin,
-                                                                   dosers[i].enablePin, dosers[i].mode0_pin, dosers[i].mode1_pin,
-                                                                   dosers[i].mode2_pin, shiftRegister, dosers[i].index);
-                            } else {
-                                Serial.printf_P(PSTR("%s %s"), "Не удалось выделить память для дозатора", ToString(dosertype));
-                            }
+                            doserFe = std::make_unique<GBasic>(dosers[i].steps, dosers[i].dirPin, dosers[i].stepPin,
+                                                               dosers[i].enablePin, dosers[i].mode0_pin, dosers[i].mode1_pin,
+                                                               dosers[i].mode2_pin, shiftRegister, dosers[i].index);
                             break;
                         default:
                             Serial.printf_P(PSTR("%s %s"), "Неизвестный тип дозатора", ToString(dosertype));
@@ -674,17 +667,17 @@ void readOptionsEEPROM() {
 }
 void readOptionsFirebase() {
     Serial.printf_P(PSTR("%s\n"), "Загрузка из Firebase");
+
     Serial.printf_P(PSTR("%s\n"), "Прожекторы...");
-    setLEDTime(ONE);
-    setLEDTime(TWO);
-    setLEDTime(THREE);
-    setLEDTime(FOUR);
-    setLEDTime(FIVE);
-    setLEDTime(SIX);
+    for (ledPosition i : ledPositionIterator()) {  // notice the parentheses!
+        setLEDTime(i);
+    }
+
     Serial.printf_P(PSTR("%s\n"), "Дозаторы...");
-    setDoser(K);
-    setDoser(NP);
-    setDoser(Fe);
+    for (doserType i : doserTypeIterator()) {  // notice the parentheses!
+        setDoser(i);
+    }
+
     Serial.printf_P(PSTR("%s\n"), "Запись в EEPROM");
     writeEEPROMLed();
     writeEEPROMDoser();

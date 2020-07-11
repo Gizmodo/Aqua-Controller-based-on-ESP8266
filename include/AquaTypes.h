@@ -53,6 +53,7 @@ inline const char* ToString(doserType v) {
             return "Unknown";
     }
 }
+#if __cplusplus < 201402L
 namespace std {
 template <class T>
 struct _Unique_if {
@@ -83,3 +84,33 @@ typename _Unique_if<T>::_Unknown_bound make_unique(size_t n) {
 template <class T, class... Args>
 typename _Unique_if<T>::_Known_bound make_unique(Args&&...) = delete;
 }  // namespace std
+#endif
+
+template <typename C, C beginVal, C endVal>
+class Iterator {
+    typedef typename std::underlying_type<C>::type val_t;
+    int val;
+
+   public:
+    Iterator(const C& f) : val(static_cast<val_t>(f)) {
+    }
+    Iterator() : val(static_cast<val_t>(beginVal)) {
+    }
+    Iterator operator++() {
+        ++val;
+        return *this;
+    }
+    C operator*() {
+        return static_cast<C>(val);
+    }
+    Iterator begin() {
+        return *this;
+    }  // default ctor is good
+    Iterator end() {
+        static const Iterator endIter = ++Iterator(endVal);  // cache it
+        return endIter;
+    }
+    bool operator!=(const Iterator& i) {
+        return val != i.val;
+    }
+};
