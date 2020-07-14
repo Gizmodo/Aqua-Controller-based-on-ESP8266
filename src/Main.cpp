@@ -34,18 +34,24 @@ std::unique_ptr<GBasic> doserFe{};
     "APA91bHDpiNHPCytTH6sQBLV7s97VwWTVKPrZN8P7nsLn73MbNIZxPnZRxn5ot6UlywQl7uNi5NhNtSdnrficBXabuPSdbgAIcEJH6oFRElckf9h3kE9p6H0OVR7" \
     "IJBLcPAlZFPEO2bz"
 
-#define WIFI_SSID "MikroTik"
-#define WIFI_PASSWORD "11111111"
+#define WORK_DEF
 
-#define GMT 3
+#ifdef WORK_DEF
+    #define WIFI_SSID "Wi-Fi"
+    #define WIFI_PASSWORD "1234567890"
+#define WIFI_RETRY 50
+#else
+    #define WIFI_SSID "MikroTik"
+    #define WIFI_PASSWORD "11111111"
+    #define WIFI_RETRY 10
+#endif
 
 #define ONE_WIRE_BUS 14  //Пин, к которому подключены датчики DS18B20 D5 GPIO14
-
 //#define ALARMS_COUNT 6  //Количество таймеров, которые нужно удалять. Помимо их есть еще два основных - каждую минуту и каждые
 //пять. Указанное кол-во надо увеличить в случае появления нового расписания для нового устройства, например, дозаторы, CO2,
 //нагреватель и прочие устройства которые будут запланированы на включение или выключение
 //----------------------------------------------------------------------------------
-uint8_t wifiMaxTry = 10;  //Попытки подключения к сети
+uint8_t wifiMaxTry = WIFI_RETRY;  //Попытки подключения к сети
 uint8_t wifiConnectCount = 0;
 
 // uEEPROMLib eeprom;
@@ -62,7 +68,7 @@ IPAddress timeServerIP;
 const char* ntpServerName = "pool.ntp.org";
 const int NTP_PACKET_SIZE = 48;
 
-const long timeZoneOffset = GMT * 3600;
+const long timeZoneOffset = 10800;
 byte packetBuffer[NTP_PACKET_SIZE];
 boolean update_status = false;
 byte count_sync = 0;
@@ -99,11 +105,11 @@ typedef Iterator<doserType, doserType::K, doserType::Fe> doserTypeIterator;
 
 ledDescription_t leds[6];
 doser_t dosers[3];
-std::vector<String> splitVector(const String& msg) {
+std::vector<String> splitVector(const String& msg, const char delim) {
     std::vector<String> subStrings;
     uint32_t j = 0;
     for (uint32_t i = 0; i < msg.length(); i++) {
-        if (msg.charAt(i) == ':') {
+        if (msg.charAt(i) == delim) {
             subStrings.push_back(msg.substring(j, i));
             j = i + 1;
         }
@@ -320,7 +326,7 @@ void syncTime() {
         const unsigned long seventyYears = 2208988800UL;
         unsigned long epoch = secsSince1900 - seventyYears;
         // 2 секунды разница с большим братом
-        epoch = epoch + 2 + GMT * 3600;
+        epoch = epoch + 2 + 10800;
         hour1 = (epoch % 86400L) / 3600;
         minute1 = (epoch % 3600) / 60;
         second1 = epoch % 60;
@@ -465,7 +471,7 @@ void printDoser(doserType dosertype) {
         Serial.printf_P(PSTR("%s\n"), "Дозатор не найден!!!");
     } else {
         Serial.printf_P(
-            PSTR("%02d => %s: Вкл %02d:%02d. Pins: dir=%d step=%d enable=%d sleep=%d.\nОбъём: %d. Modes:%d.%d.%d Steps:%d\n"),
+            PSTR("%d => %s: Вкл %02d:%02d. Pins: dir=%d step=%d enable=%d sleep=%d.\nОбъём: %d. Modes:%d.%d.%d Steps:%d\n"),
             dosers[index].index, dosers[index].name.c_str(), dosers[index].hour, dosers[index].minute, dosers[index].dirPin,
             dosers[index].stepPin, dosers[index].enablePin, dosers[index].sleepPin, dosers[index].volume, dosers[index].mode0_pin,
             dosers[index].mode1_pin, dosers[index].mode2_pin, dosers[index].steps);
@@ -481,7 +487,7 @@ void printAllDosers() {
 void setDoser(doserType dosertype) {
     uint8_t dosersCount = (sizeof(dosers) / sizeof(*dosers));
     String name;
-    uint8_t i;
+    uint8_t i = 0;
     bool found = false;
     for (size_t k = 0; k < dosersCount; k++) {
         if (dosers[k].type == dosertype) {
@@ -494,56 +500,76 @@ void setDoser(doserType dosertype) {
     if (!found) {
         Serial.printf_P(PSTR("%s %s %s\n"), "Дозатор", name.c_str(), "не найден");
     } else {
-        if (!Firebase.getJSON(data, pathDoser + name)) {
+        if (!Firebase.getString(data, pathDoser + name)) {
             Serial.printf_P(PSTR("%s %s: %s\n"), "Ошибка загрузки параметров дозатора", name.c_str(), data.errorReason().c_str());
         } else {
-            if ((data.dataType() == "json")) {
-                String json = data.jsonString();
-                StaticJsonDocument<290> doc;
-                std::vector<String> vectorString;
-                DeserializationError err = deserializeJson(doc, json);
-                if (err) {
-                    Serial.printf_P(PSTR("Ошибка десериализации: %s\n"), err.c_str());
-                } else {
-                    dosers[i].dirPin = doc["dirPin"];
-                    dosers[i].stepPin = doc["stepPin"];
-                    dosers[i].enablePin = doc["enablePin"];
-                    dosers[i].sleepPin = doc["sleepPin"];
-                    dosers[i].steps = doc["steps"];
-                    dosers[i].mode0_pin = doc["mode0_pin"];
-                    dosers[i].mode1_pin = doc["mode1_pin"];
-                    dosers[i].mode2_pin = doc["mode2_pin"];
-                    dosers[i].index = doc["index"];
+            if ((data.dataType() == "string")) {
+                String payload = data.stringData();
+                //"d=1#s=1#e=2#sl=2#ss=200#0=1#1=2#2=4#i=3#t=23:59"
+                std::vector<String> vectorPayload = splitVector(payload, '#');
 
-                    vectorString = splitVector(doc["time"]);
-                    dosers[i].hour = vectorString[0].toInt();
-                    dosers[i].minute = vectorString[1].toInt();
-
-                    switch (dosertype) {
-                        case K:
-                            doserK = std::make_unique<GBasic>(dosers[i].steps, dosers[i].dirPin, dosers[i].stepPin,
-                                                              dosers[i].enablePin, dosers[i].mode0_pin, dosers[i].mode1_pin,
-                                                              dosers[i].mode2_pin, shiftRegister, dosers[i].index);
-                            break;
-                        case NP:
-                            doserNP = std::make_unique<GBasic>(dosers[i].steps, dosers[i].dirPin, dosers[i].stepPin,
-                                                               dosers[i].enablePin, dosers[i].mode0_pin, dosers[i].mode1_pin,
-                                                               dosers[i].mode2_pin, shiftRegister, dosers[i].index);
-                            break;
-                        case Fe:
-                            doserFe = std::make_unique<GBasic>(dosers[i].steps, dosers[i].dirPin, dosers[i].stepPin,
-                                                               dosers[i].enablePin, dosers[i].mode0_pin, dosers[i].mode1_pin,
-                                                               dosers[i].mode2_pin, shiftRegister, dosers[i].index);
-                            break;
-                        default:
-                            Serial.printf_P(PSTR("%s %s"), "Неизвестный тип дозатора", ToString(dosertype));
-                            break;
+                for (String pair : vectorPayload) {
+                    std::vector<String> pairItem = splitVector(pair, '=');
+                    if (pairItem[0] == "d") {
+                        dosers[i].dirPin = pairItem[1].toInt();
                     }
-                    dosers[i].alarm = Alarm.alarmRepeat(dosers[i].hour, dosers[i].minute, 0, doserHandler, dosers[i]);
-                    doc.clear();
+                    if (pairItem[0] == "s") {
+                        dosers[i].stepPin = pairItem[1].toInt();
+                    }
+                    if (pairItem[0] == "e") {
+                        dosers[i].enablePin = pairItem[1].toInt();
+                    }
+                    if (pairItem[0] == "sl") {
+                        dosers[i].sleepPin = pairItem[1].toInt();
+                    }
+                    if (pairItem[0] == "ss") {
+                        dosers[i].steps = pairItem[1].toInt();
+                    }
+                    if (pairItem[0] == "0") {
+                        dosers[i].mode0_pin = pairItem[1].toInt();
+                    }
+                    if (pairItem[0] == "1") {
+                        dosers[i].mode1_pin = pairItem[1].toInt();
+                    }
+                    if (pairItem[0] == "2") {
+                        dosers[i].mode2_pin = pairItem[1].toInt();
+                    }
+                    if (pairItem[0] == "i") {
+                        dosers[i].index = pairItem[1].toInt();
+                    }
+                    if (pairItem[0] == "t") {
+                        std::vector<String> timeVector = splitVector(pairItem[1], ':');
+                        dosers[i].hour = timeVector[0].toInt();
+                        dosers[i].minute = timeVector[1].toInt();
+                        timeVector.clear();
+                    }
+                    pairItem.clear();
                 }
+                vectorPayload.clear();
+
+                switch (dosertype) {
+                    case K:
+                        doserK = std::make_unique<GBasic>(dosers[i].steps, dosers[i].dirPin, dosers[i].stepPin, dosers[i].enablePin,
+                                                          dosers[i].mode0_pin, dosers[i].mode1_pin, dosers[i].mode2_pin,
+                                                          shiftRegister, dosers[i].index);
+                        break;
+                    case NP:
+                        doserNP = std::make_unique<GBasic>(dosers[i].steps, dosers[i].dirPin, dosers[i].stepPin,
+                                                           dosers[i].enablePin, dosers[i].mode0_pin, dosers[i].mode1_pin,
+                                                           dosers[i].mode2_pin, shiftRegister, dosers[i].index);
+                        break;
+                    case Fe:
+                        doserFe = std::make_unique<GBasic>(dosers[i].steps, dosers[i].dirPin, dosers[i].stepPin,
+                                                           dosers[i].enablePin, dosers[i].mode0_pin, dosers[i].mode1_pin,
+                                                           dosers[i].mode2_pin, shiftRegister, dosers[i].index);
+                        break;
+                    default:
+                        Serial.printf_P(PSTR("%s %s"), "Неизвестный тип дозатора", ToString(dosertype));
+                        break;
+                }
+                dosers[i].alarm = Alarm.alarmRepeat(dosers[i].hour, dosers[i].minute, 0, doserHandler, dosers[i]);
             } else {
-                Serial.printf_P(PSTR("%s\n"), "Ответ не является JSON объектом");
+                Serial.printf_P(PSTR("%s\n"), "Ответ не String");
             }
         }
     }
@@ -577,12 +603,12 @@ void setLEDTime(ledPosition position) {
                     leds[i].led.currentState = doc["state"];
 
                     vectorString.clear();
-                    vectorString = splitVector(doc["off"]);
+                    vectorString = splitVector(doc["off"], ':');
                     leds[i].led.HOff = vectorString[0].toInt();
                     leds[i].led.MOff = vectorString[1].toInt();
 
                     vectorString.clear();
-                    vectorString = splitVector(doc["on"]);
+                    vectorString = splitVector(doc["on"], ':');
                     leds[i].led.HOn = vectorString[0].toInt();
                     leds[i].led.MOn = vectorString[1].toInt();
 
@@ -759,11 +785,9 @@ void Timer5Min() {
 
 void Timer1Min() {
     ledState_t currentLed;
-    Serial.println(ESP.getFreeHeap());
     char* p = clockRTC.dateFormat("H:i:s", clockRTC.getDateTime());
     Serial.printf_P(PSTR("%s "), String(p).c_str());
     free(p);
-    Serial.println(ESP.getFreeHeap());
     getTemperature();
     checkUpdateSettings();
     if (shouldUpdateFlag) {
