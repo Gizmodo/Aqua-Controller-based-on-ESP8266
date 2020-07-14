@@ -17,7 +17,8 @@
 #define dataPin 10
 #define clockPin 14
 #define latchPin 16
-#define numOfRegisters 3
+#define numOfRegisters 4
+#define indexRegisterRelay 4
 Shiftduino shiftRegister(dataPin, clockPin, latchPin, numOfRegisters);
 
 std::unique_ptr<GBasic> doserK{};
@@ -387,6 +388,7 @@ void doserHandler(doser& dos) {
 void ledOnHandler(ledDescription& led) {
     if (led.led.enabled) {
         Serial.printf_P(PSTR("Включение прожектора PIN %d\n"), led.led.pin);
+        shiftRegister.setPin(indexRegisterRelay, led.led.pin, HIGH);
         sendMessage(led, true);
         Alarm.enable(led.led.off);
         Alarm.enable(led.led.on);
@@ -407,6 +409,7 @@ void ledOnHandler(ledDescription& led) {
 void ledOffHandler(ledDescription& led) {
     if (led.led.enabled) {
         Serial.printf_P(PSTR("Выключение прожектора PIN %d\n"), led.led.pin);
+        shiftRegister.setPin(indexRegisterRelay, led.led.pin, LOW);
         sendMessage(led, false);
         Alarm.enable(led.led.off);
         Alarm.enable(led.led.on);
