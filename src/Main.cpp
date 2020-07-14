@@ -34,16 +34,16 @@ std::unique_ptr<GBasic> doserFe{};
     "APA91bHDpiNHPCytTH6sQBLV7s97VwWTVKPrZN8P7nsLn73MbNIZxPnZRxn5ot6UlywQl7uNi5NhNtSdnrficBXabuPSdbgAIcEJH6oFRElckf9h3kE9p6H0OVR7" \
     "IJBLcPAlZFPEO2bz"
 
-#define WORK_DEF
+#undef WORK_DEF
 
 #ifdef WORK_DEF
-    #define WIFI_SSID "Wi-Fi"
-    #define WIFI_PASSWORD "1234567890"
+#define WIFI_SSID "Wi-Fi"
+#define WIFI_PASSWORD "1234567890"
 #define WIFI_RETRY 50
 #else
-    #define WIFI_SSID "MikroTik"
-    #define WIFI_PASSWORD "11111111"
-    #define WIFI_RETRY 10
+#define WIFI_SSID "MikroTik"
+#define WIFI_PASSWORD "11111111"
+#define WIFI_RETRY 10
 #endif
 
 #define ONE_WIRE_BUS 14  //Пин, к которому подключены датчики DS18B20 D5 GPIO14
@@ -114,7 +114,7 @@ std::vector<String> splitVector(const String& msg, const char delim) {
             j = i + 1;
         }
     }
-    subStrings.push_back(msg.substring(j, msg.length()));  // to grab the last value of the string
+    subStrings.push_back(msg.substring(j, msg.length()));
     return subStrings;
 }
 
@@ -162,17 +162,17 @@ void getTemperature() {
     Serial.printf_P(PSTR(" [T1: %s°]  [T2: %s°]\n"), String(temp1).c_str(), String(temp2).c_str());
 }
 void sendMessage() {
-    char* p = clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime());
+    /*char* p = clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime());
     data.fcm.setNotifyMessage("Перезагрузка", String(p));
     free(p);
     if (Firebase.broadcastMessage(data)) {
         Serial.printf_P(PSTR("Сообщение отправлено\n"));
     } else {
         Serial.printf_P(PSTR("Ошибка отправки сообщения: %s\n"), data.errorReason().c_str());
-    }
+    }*/
 }
 void sendMessage(ledDescription& led, bool state) {
-    char dataMsg[100];
+    /*char dataMsg[100];
     String stateString = state ? "Включение" : "Выключение";
     char* p = clockRTC.dateFormat("H:i:s", clockRTC.getDateTime());
     sprintf(dataMsg, "Прожектор %s в %s", led.name.c_str(), String(p).c_str());
@@ -183,7 +183,7 @@ void sendMessage(ledDescription& led, bool state) {
         Serial.printf_P(PSTR("Сообщение отправлено\n"));
     } else {
         Serial.printf_P(PSTR("Ошибка отправки сообщения: %s\n"), data.errorReason().c_str());
-    }
+    }*/
 }
 void clearAlarms() {
     uint8_t ledsCount(sizeof(leds) / sizeof(*leds));
@@ -449,12 +449,9 @@ void printLEDTime(ledPosition position) {
 
 void printAllLedsTime() {
     Serial.printf_P(PSTR("%s\n"), "Отображение текущих настроек всех прожекторов");
-    printLEDTime(ONE);
-    printLEDTime(TWO);
-    printLEDTime(THREE);
-    printLEDTime(FOUR);
-    printLEDTime(FIVE);
-    printLEDTime(SIX);
+    for (ledPosition i : ledPositionIterator()) {
+        printLEDTime(i);
+    }
 }
 void printDoser(doserType dosertype) {
     uint8_t dosersCount(sizeof(dosers) / sizeof(*dosers));
@@ -480,11 +477,12 @@ void printDoser(doserType dosertype) {
 
 void printAllDosers() {
     Serial.printf_P(PSTR("%s\n"), "Отображение текущих настроек всех прожекторов");
-    printDoser(K);
-    printDoser(NP);
-    printDoser(Fe);
+    for (doserType i : doserTypeIterator()) {
+        printDoser(i);
+    }
 }
 void setDoser(doserType dosertype) {
+    std::unique_ptr<GBasic> doser{};
     uint8_t dosersCount = (sizeof(dosers) / sizeof(*dosers));
     String name;
     uint8_t i = 0;
@@ -546,22 +544,18 @@ void setDoser(doserType dosertype) {
                     pairItem.clear();
                 }
                 vectorPayload.clear();
-
+                doser = std::make_unique<GBasic>(dosers[i].steps, dosers[i].dirPin, dosers[i].stepPin, dosers[i].enablePin,
+                                                 dosers[i].mode0_pin, dosers[i].mode1_pin, dosers[i].mode2_pin, shiftRegister,
+                                                 dosers[i].index);
                 switch (dosertype) {
                     case K:
-                        doserK = std::make_unique<GBasic>(dosers[i].steps, dosers[i].dirPin, dosers[i].stepPin, dosers[i].enablePin,
-                                                          dosers[i].mode0_pin, dosers[i].mode1_pin, dosers[i].mode2_pin,
-                                                          shiftRegister, dosers[i].index);
+                        doserK = std::move(doser);
                         break;
                     case NP:
-                        doserNP = std::make_unique<GBasic>(dosers[i].steps, dosers[i].dirPin, dosers[i].stepPin,
-                                                           dosers[i].enablePin, dosers[i].mode0_pin, dosers[i].mode1_pin,
-                                                           dosers[i].mode2_pin, shiftRegister, dosers[i].index);
+                        doserNP = std::move(doser);
                         break;
                     case Fe:
-                        doserFe = std::make_unique<GBasic>(dosers[i].steps, dosers[i].dirPin, dosers[i].stepPin,
-                                                           dosers[i].enablePin, dosers[i].mode0_pin, dosers[i].mode1_pin,
-                                                           dosers[i].mode2_pin, shiftRegister, dosers[i].index);
+                        doserFe = std::move(doser);
                         break;
                     default:
                         Serial.printf_P(PSTR("%s %s"), "Неизвестный тип дозатора", ToString(dosertype));
@@ -695,12 +689,12 @@ void readOptionsFirebase() {
     Serial.printf_P(PSTR("%s\n"), "Загрузка из Firebase");
 
     Serial.printf_P(PSTR("%s\n"), "Прожекторы...");
-    for (ledPosition i : ledPositionIterator()) {  // notice the parentheses!
+    for (ledPosition i : ledPositionIterator()) {
         setLEDTime(i);
     }
 
     Serial.printf_P(PSTR("%s\n"), "Дозаторы...");
-    for (doserType i : doserTypeIterator()) {  // notice the parentheses!
+    for (doserType i : doserTypeIterator()) {
         setDoser(i);
     }
 
@@ -806,7 +800,7 @@ void Timer1Min() {
 void startMainTimers() {
     Serial.printf_P(PSTR("%s -> %d\n"), "Таймеры: основные", Alarm.count());
     Alarm.timerRepeat(5 * 60, Timer5Min);  // сохраняем температуру в Firebase/EEPROM
-    Alarm.timerRepeat(20, Timer1Min);      // вывод uptime и тмемпературу каждую минуту
+    Alarm.timerRepeat(60, Timer1Min);      // вывод uptime и тмемпературу каждую минуту
     Serial.printf_P(PSTR("%s -> %d\n"), "Таймеры: основные и прожекторные", Alarm.count());
 }
 void checkUpdateSettings() {
