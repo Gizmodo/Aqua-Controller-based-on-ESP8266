@@ -41,22 +41,7 @@ typedef struct doser_t {
     byte index;
     word steps;
 } doser;
-typedef struct air_t {
-     byte HOn, HOff;
-    byte MOn, MOff;
-    byte enablePin;
-    byte sleepPin;
-    doserType type;
-    String name;
-    byte hour, minute;
-    AlarmId alarm;
-    byte volume;
-    byte mode0_pin;
-    byte mode1_pin;
-    byte mode2_pin;
-    byte index;
-    word steps;
-} air;
+
 inline const char* ToString(doserType v) {
     switch (v) {
         case K:

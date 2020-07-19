@@ -107,7 +107,7 @@ typedef Iterator<doserType, doserType::K, doserType::Fe> doserTypeIterator;
 
 ledDescription_t leds[6];
 doser_t dosers[3];
-ledStruct air;
+ledDescription_t air;
 std::vector<String> splitVector(const String& msg, const char delim) {
     std::vector<String> subStrings;
     uint32_t j = 0;
@@ -122,6 +122,7 @@ std::vector<String> splitVector(const String& msg, const char delim) {
 }
 
 void checkUpdateSettings();
+
 float DS18B20(const byte* adres) {
     unsigned int raw;
     ds.reset();
@@ -137,6 +138,7 @@ float DS18B20(const byte* adres) {
     float celsius = (float)raw / 16.0;
     return celsius;
 }
+
 void initDosers() {
     dosers[0].name = "K";
     dosers[0].type = K;
@@ -145,6 +147,7 @@ void initDosers() {
     dosers[2].name = "Fe";
     dosers[2].type = Fe;
 }
+
 void initLeds() {
     leds[0].name = "One";
     leds[0].position = ONE;
@@ -159,11 +162,17 @@ void initLeds() {
     leds[5].name = "Six";
     leds[5].position = SIX;
 }
+
+void initAir() {
+    air.name = "Аэратор";
+}
+
 void getTemperature() {
     temp1 = DS18B20(addr1);
     temp2 = DS18B20(addr2);
     Serial.printf_P(PSTR(" [T1: %s°]  [T2: %s°]\n"), String(temp1).c_str(), String(temp2).c_str());
 }
+
 void sendMessage() {
     /*char* p = clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime());
     data.fcm.setNotifyMessage("Перезагрузка", String(p));
@@ -174,6 +183,7 @@ void sendMessage() {
         Serial.printf_P(PSTR("Ошибка отправки сообщения: %s\n"), data.errorReason().c_str());
     }*/
 }
+
 void sendMessage(ledDescription& led, bool state) {
     /*char dataMsg[100];
     String stateString = state ? "Включение" : "Выключение";
@@ -188,6 +198,7 @@ void sendMessage(ledDescription& led, bool state) {
         Serial.printf_P(PSTR("Ошибка отправки сообщения: %s\n"), data.errorReason().c_str());
     }*/
 }
+
 void clearAlarms() {
     uint8_t ledsCount(sizeof(leds) / sizeof(*leds));
     for (size_t i = 0; i < ledsCount; i++) {
@@ -209,6 +220,7 @@ void uptime() {
         Serial.printf_P(PSTR("\nОшибка uptime: %s\n"), data.errorReason().c_str());
     };
 }
+
 void initRTC() {
     clockRTC.begin();
     char* p = clockRTC.dateFormat("H:i:s Y-m-d", clockRTC.getDateTime());
@@ -288,6 +300,7 @@ void eeprom_test() {
 
 }
 */
+
 void sendNTPpacket(const IPAddress& address) {
     memset(packetBuffer, 0, NTP_PACKET_SIZE);
     packetBuffer[0] = 0b11100011;
@@ -304,7 +317,6 @@ void sendNTPpacket(const IPAddress& address) {
     udp.endPacket();
 }
 
-// Синхронизация времени
 void syncTime() {
     Serial.printf_P(PSTR("Синхронизация времени\n"), ntpServerName);
     udp.begin(2390);
@@ -357,12 +369,21 @@ void syncTime() {
 
 void setCurrentState(boolean state, const String& name) {
     String stateString = state ? "ON" : "OFF";
-    if (!Firebase.setBool(data, pathLight + name + "/state", state)) {
-        Serial.printf_P(PSTR("Не удалось установить состояние прожектора %s в %s\n"), name.c_str(), stateString.c_str());
+    if (name == "Аэратор") {
+        //"on=13:22#off=23:54#e=1#s=1#p=12"
+        char buff[50];
+        snprintf(buff, sizeof(buff), "on=%02d:%02d#off=%02d:%02d#e=%d#s=%d#p=%d", air.led.HOn, air.led.MOn, air.led.HOff,
+                 air.led.MOff, air.led.enabled, state, air.led.pin);
+        std::string buffAsStdStr = buff;
     } else {
-        Serial.printf_P(PSTR("Состояние прожектора %s установлено в %s\n"), name.c_str(), stateString.c_str());
+        if (!Firebase.setBool(data, pathLight + name + "/state", state)) {
+            Serial.printf_P(PSTR("Не удалось установить состояние прожектора %s в %s\n"), name.c_str(), stateString.c_str());
+        } else {
+            Serial.printf_P(PSTR("Состояние прожектора %s установлено в %s\n"), name.c_str(), stateString.c_str());
+        }
     }
 }
+
 void doserHandler(const doser& dos) {
     switch (dos.type) {
         case K:
@@ -387,6 +408,7 @@ void doserHandler(const doser& dos) {
             break;
     }
 }
+
 void ledOnHandler(ledDescription& led) {
     if (led.led.enabled) {
         Serial.printf_P(PSTR("Включение прожектора PIN %d\n"), led.led.pin);
@@ -428,9 +450,10 @@ void ledOffHandler(ledDescription& led) {
         Alarm.disable(led.led.on);
     }
 }
+
 void airOnHandler(ledDescription& led) {
     if (led.led.enabled) {
-        Serial.printf_P(PSTR("Включение прожектора PIN %d\n"), led.led.pin);
+        Serial.printf_P(PSTR("Включение аэратора PIN %d\n"), led.led.pin);
         shiftRegister.setPin(indexRegisterRelay, led.led.pin, HIGH);
         sendMessage(led, true);
         Alarm.enable(led.led.off);
@@ -443,7 +466,7 @@ void airOnHandler(ledDescription& led) {
         state.state = true;
         vectorState.push_back(state);
     } else {
-        Serial.printf_P(PSTR("%s\n"), "Прожектор не доступен для изменения состояния");
+        Serial.printf_P(PSTR("%s\n"), "Аэратор не доступен для изменения состояния");
         Alarm.disable(led.led.off);
         Alarm.disable(led.led.on);
     }
@@ -451,7 +474,7 @@ void airOnHandler(ledDescription& led) {
 
 void airOffHandler(ledDescription& led) {
     if (led.led.enabled) {
-        Serial.printf_P(PSTR("Выключение прожектора PIN %d\n"), led.led.pin);
+        Serial.printf_P(PSTR("Выключение аэратора PIN %d\n"), led.led.pin);
         shiftRegister.setPin(indexRegisterRelay, led.led.pin, LOW);
         sendMessage(led, false);
         Alarm.enable(led.led.off);
@@ -464,11 +487,12 @@ void airOffHandler(ledDescription& led) {
         state.state = false;
         vectorState.push_back(state);
     } else {
-        Serial.printf_P(PSTR("%s\n"), "Прожектор не доступен для изменения состояния");
+        Serial.printf_P(PSTR("%s\n"), "Аэратор не доступен для изменения состояния");
         Alarm.disable(led.led.off);
         Alarm.disable(led.led.on);
     }
 }
+
 void printLEDTime(ledPosition position) {
     uint8_t ledsCount(sizeof(leds) / sizeof(*leds));
     uint8_t index;
@@ -498,6 +522,7 @@ void printAllLedsTime() {
         printLEDTime(i);
     }
 }
+
 void printDoser(doserType dosertype) {
     uint8_t dosersCount(sizeof(dosers) / sizeof(*dosers));
     uint8_t index;
@@ -526,6 +551,16 @@ void printAllDosers() {
         printDoser(i);
     }
 }
+
+void printAir() {
+    Serial.printf_P(PSTR("%s\n"), "Отображение текущих настроек аэратора");
+    Serial.printf_P(PSTR(" Вкл-%02d:%02d. Выкл-%02d:%02d. Состояние: %s. Разрешен: %s. PIN: %d\n"), air.led.HOn, air.led.MOn,
+                    air.led.HOff, air.led.MOff, ((air.led.currentState == true) ? "включен" : "выключен"),
+                    ((air.led.enabled == true) ? "да" : "нет"), air.led.pin
+
+    );
+}
+
 void setDoser(doserType dosertype) {
     std::unique_ptr<GBasic> doser{};
     uint8_t dosersCount = (sizeof(dosers) / sizeof(*dosers));
@@ -613,7 +648,7 @@ void setDoser(doserType dosertype) {
         }
     }
 }
-//Загрузка времени включения/выключения прожектора
+
 void setLEDTime(ledPosition position) {
     uint8_t ledsCount = (sizeof(leds) / sizeof(*leds));
     String ledPath;
@@ -674,10 +709,16 @@ void setLEDTime(ledPosition position) {
         Serial.printf_P(PSTR("%s\n"), "Прожектор не найден");
     }
 }
+
+void writeEEPROMAir() {
+    // TODO
+}
+
 uint16_t doserAddress(const uint8_t num) {
     uint8_t ledsCount(sizeof(leds) / sizeof(*leds));
     return StartAddress + num * sizeof(doser) + ledsCount * sizeof(ledDescription) + 1;
 }
+
 void writeEEPROMDoser() {
     uint8_t dosersCount(sizeof(dosers) / sizeof(*dosers));
     for (size_t i = 0; i < dosersCount; i++) {
@@ -688,9 +729,11 @@ void writeEEPROMDoser() {
         }
     }
 }
+
 uint16_t ledAddress(const uint8_t num) {
     return StartAddress + num * sizeof(ledDescription);
 }
+
 void writeEEPROMLed() {
     uint8_t ledsCount(sizeof(leds) / sizeof(*leds));
     for (size_t i = 0; i < ledsCount; i++) {
@@ -701,6 +744,7 @@ void writeEEPROMLed() {
         }
     }
 }
+
 void readOptionsEEPROM() {
     ledDescription_t ledFromEEPROM;
     doser doserFromEEPROM;
@@ -729,50 +773,53 @@ void readOptionsEEPROM() {
     }
     printAllLedsTime();
     printAllDosers();
+    printAir();
 }
-void setAir(){
-     if (!Firebase.getString(data,pathAir)) {
-            Serial.printf_P(PSTR("%s: %s\n"), "Ошибка загрузки параметров аэратора", data.errorReason().c_str());
-        } else {
-            if ((data.dataType() == "string")) {
-                String payload = data.stringData();
-                //"on=13:22#off=23:54#e=1#s=1#p=12"
-                std::vector<String> vectorPayload = splitVector(payload, '#');
-                std::vector<String> timeVector;
-                for (String pair : vectorPayload) {
-                    std::vector<String> pairItem = splitVector(pair, '=');
-                    if (pairItem[0] == "on") {
-                       timeVector= splitVector(pairItem[1], ':');
-                       air.HOn = timeVector[0].toInt();
-                        air.MOn = timeVector[1].toInt();
-                        timeVector.clear();
-                    }
-                    if (pairItem[0] == "off") {
-                        timeVector= splitVector(pairItem[1], ':');
-                       air.HOff = timeVector[0].toInt();
-                        air.MOff = timeVector[1].toInt();
-                        timeVector.clear();
-                    }
-                    if (pairItem[0] == "e") {
-                        air.enabled = pairItem[1].toInt();
-                    }
-                    if (pairItem[0] == "s") {
-                        air.currentState = pairItem[1].toInt();
-                    }
-                    if (pairItem[0] == "p") {
-                        air.pin = pairItem[1].toInt();
-                    }
-                    pairItem.clear();
+
+void setAir() {
+    if (!Firebase.getString(data, pathAir)) {
+        Serial.printf_P(PSTR("%s: %s\n"), "Ошибка загрузки параметров аэратора", data.errorReason().c_str());
+    } else {
+        if ((data.dataType() == "string")) {
+            String payload = data.stringData();
+            //"on=13:22#off=23:54#e=1#s=1#p=12"
+            std::vector<String> vectorPayload = splitVector(payload, '#');
+            std::vector<String> timeVector;
+            for (String pair : vectorPayload) {
+                std::vector<String> pairItem = splitVector(pair, '=');
+                if (pairItem[0] == "on") {
+                    timeVector = splitVector(pairItem[1], ':');
+                    air.led.HOn = timeVector[0].toInt();
+                    air.led.MOn = timeVector[1].toInt();
+                    timeVector.clear();
                 }
-                vectorPayload.clear();
-                
-                air.on = Alarm.alarmRepeat(air.HOn, air.MOn, 0, airOnHandler, air);
-                air.off = Alarm.alarmRepeat(air.HOff, air.MOff, 0, airOffHandler, air);
-            } else {
-                Serial.printf_P(PSTR("%s\n"), "Ответ не String");
+                if (pairItem[0] == "off") {
+                    timeVector = splitVector(pairItem[1], ':');
+                    air.led.HOff = timeVector[0].toInt();
+                    air.led.MOff = timeVector[1].toInt();
+                    timeVector.clear();
+                }
+                if (pairItem[0] == "e") {
+                    air.led.enabled = pairItem[1].toInt();
+                }
+                if (pairItem[0] == "s") {
+                    air.led.currentState = pairItem[1].toInt();
+                }
+                if (pairItem[0] == "p") {
+                    air.led.pin = pairItem[1].toInt();
+                }
+                pairItem.clear();
             }
+            vectorPayload.clear();
+
+            air.led.on = Alarm.alarmRepeat(air.led.HOn, air.led.MOn, 0, airOnHandler, air);
+            air.led.off = Alarm.alarmRepeat(air.led.HOff, air.led.MOff, 0, airOffHandler, air);
+        } else {
+            Serial.printf_P(PSTR("%s\n"), "Ответ не String");
         }
+    }
 }
+
 void readOptionsFirebase() {
     Serial.printf_P(PSTR("%s\n"), "Загрузка из Firebase");
 
@@ -786,14 +833,18 @@ void readOptionsFirebase() {
         setDoser(i);
     }
 
+    setAir();
+
     Serial.printf_P(PSTR("%s\n"), "Запись в EEPROM");
     writeEEPROMLed();
     writeEEPROMDoser();
+    writeEEPROMAir();
 }
+
 double floatToDouble(float x) {
     return static_cast<double>(x);
 }
-//Сохранение показаний датчиков температуры
+
 void writeTemperatureFirebase() {
     if (!WiFi.isConnected())
         return;
@@ -839,6 +890,7 @@ void writeBootHistory() {
     }
     free(p);
 }
+
 void setClock() {
     configTime(3 * 3600, 0, "pool.ntp.org", "time.nist.gov");
     time_t now = time(nullptr);
@@ -853,16 +905,24 @@ void setClock() {
     struct tm timeinfo;
     gmtime_r(&now, &timeinfo);
 }
+
 void lastOnline() {
     char* p = clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime());
     Firebase.setString(data, pathToLastOnline, String(p));
     free(p);
 }
+
 void Timer5Min() {
     uptime();
     lastOnline();
     getTemperature();
     writeTemperatureFirebase();
+}
+
+void printAll() {
+    printAllLedsTime();
+    printAllDosers();
+    printAir();
 }
 
 void Timer1Min() {
@@ -874,8 +934,7 @@ void Timer1Min() {
     checkUpdateSettings();
     if (shouldUpdateFlag) {
         readOptionsFirebase();
-        printAllLedsTime();
-        printAllDosers();
+        printAll();
         shouldUpdateFlag = false;
     }
     while (!vectorState.empty()) {
@@ -885,12 +944,14 @@ void Timer1Min() {
     }
     vectorState.clear();
 }
+
 void startMainTimers() {
     Serial.printf_P(PSTR("%s -> %d\n"), "Таймеры: основные", Alarm.count());
     Alarm.timerRepeat(5 * 60, Timer5Min);  // сохраняем температуру в Firebase/EEPROM
     Alarm.timerRepeat(60, Timer1Min);      // вывод uptime и тмемпературу каждую минуту
     Serial.printf_P(PSTR("%s -> %d\n"), "Таймеры: основные и прожекторные", Alarm.count());
 }
+
 void checkUpdateSettings() {
     if (Firebase.getBool(data, pathUpdateSettings)) {
         if (data.dataType() == "boolean") {
@@ -910,14 +971,18 @@ void checkUpdateSettings() {
     }
 }
 
+void initArrays() {
+    initRTC();
+    initLeds();
+    initDosers();
+    initAir();
+}
+
 void setup() {
     Serial.begin(115200);
     Serial.println();
 
-    //Запуск часов реального времени
-    initRTC();
-    initLeds();
-    initDosers();
+    init();
     getTemperature();
 
     Serial.printf_P(PSTR("%s: %s\n"), "Подключение к WiFi", WIFI_SSID);
@@ -948,10 +1013,9 @@ void setup() {
 
         sendMessage();
         writeBootHistory();
-        syncTime();  // синхронизируем время
+        syncTime();
         readOptionsFirebase();
-        printAllLedsTime();
-        printAllDosers();
+        printAll();
     }
     startMainTimers();
     Timer5Min();
@@ -978,6 +1042,7 @@ void prWiFiStatus(int s) {
             break;
     }
 }
+
 void loop() {
     Alarm.delay(10);
     currentMillis = millis();
