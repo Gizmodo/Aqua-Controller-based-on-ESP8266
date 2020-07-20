@@ -35,7 +35,7 @@ std::unique_ptr<GBasic> doserFe{};
     "APA91bHDpiNHPCytTH6sQBLV7s97VwWTVKPrZN8P7nsLn73MbNIZxPnZRxn5ot6UlywQl7uNi5NhNtSdnrficBXabuPSdbgAIcEJH6oFRElckf9h3kE9p6H0OVR7" \
     "IJBLcPAlZFPEO2bz"
 
-#undef WORK_DEF
+#define WORK_DEF
 
 #ifdef WORK_DEF
 #define WIFI_SSID "Wi-Fi"
