@@ -517,7 +517,7 @@ void printLEDTime(ledPosition position) {
 }
 
 void printAllLedsTime() {
-    Serial.printf_P(PSTR("%s\n"), "Отображение текущих настроек всех прожекторов");
+    Serial.printf_P(PSTR("%s\n"), "Настройки прожекторов");
     for (ledPosition i : ledPositionIterator()) {
         printLEDTime(i);
     }
@@ -546,14 +546,14 @@ void printDoser(doserType dosertype) {
 }
 
 void printAllDosers() {
-    Serial.printf_P(PSTR("%s\n"), "Отображение текущих настроек всех прожекторов");
+    Serial.printf_P(PSTR("%s\n"), "Настройки дозаторов");
     for (doserType i : doserTypeIterator()) {
         printDoser(i);
     }
 }
 
 void printAir() {
-    Serial.printf_P(PSTR("%s\n"), "Отображение текущих настроек аэратора");
+    Serial.printf_P(PSTR("%s\n"), "Настройки аэратора");
     Serial.printf_P(PSTR(" Вкл-%02d:%02d. Выкл-%02d:%02d. Состояние: %s. Разрешен: %s. PIN: %d\n"), air.led.HOn, air.led.MOn,
                     air.led.HOff, air.led.MOff, ((air.led.currentState == true) ? "включен" : "выключен"),
                     ((air.led.enabled == true) ? "да" : "нет"), air.led.pin
@@ -710,8 +710,18 @@ void setLEDTime(ledPosition position) {
     }
 }
 
+uint16_t airAddress() {
+    uint8_t ledsCount(sizeof(leds) / sizeof(*leds));
+    uint8_t dosersCount(sizeof(dosers) / sizeof(*dosers));
+    return StartAddress + dosersCount + ledsCount + sizeof(ledDescription) + 1;
+}
+
 void writeEEPROMAir() {
-    // TODO
+    if (eeprom.eeprom_write(airAddress(), air)) {
+        Serial.printf_P(PSTR(" Параметры по аэратору сохранены в EEPROM\n"));
+    } else {
+        Serial.printf_P(PSTR(" Ошибка сохранения параметров аэратора в EEPROM\n"));
+    }
 }
 
 uint16_t doserAddress(const uint8_t num) {
@@ -748,6 +758,7 @@ void writeEEPROMLed() {
 void readOptionsEEPROM() {
     ledDescription_t ledFromEEPROM;
     doser doserFromEEPROM;
+    ledDescription_t airFromEEPROM;
     Serial.printf_P(PSTR("%s\n"), "Загрузка настроек из EEPROM");
     uint8_t ledsCount(sizeof(leds) / sizeof(*leds));
     uint8_t dosersCount(sizeof(dosers) / sizeof(*dosers));
@@ -771,6 +782,13 @@ void readOptionsEEPROM() {
         dosers[i] = doserFromEEPROM;
         dosers[i].alarm = Alarm.alarmRepeat(dosers[i].hour, dosers[i].minute, 0, doserHandler, dosers[i]);
     }
+    
+    // Air
+    eeprom.eeprom_read(airAddress(), &airFromEEPROM);
+    air = airFromEEPROM;
+    air.led.on = Alarm.alarmRepeat(air.led.HOn, air.led.MOn, 0, airOnHandler, air);
+    air.led.off = Alarm.alarmRepeat(air.led.HOff, air.led.MOff, 0, airOffHandler, air);
+
     printAllLedsTime();
     printAllDosers();
     printAir();
@@ -982,7 +1000,7 @@ void setup() {
     Serial.begin(115200);
     Serial.println();
 
-    init();
+    initArrays();
     getTemperature();
 
     Serial.printf_P(PSTR("%s: %s\n"), "Подключение к WiFi", WIFI_SSID);
