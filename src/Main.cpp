@@ -37,7 +37,7 @@ std::unique_ptr<GBasic> doserFe{};
 
 #define WORK_DEF
 
-#ifdef WORK_DEF
+#ifdef WORK_DEF1
 #define WIFI_SSID "Wi-Fi"
 #define WIFI_PASSWORD "1234567890"
 #define WIFI_RETRY 50
@@ -689,9 +689,9 @@ void setLEDTime(ledPosition position) {
                     leds[i].led.off = Alarm.alarmRepeat(leds[i].led.HOff, leds[i].led.MOff, 0, ledOffHandler, leds[i]);
                     leds[i].led.on = Alarm.alarmRepeat(leds[i].led.HOn, leds[i].led.MOn, 0, ledOnHandler, leds[i]);
 
-                    uint8_t minutes = clockRTC.getDateTime().hour * 60 + clockRTC.getDateTime().minute;
-                    uint8_t minutesOn = leds[i].led.HOn * 60 + leds[i].led.MOn;
-                    uint8_t minutesOff = leds[i].led.HOff * 60 + leds[i].led.MOff;
+                    uint16_t minutes = clockRTC.getDateTime().hour * 60 + clockRTC.getDateTime().minute;
+                    uint16_t minutesOn = leds[i].led.HOn * 60 + leds[i].led.MOn;
+                    uint16_t minutesOff = leds[i].led.HOff * 60 + leds[i].led.MOff;
                     if ((minutes > minutesOn) && (minutes < minutesOff)) {
                         ledOnHandler(leds[i]);
                     } else {
@@ -782,7 +782,7 @@ void readOptionsEEPROM() {
         dosers[i] = doserFromEEPROM;
         dosers[i].alarm = Alarm.alarmRepeat(dosers[i].hour, dosers[i].minute, 0, doserHandler, dosers[i]);
     }
-    
+
     // Air
     eeprom.eeprom_read(airAddress(), &airFromEEPROM);
     air = airFromEEPROM;
@@ -832,6 +832,15 @@ void setAir() {
 
             air.led.on = Alarm.alarmRepeat(air.led.HOn, air.led.MOn, 0, airOnHandler, air);
             air.led.off = Alarm.alarmRepeat(air.led.HOff, air.led.MOff, 0, airOffHandler, air);
+
+            uint16_t minutes = clockRTC.getDateTime().hour * 60 + clockRTC.getDateTime().minute;
+            uint16_t minutesOn = air.led.HOn * 60 + air.led.MOn;
+            uint16_t minutesOff = air.led.HOff * 60 + air.led.MOff;
+            if ((minutes > minutesOn) && (minutes < minutesOff)) {
+                airOnHandler(air);
+            } else {
+                airOffHandler(air);
+            }
         } else {
             Serial.printf_P(PSTR("%s\n"), "Ответ не String");
         }
