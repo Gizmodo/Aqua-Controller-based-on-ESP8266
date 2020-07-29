@@ -101,9 +101,19 @@ String pathToLastOnline = "LastOnline";
 String pathToUptime = "Uptime";
 String pathToBootHistory = "BootHistory";
 
+// BackendLess Strings
+const char belHost[] PROGMEM = "https://api.backendless.com";
+const char belAppID[] PROGMEM = "2B9D61E8-C989-5520-FFEB-A720A49C0C00";
+const char belRESTAPIKey[] PROGMEM = "078C7D14-D7FF-42E1-95FA-A012EB826621";
+const char belProperty[] PROGMEM = "property";
+const char belEqualSign[] PROGMEM = "=";
+const char belSlash[] PROGMEM = "/";
+
+const char* const string_table[] PROGMEM = {belHost, belAppID, belRESTAPIKey, belProperty, belEqualSign, belSlash};
 const String urlLights =
     "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/"
     "Light?property=enabled&property=name&property=off&property=on&property=pin&property=state&where=name='";
+const PROGMEM uint16_t charSet[] = {65000, 32796, 16843, 10, 11234};
 
 OneWire ds(ONE_WIRE_BUS);
 byte sensorData[12];
@@ -132,7 +142,36 @@ std::vector<String> splitVector(const String& msg, const char delim) {
 }
 
 void checkUpdateSettings();
+void _delPtr(char* p) {
+    if (p != nullptr)
+        delete[] p;
+}
 
+char* _newPtr(size_t len) {
+    char* p = new char[len];
+    memset(p, 0, len);
+    return p;
+}
+
+char* _newPtr(char* p, size_t len) {
+    _delPtr(p);
+    p = _newPtr(len);
+    return p;
+}
+
+char* _newPtr(char* p, size_t len, char* d) {
+    _delPtr(p);
+    p = _newPtr(len);
+    strcpy(p, d);
+    return p;
+}
+char* _getPGMString(PGM_P pgm) {
+    size_t len = strlen_P(pgm) + 1;
+    char* buf = _newPtr(len);
+    strcpy_P(buf, pgm);
+    buf[len - 1] = 0;
+    return buf;
+}
 void parseJSON(const String& payload) {
     DynamicJsonDocument doc(1500);
     DeserializationError err = deserializeJson(doc, payload);
@@ -704,7 +743,16 @@ void setLEDTimeBEL(ledPosition position) {
         }
     }
     if (found) {
-        Serial.print("[HTTPS] begin...\n");
+        char tempBuffer[50];
+        
+        Serial.print("");
+        Serial.printf_P(PSTR("%s\n"), "[HTTPS] begin...");
+        sprintf_P(tempBuffer, PSTR("%s\n"), "[HTTPS] begin...");
+        Serial.printf_P(PSTR("%s\n"), _getPGMString(string_table[2]));
+        //Serial.print(F("Write something on the Serial Monitor that is stored in FLASH"));
+        //char buffer1[30];
+        //strcpy_P(buffer1, (char*)pgm_read_word(&(string_table[3]))); 
+        
         if (https.begin(*client, urlLights + ledPath + '\'')) {
             Serial.print("[HTTPS] GET...\n");
             int httpCode = https.GET();
