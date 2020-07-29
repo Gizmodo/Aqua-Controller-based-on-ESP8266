@@ -54,6 +54,30 @@ inline const char* ToString(doserType v) {
             return "Unknown";
     }
 }
+// BackendLess Strings
+const char backEndLess_0[] PROGMEM = "https://api.backendless.com";
+const char backEndLess_1[] PROGMEM = "2B9D61E8-C989-5520-FFEB-A720A49C0C00";
+const char backEndLess_2[] PROGMEM = "078C7D14-D7FF-42E1-95FA-A012EB826621";
+const char backEndLess_3[] PROGMEM = "property";
+const char backEndLess_4[] PROGMEM = "=";
+const char backEndLess_5[] PROGMEM = "/";
+const char backEndLess_6[] PROGMEM = "?";
+const char backEndLess_7[] PROGMEM = "&";
+const char backEndLess_8[] PROGMEM = "Light";
+const char backEndLess_9[] PROGMEM = "enabled";
+const char backEndLess_10[] PROGMEM = "name";
+const char backEndLess_11[] PROGMEM = "off";
+const char backEndLess_12[] PROGMEM = "on";
+const char backEndLess_13[] PROGMEM = "pin";
+const char backEndLess_14[] PROGMEM = "state";
+const char backEndLess_15[] PROGMEM = "where";
+const char backEndLess_16[] PROGMEM = "'";
+const char backEndLess_17[] PROGMEM = "data";
+const char* const backEndLessStrings[] PROGMEM = {backEndLess_0,  backEndLess_1,  backEndLess_2,  backEndLess_3,  backEndLess_4,
+                                                  backEndLess_5,  backEndLess_6,  backEndLess_7,  backEndLess_8,  backEndLess_9,
+                                                  backEndLess_10, backEndLess_11, backEndLess_12, backEndLess_13, backEndLess_14,
+                                                  backEndLess_15, backEndLess_16, backEndLess_17};
+const char led_0[] PROGMEM ="One";
 #if __cplusplus < 201402L
 namespace std {
 template <class T>

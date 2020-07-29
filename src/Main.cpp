@@ -101,19 +101,9 @@ String pathToLastOnline = "LastOnline";
 String pathToUptime = "Uptime";
 String pathToBootHistory = "BootHistory";
 
-// BackendLess Strings
-const char belHost[] PROGMEM = "https://api.backendless.com";
-const char belAppID[] PROGMEM = "2B9D61E8-C989-5520-FFEB-A720A49C0C00";
-const char belRESTAPIKey[] PROGMEM = "078C7D14-D7FF-42E1-95FA-A012EB826621";
-const char belProperty[] PROGMEM = "property";
-const char belEqualSign[] PROGMEM = "=";
-const char belSlash[] PROGMEM = "/";
-
-const char* const string_table[] PROGMEM = {belHost, belAppID, belRESTAPIKey, belProperty, belEqualSign, belSlash};
 const String urlLights =
     "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/"
     "Light?property=enabled&property=name&property=off&property=on&property=pin&property=state&where=name='";
-const PROGMEM uint16_t charSet[] = {65000, 32796, 16843, 10, 11234};
 
 OneWire ds(ONE_WIRE_BUS);
 byte sensorData[12];
@@ -744,16 +734,60 @@ void setLEDTimeBEL(ledPosition position) {
     }
     if (found) {
         char tempBuffer[50];
-        
-        Serial.print("");
+        char* _tab = nullptr;
+        // %27One%27
+
+        _tab = _getPGMString(backEndLessStrings[0]);
+        strcpy_P(tempBuffer, _getPGMString(backEndLessStrings[0]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[5]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[1]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[5]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[2]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[5]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[17]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[5]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[8]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[6]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[3]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[4]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[9]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[7]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[3]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[4]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[10]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[7]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[3]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[4]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[11]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[7]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[3]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[4]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[12]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[7]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[3]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[4]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[13]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[7]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[3]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[4]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[14]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[7]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[15]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[4]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[10]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[4]));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[16]));
+        strcat_P(tempBuffer, _getPGMString(led_0));
+        strcat_P(tempBuffer, _getPGMString(backEndLessStrings[16]));
+        Serial.printf_P(tempBuffer);
         Serial.printf_P(PSTR("%s\n"), "[HTTPS] begin...");
-        sprintf_P(tempBuffer, PSTR("%s\n"), "[HTTPS] begin...");
-        Serial.printf_P(PSTR("%s\n"), _getPGMString(string_table[2]));
-        //Serial.print(F("Write something on the Serial Monitor that is stored in FLASH"));
-        //char buffer1[30];
-        //strcpy_P(buffer1, (char*)pgm_read_word(&(string_table[3]))); 
-        
-        if (https.begin(*client, urlLights + ledPath + '\'')) {
+        // sprintf_P(tempBuffer, PSTR("%s\n"), "[HTTPS] begin...");
+        // Serial.printf_P(PSTR("%s\n"), _getPGMString(string_table[2]));
+        // Serial.print(F("Write something on the Serial Monitor that is stored in FLASH"));
+        // char buffer1[30];
+        // strcpy_P(buffer1, (char*)pgm_read_word(&(string_table[3])));
+
+        if (https.begin(*client, tempBuffer)) {
             Serial.print("[HTTPS] GET...\n");
             int httpCode = https.GET();
             if (httpCode > 0) {
@@ -815,6 +849,7 @@ void setLEDTimeBEL(ledPosition position) {
         } else {
             Serial.printf_P(PSTR("%s: %s\n"), "Ошибка загрузки параметров прожектора", data.errorReason().c_str());
         }
+        _delPtr(_tab);
     } else {
         Serial.printf_P(PSTR("%s\n"), "Прожектор не найден");
     }
@@ -1220,11 +1255,12 @@ void setup() {
         sendMessage();
         writeBootHistory();
         syncTime();
-        readOptionsFirebase();
-        printAll();
+        //readOptionsFirebase();
+        readOptionsBEL();
+        //printAll();
     }
-    startMainTimers();
-    Timer5Min();
+    // startMainTimers();
+    // Timer5Min();
 }
 
 void prWiFiStatus(int s) {
