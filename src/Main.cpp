@@ -162,37 +162,6 @@ char* _getPGMString(PGM_P pgm) {
     buf[len - 1] = 0;
     return buf;
 }
-void parseJSON(const String& payload) {
-    DynamicJsonDocument doc(1500);
-    DeserializationError err = deserializeJson(doc, payload);
-    if (err) {
-        Serial.print(F("deserializeJson() returned "));
-        Serial.println(err.c_str());
-        return;
-    } else {
-        JsonArray array = doc.as<JsonArray>();
-        Serial.println(array);
-        for (JsonObject obj : array) {
-            boolean enabled = obj["enabled"];
-            const char* name = obj["name"];
-            const char* off = obj["off"];
-            const char* on = obj["on"];
-            uint8_t pin = obj["pin"];
-            boolean state = obj["state"];
-            Serial.println(enabled);
-            Serial.println(name);
-            Serial.println(off);
-            Serial.println(on);
-            Serial.println(pin);
-            Serial.println(state);
-            Serial.println("----------------------");
-            // Serial.printf_P(PSTR("enabled=%s name=%s off=%s on=%s pin=%s state=%s\n"), enabled, name.c_str(), off, on, pin,
-            // state);
-        }
-        doc.shrinkToFit();
-        doc.clear();
-    }
-}
 
 float DS18B20(const byte* adres) {
     unsigned int raw;
@@ -521,7 +490,56 @@ void ledOffHandler(ledDescription& led) {
         Alarm.disable(led.led.on);
     }
 }
+void parseJSON(const String& payload, ledDescription_t& led_) {
+    DynamicJsonDocument doc(1500);
+    DeserializationError err = deserializeJson(doc, payload);
+    if (err) {
+        Serial.print(F("deserializeJson() returned "));
+        Serial.println(err.c_str());
+        return;
+    } else {
+        JsonArray array = doc.as<JsonArray>();
+        Serial.println(array);
+        std::vector<String> vectorString;
+        for (JsonObject obj : array) {
+            boolean enabled = obj["enabled"];
+            const char* name = obj["name"];
+            const char* off = obj["off"];
+            const char* on = obj["on"];
+            uint8_t pin = obj["pin"];
+            boolean state = obj["state"];
+            Serial.println("----------------------");
+            Serial.printf_P(PSTR("enabled=%s name=%s off=%s on=%s pin=%s state=%s\n"), enabled, name, off, on, pin, state);
+            led_.led.enabled = obj["enabled"];
+            led_.led.pin = obj["pin"];
+            led_.led.currentState = obj["state"];
 
+            vectorString.clear();
+            vectorString = splitVector(obj["off"], ':');
+            led_.led.HOff = vectorString[0].toInt();
+            led_.led.MOff = vectorString[1].toInt();
+
+            vectorString.clear();
+            vectorString = splitVector(obj["on"], ':');
+            led_.led.HOn = vectorString[0].toInt();
+            led_.led.MOn = vectorString[1].toInt();
+
+            led_.led.off = Alarm.alarmRepeat(led_.led.HOff, led_.led.MOff, 0, ledOffHandler, led_);
+            led_.led.on = Alarm.alarmRepeat(led_.led.HOn, led_.led.MOn, 0, ledOnHandler, led_);
+
+            uint16_t minutes = clockRTC.getDateTime().hour * 60 + clockRTC.getDateTime().minute;
+            uint16_t minutesOn = led_.led.HOn * 60 + led_.led.MOn;
+            uint16_t minutesOff = led_.led.HOff * 60 + led_.led.MOff;
+            if ((minutes > minutesOn) && (minutes < minutesOff)) {
+                ledOnHandler(led_);
+            } else {
+                ledOffHandler(led_);
+            }
+        }
+        doc.shrinkToFit();
+        doc.clear();
+    }
+}
 void airOnHandler(ledDescription& led) {
     if (led.led.enabled) {
         Serial.printf_P(PSTR("Включение аэратора PIN %d\n"), led.led.pin);
@@ -719,6 +737,7 @@ void setDoser(doserType dosertype) {
         }
     }
 }
+
 void setLEDTimeBEL(ledPosition position) {
     uint8_t ledsCount = (sizeof(leds) / sizeof(*leds));
     String ledPath;
@@ -733,10 +752,8 @@ void setLEDTimeBEL(ledPosition position) {
         }
     }
     if (found) {
-        char tempBuffer[50];
+        char tempBuffer[100];
         char* _tab = nullptr;
-        // %27One%27
-
         _tab = _getPGMString(backEndLessStrings[0]);
         strcpy_P(tempBuffer, _getPGMString(backEndLessStrings[0]));
         strcat_P(tempBuffer, _getPGMString(backEndLessStrings[5]));
@@ -777,6 +794,7 @@ void setLEDTimeBEL(ledPosition position) {
         strcat_P(tempBuffer, _getPGMString(backEndLessStrings[10]));
         strcat_P(tempBuffer, _getPGMString(backEndLessStrings[4]));
         strcat_P(tempBuffer, _getPGMString(backEndLessStrings[16]));
+        // TODO Сейчас только один прожектор
         strcat_P(tempBuffer, _getPGMString(led_0));
         strcat_P(tempBuffer, _getPGMString(backEndLessStrings[16]));
         Serial.printf_P(tempBuffer);
@@ -791,69 +809,23 @@ void setLEDTimeBEL(ledPosition position) {
             Serial.print("[HTTPS] GET...\n");
             int httpCode = https.GET();
             if (httpCode > 0) {
-                // HTTP header has been send and Server response header has been handled
-                Serial.printf("[HTTP] GET... code: %d\n", httpCode);
-                // todo continue here. pass led as reference
-                // file found at server
+                Serial.printf_P(PSTR("[HTTP] GET... code: %d\n"), httpCode);
                 if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
-                    Serial.println(String("FreeHeap before parseJSON() = ") + ESP.getFreeHeap());
-                    parseJSON(https.getString());
-                    Serial.println(String("FreeHeap after parseJSON() = ") + ESP.getFreeHeap());
+                    parseJSON(https.getString(), leds[i]);
                 }
             } else {
-                Serial.printf("[HTTP] GET... failed, error: %s\n", https.errorToString(httpCode).c_str());
+                Serial.printf_P(PSTR("[HTTP] GET... failed, error: %s\n"), https.errorToString(httpCode).c_str());
             }
             https.end();
         } else {
-            Serial.printf("Unable to connect\n");
-        }
-        if (Firebase.getJSON(data, urlLights + ledPath)) {
-            if ((data.dataType() == "json")) {
-                String json = data.jsonString();
-                StaticJsonDocument<180> doc;
-                std::vector<String> vectorString;
-                DeserializationError err = deserializeJson(doc, json);
-                if (err) {
-                    Serial.printf_P(PSTR("Ошибка десериализации: %s\n"), err.c_str());
-                } else {
-                    leds[i].led.enabled = doc["enabled"];
-                    leds[i].led.pin = doc["pin"];
-                    leds[i].led.currentState = doc["state"];
-
-                    vectorString.clear();
-                    vectorString = splitVector(doc["off"], ':');
-                    leds[i].led.HOff = vectorString[0].toInt();
-                    leds[i].led.MOff = vectorString[1].toInt();
-
-                    vectorString.clear();
-                    vectorString = splitVector(doc["on"], ':');
-                    leds[i].led.HOn = vectorString[0].toInt();
-                    leds[i].led.MOn = vectorString[1].toInt();
-
-                    leds[i].led.off = Alarm.alarmRepeat(leds[i].led.HOff, leds[i].led.MOff, 0, ledOffHandler, leds[i]);
-                    leds[i].led.on = Alarm.alarmRepeat(leds[i].led.HOn, leds[i].led.MOn, 0, ledOnHandler, leds[i]);
-
-                    uint16_t minutes = clockRTC.getDateTime().hour * 60 + clockRTC.getDateTime().minute;
-                    uint16_t minutesOn = leds[i].led.HOn * 60 + leds[i].led.MOn;
-                    uint16_t minutesOff = leds[i].led.HOff * 60 + leds[i].led.MOff;
-                    if ((minutes > minutesOn) && (minutes < minutesOff)) {
-                        ledOnHandler(leds[i]);
-                    } else {
-                        ledOffHandler(leds[i]);
-                    }
-                    doc.clear();
-                }
-            } else {
-                Serial.printf_P(PSTR("%s\n"), "Ответ не является JSON объектом");
-            }
-        } else {
-            Serial.printf_P(PSTR("%s: %s\n"), "Ошибка загрузки параметров прожектора", data.errorReason().c_str());
+            Serial.printf_P(PSTR("%s\n"), "Unable to connect\n");
         }
         _delPtr(_tab);
     } else {
         Serial.printf_P(PSTR("%s\n"), "Прожектор не найден");
     }
 }
+
 void setLEDTime(ledPosition position) {
     uint8_t ledsCount = (sizeof(leds) / sizeof(*leds));
     String ledPath;
@@ -1255,9 +1227,9 @@ void setup() {
         sendMessage();
         writeBootHistory();
         syncTime();
-        //readOptionsFirebase();
+        // readOptionsFirebase();
         readOptionsBEL();
-        //printAll();
+        // printAll();
     }
     // startMainTimers();
     // Timer5Min();
