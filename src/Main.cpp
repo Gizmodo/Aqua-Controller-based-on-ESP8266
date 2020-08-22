@@ -4,12 +4,12 @@
 #include <ESP8266WiFi.h>
 #include <WiFiClientSecure.h>
 #include <WiFiUdp.h>
-#include "DS3231.h"      // Чип RTC
-#include "GBasic.h"      // DRV8825
-#include "RtcDS3231.h"   // Время
-#include "Shiftduino.h"  // Сдвиговый регистр
-#include "TimeAlarms.h"  // Таймеры
-
+#include "DS3231.h"            // Чип RTC
+#include "GBasic.h"            // DRV8825
+#include "RtcDS3231.h"         // Время
+#include "Shiftduino.h"        // Сдвиговый регистр
+#include "TimeAlarms.h"        // Таймеры
+#include "uptime_formatter.h"  // Время работы
 //// Сдвиговый регистр
 #define dataPin 10
 #define clockPin 14
@@ -18,6 +18,12 @@
 Shiftduino shiftRegister(dataPin, clockPin, latchPin, countShiftRegister);
 
 //// PROGMEM
+const char contentType[] PROGMEM = {"Content-Type"};
+const char applicationJson[] PROGMEM = {"application/json"};
+const char androidTickerText[] PROGMEM = {"android-ticker-text"};
+const char androidContentTitle[] PROGMEM = {"android-content-title"};
+const char androidContentText[] PROGMEM = {"android-content-text"};
+
 const char urlLights[] PROGMEM = {
     "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/"
     "Light?property=enabled&property=name&property=off&property=on&property=pin&property=state"};
@@ -28,7 +34,16 @@ const char urlDosers[] PROGMEM = {
 const char urlCompressor[] PROGMEM = {
     "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/"
     "Compressor?property=enabled&property=off&property=on&property=pin&property=state"};
-
+const char urlPutUptime[] PROGMEM = {
+    "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/Uptime/"
+    "66E232A0-EFF0-4A9C-9B6A-785C85B139B7"};
+const char urlPutLastOnline[] PROGMEM = {
+    "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/LastOnline/"
+    "E190FD47-1611-41CF-A1A6-C852EC05BD4F"};
+const char urlPostBoot[] PROGMEM = {
+    "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/BootHistory"};
+const char urlPushMessage[] PROGMEM = {
+    "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/messaging/Default"};
 //// RTC
 DS3231 clockRTC;
 RtcDS3231 rtc;
@@ -78,7 +93,8 @@ typedef Iterator<ledPosition, ledPosition::ONE, ledPosition::SIX> ledPositionIte
 typedef Iterator<doserType, doserType::K, doserType::Fe> doserTypeIterator;
 
 //// METHODS
-void _delPtr(const char* p) {
+
+void delPtr(const char* p) {
     delete[] p;
 }
 
@@ -96,11 +112,66 @@ char* _getPGMString(PGM_P pgm) {
     return buf;
 }
 
+void sendMessage(const String& message) {
+    char* url = nullptr;
+    url = _getPGMString(urlPushMessage);
+    if (https.begin(*client, String(url))) {
+        String data;
+        data = "{\"message\":\"" + message + "\"}";
+        https.addHeader(String(_getPGMString(contentType)), String(_getPGMString(applicationJson)));
+        https.addHeader(String(_getPGMString(androidTickerText)), F("You just got a push notification!"));
+        https.addHeader(String(_getPGMString(androidContentTitle)), F("This is a notification title"));
+        https.addHeader(String(_getPGMString(androidContentText)), F("Push Notifications are cool"));
+
+        int httpCode = https.POST(data);
+        if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
+            Serial.println(F("Сообщение отправлено"));
+        } else {
+            Serial.printf_P(PSTR("sendMessage() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
+        }
+        https.end();
+    } else {
+        Serial.printf_P(PSTR("%s\n"), "sendMessage() -> Невозможно подключиться\n");
+    }
+    delPtr(url);
+}
+
+void sendMessage(ledDescription& led, bool state) {
+    char dataMsg[100];
+    String stateString = state ? "Включение" : "Выключение";
+    char* p = clockRTC.dateFormat("H:i:s", clockRTC.getDateTime());
+    sprintf(dataMsg, "Прожектор %s в %s", led.name.c_str(), String(p).c_str());
+    delPtr(p);
+
+    char* url = nullptr;
+    url = _getPGMString(urlPushMessage);
+    if (https.begin(*client, String(url))) {
+        String data;
+        data = "{\"message\":\"" + stateString + "\"}";
+        https.addHeader(String(_getPGMString(contentType)), String(_getPGMString(applicationJson)));
+        https.addHeader(String(_getPGMString(androidTickerText)), F("You just got a push notification!"));
+        https.addHeader(String(_getPGMString(androidContentTitle)), F("This is a notification title"));
+        https.addHeader(String(_getPGMString(androidContentText)), String(dataMsg));
+
+        int httpCode = https.POST(data);
+        if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
+            Serial.println(F("Сообщение отправлено"));
+        } else {
+            Serial.printf_P(PSTR("sendMessage() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
+        }
+        https.end();
+    } else {
+        Serial.printf_P(PSTR("%s\n"), "sendMessage() -> Невозможно подключиться\n");
+    }
+    delPtr(url);
+    stateString.clear();
+}
+
 void ledOnHandler(ledDescription& led) {
     if (led.led.enabled) {
-        Serial.printf_P(PSTR("Включение прожектора PIN %d\n"), led.led.pin);
+        Serial.printf_P(PSTR("  Включение прожектора PIN %d\n"), led.led.pin);
         shiftRegister.setPin(countShiftRegister, led.led.pin, HIGH);
-        // TODO sendMessage(led, true); // отправка события о включении прожектора
+        sendMessage(led, true);
         Alarm.enable(led.led.off);
         Alarm.enable(led.led.on);
 
@@ -119,9 +190,9 @@ void ledOnHandler(ledDescription& led) {
 
 void ledOffHandler(ledDescription& led) {
     if (led.led.enabled) {
-        Serial.printf_P(PSTR("Выключение прожектора PIN %d\n"), led.led.pin);
+        Serial.printf_P(PSTR("  Выключение прожектора PIN %d\n"), led.led.pin);
         shiftRegister.setPin(countShiftRegister, led.led.pin, LOW);
-        // TODO sendMessage(led, false); // отправка события о выключении прожектора
+        sendMessage(led, false);
         Alarm.enable(led.led.off);
         Alarm.enable(led.led.on);
 
@@ -140,9 +211,9 @@ void ledOffHandler(ledDescription& led) {
 
 void compressorOnHandler(ledDescription& led) {
     if (led.led.enabled) {
-        Serial.printf_P(PSTR("Включение компрессора PIN %d\n"), led.led.pin);
+        Serial.printf_P(PSTR("  Включение компрессора PIN %d\n"), led.led.pin);
         shiftRegister.setPin(countShiftRegister, led.led.pin, HIGH);
-        // TODO sendMessage(led, true); // отправка события о включении прожектора
+        sendMessage(led, true);  // отправка события о включении компрессора
         Alarm.enable(led.led.off);
         Alarm.enable(led.led.on);
 
@@ -161,9 +232,9 @@ void compressorOnHandler(ledDescription& led) {
 
 void compressorOffHandler(ledDescription& led) {
     if (led.led.enabled) {
-        Serial.printf_P(PSTR("Выключение компрессора PIN %d\n"), led.led.pin);
+        Serial.printf_P(PSTR("  Выключение компрессора PIN %d\n"), led.led.pin);
         shiftRegister.setPin(countShiftRegister, led.led.pin, LOW);
-        // TODO sendMessage(led, false); // отправка события о выключении прожектора
+        sendMessage(led, false);  // отправка события о выключении компрессора
         Alarm.enable(led.led.off);
         Alarm.enable(led.led.on);
 
@@ -181,6 +252,11 @@ void compressorOffHandler(ledDescription& led) {
 }
 
 void doserHandler(const doser& dos) {
+    String message;
+    message = "Включение дозатора " + dos.name;
+    sendMessage(message);
+    message.clear();
+
     switch (dos.type) {
         case K:
             doserK->begin();
@@ -318,7 +394,6 @@ void parseJSONDosers(const String& response) {
                                                  dosersArray[ind].mode2_pin, shiftRegister, dosersArray[ind].index);
                     switch (doserItem.type) {
                         case K:
-                            // TODO Проверить в Clion многократную передачу doser
                             doserK = std::move(emptyDoser);
                             break;
                         case NP:
@@ -439,7 +514,7 @@ void getParamLights() {
     } else {
         Serial.printf_P(PSTR("%s\n"), "getParamLights() -> Невозможно подключиться\n");
     }
-    _delPtr(url);
+    delPtr(url);
     if (responseString.isEmpty()) {
         Serial.printf_P(PSTR(" %s\n"), "getParamLights() -> Ответ пустой");
     } else {
@@ -465,7 +540,7 @@ void getParamDosers() {
     } else {
         Serial.printf_P(PSTR("%s\n"), "getParamDosers() -> Невозможно подключиться\n");
     }
-    _delPtr(url);
+    delPtr(url);
     if (responseString.isEmpty()) {
         Serial.printf_P(PSTR(" %s\n"), "getParamDosers() -> Ответ пустой");
     } else {
@@ -496,7 +571,7 @@ void getParamCompressor() {
     } else {
         Serial.printf_P(PSTR("%s\n"), "getParamCompressor() -> Невозможно подключиться\n");
     }
-    _delPtr(url);
+    delPtr(url);
     if (responseString.isEmpty()) {
         Serial.printf_P(PSTR(" %s\n"), "getParamCompressor() -> Ответ пустой");
     } else {
@@ -639,11 +714,143 @@ void initDosersArray() {
     dosersArray[2].type = Fe;
 }
 
+void setCurrentState(boolean state, const String& name) {
+    // TODO Посмотреть
+    // String stateString = state ? "ON" : "OFF";
+    if (name == "Компрессор") {
+        //"on=13:22#off=23:54#e=1#s=1#p=12"
+        /*
+         char buff[50];
+         snprintf(buff, sizeof(buff), "on=%02d:%02d#off=%02d:%02d#e=%d#s=%d#p=%d", air.led.HOn, air.led.MOn, air.led.HOff,
+                  air.led.MOff, air.led.enabled, state, air.led.pin);
+         std::string buffAsStdStr = buff;
+         */
+    } else {
+        // TODO Отправка нового состояния на backend
+        /*
+        if (!Firebase.setBool(data, pathLight + name + "/state", state)) {
+            Serial.printf_P(PSTR("Не удалось установить состояние прожектора %s в %s\n"), name.c_str(), stateString.c_str());
+        } else {
+            Serial.printf_P(PSTR("Состояние прожектора %s установлено в %s\n"), name.c_str(), stateString.c_str());
+        }
+        */
+    }
+}
+
+void putUptime(const String& uptime) {
+    char* url = nullptr;
+    url = _getPGMString(urlPutUptime);
+    if (https.begin(*client, String(url))) {
+        String payload;
+        payload = "{\"uptime\":\"" + uptime + "\"}";
+        https.addHeader(String(_getPGMString(contentType)), String(_getPGMString(applicationJson)));
+        int httpCode = https.PUT(payload);
+        if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
+        } else {
+            Serial.printf_P(PSTR("putUptime() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
+        }
+        https.end();
+    } else {
+        Serial.printf_P(PSTR("%s\n"), "putUptime() -> Невозможно подключиться\n");
+    }
+    delPtr(url);
+}
+
+void uptime() {
+    String uptime = uptime_formatter::getUptime();
+    Serial.printf_P(PSTR("Время работы устройства: %s\n"), uptime.c_str());
+    putUptime(uptime);
+}
+
+void putLastOnline(const String& currentTime) {
+    char* url = nullptr;
+    url = _getPGMString(urlPutLastOnline);
+    if (https.begin(*client, String(url))) {
+        String payload;
+        payload = "{\"lastonline\":\"" + currentTime + "\"}";
+        https.addHeader(String(_getPGMString(contentType)), String(_getPGMString(applicationJson)));
+        int httpCode = https.PUT(payload);
+        if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
+        } else {
+            Serial.printf_P(PSTR("postLastOnline() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
+        }
+        https.end();
+    } else {
+        Serial.printf_P(PSTR("%s\n"), "postLastOnline() -> Невозможно подключиться\n");
+    }
+    delPtr(url);
+}
+
+void lastOnline() {
+    char* currentTime = clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime());
+    String payload = String(currentTime);
+    putLastOnline(payload);
+    free(currentTime);
+}
+
+void postBoot() {
+    char* url = nullptr;
+    char* currentTime = clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime());
+    url = _getPGMString(urlPostBoot);
+    if (https.begin(*client, String(url))) {
+        String payload;
+        payload = "{\"time\":\"" + String(currentTime) + "\"}";
+        https.addHeader(String(_getPGMString(contentType)), String(_getPGMString(applicationJson)));
+        int httpCode = https.POST(payload);
+        if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
+        } else {
+            Serial.printf_P(PSTR("postBoot() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
+        }
+        https.end();
+    } else {
+        Serial.printf_P(PSTR("%s\n"), "postBoot() -> Невозможно подключиться\n");
+    }
+    delPtr(url);
+    String message;
+    message = "Перезагрузка " + String(currentTime);
+    sendMessage(message);
+    message.clear();
+}
+
+void timer1() {
+    ledState_t currentLed;
+    char* df = clockRTC.dateFormat("H:i:s", clockRTC.getDateTime());
+    Serial.printf_P(PSTR("Сейчас %s\n"), String(df).c_str());
+    free(df);
+
+    /*
+     getTemperature();
+     checkUpdateSettings();
+     if (shouldUpdateFlag) {
+         readOptionsFirebase();
+         printAll();
+         shouldUpdateFlag = false;
+     }
+     */
+    while (!vectorState.empty()) {
+        currentLed = vectorState.back();
+        setCurrentState(currentLed.state, currentLed.name);
+        vectorState.pop_back();
+    }
+    vectorState.clear();
+}
+
+void timer5() {
+    uptime();
+    lastOnline();
+}
+
+void startTimers() {
+    Serial.printf_P(PSTR("%s -> %d\n"), "Таймеры: основные", Alarm.count());
+    Alarm.timerRepeat(5 * 60, timer5);
+    Alarm.timerRepeat(60, timer1);
+    Serial.printf_P(PSTR("%s -> %d\n"), "Таймеры: основные и прожекторные", Alarm.count());
+}
+
 void setup() {
     Serial.begin(115200);
     Serial.println();
 
-    //  initArrays();
     //  getTemperature();
     initRealTimeClock();
     initLedsArray();
@@ -654,27 +861,21 @@ void setup() {
         getParamsEEPROM();
     } else {
         initHTTPClient();
+        postBoot();
         getParamsBackEnd();
         syncTime();
         setInternalClock();
-
-        // sendMessage();
-        // writeBootHistory();
-        // syncTime();
-        // readOptionsFirebase();
-        // readOptionsBEL();
         // printAll();
     }
 
-    // startMainTimers();
-    // Timer5Min();
+    startTimers();
+    timer5();
 }
+
 // TODO Добавить вывод информации по устройствам
-// TODO Добавить Uptime информацию
-// TODO Отправка сообщений о событиях на backend
 // TODO Чтение температуры
-// TODO Таймеры
 // TODO EEPROM чтение и запись
 
 void loop() {
+    Alarm.delay(10);
 }
