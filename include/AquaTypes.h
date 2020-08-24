@@ -3,6 +3,7 @@
 #include <type_traits>
 #include <utility>
 #include "TimeAlarms.h"
+
 enum ledPosition { ONE, TWO, THREE, FOUR, FIVE, SIX };
 enum doserType { K, NP, Fe };
 enum deviceType { Light, Compressor };
@@ -13,6 +14,7 @@ typedef struct ledStruct_t {
     bool currentState;
     AlarmId on, off;
     byte pin;
+    String objectId;
 } ledStruct;
 
 typedef struct ledDescription_t {
