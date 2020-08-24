@@ -2,6 +2,7 @@
 #include <EEPROM.h>
 #include <ESP8266HTTPClient.h>
 #include <ESP8266WiFi.h>
+#include <OneWire.h>  // OneWire
 #include <WiFiClientSecure.h>
 #include <WiFiUdp.h>
 #include "DS3231.h"            // Чип RTC
@@ -10,6 +11,7 @@
 #include "Shiftduino.h"        // Сдвиговый регистр
 #include "TimeAlarms.h"        // Таймеры
 #include "uptime_formatter.h"  // Время работы
+
 //// Сдвиговый регистр
 #define dataPin 10
 #define clockPin 14
@@ -50,6 +52,11 @@ const char urlPutLight[] PROGMEM = {
 const char urlPutCompressor[] PROGMEM = {
     "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/Compressor/"
     "CB8B3EC7-2C05-4D0B-99BE-DE276D98DBDF"};
+const char urlPostTemperature[] PROGMEM = {
+    "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/TemperatureLog"};
+const char urlPutTemperature[] PROGMEM = {
+    "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/Temperature/"
+    "6D267F27-84A2-4F80-816F-550790E07C34"};
 //// RTC
 DS3231 clockRTC;
 RtcDS3231 rtc;
@@ -61,6 +68,14 @@ const int NTP_PACKET_SIZE = 48;
 byte packetBuffer[NTP_PACKET_SIZE];
 byte count_sync = 0;
 WiFiUDP udp;
+
+//// Датчик температуры
+#define ONE_WIRE_BUS 14  //Пин, к которому подключены датчики DS18B20 D5 GPIO14
+uint8_t sensorTemperatureAddress1[8] = {0x28, 0xFF, 0x17, 0xF0, 0x8B, 0x16, 0x03, 0x13};
+uint8_t sensorTemperatureAddress2[8] = {0x28, 0xFF, 0x5F, 0x1E, 0x8C, 0x16, 0x03, 0xE2};
+OneWire onewire(ONE_WIRE_BUS);
+uint8_t sensorData[12];
+float sensorTemperatureValue1, sensorTemperatureValue2;
 
 //// WIFI
 #define WORK_DEF1
@@ -95,10 +110,35 @@ std::unique_ptr<GBasic> doserFe{};
 // Прожекторы
 ledDescription_t leds[6];
 std::vector<std::reference_wrapper<ledDescription_t>> vectorRefLeds;
-typedef Iterator<ledPosition, ledPosition::ONE, ledPosition::SIX> ledPositionIterator;
-typedef Iterator<doserType, doserType::K, doserType::Fe> doserTypeIterator;
 
 //// METHODS
+double floatToDouble(float x) {
+    return static_cast<double>(x);
+}
+
+float getSensorTemperature(const uint8_t* sensorAddress) {
+    unsigned int rawData;
+    onewire.reset();
+    onewire.select(sensorAddress);
+    onewire.write(0x44, 1);
+    onewire.reset();
+    onewire.select(sensorAddress);
+    onewire.write(0xBE);
+    for (uint8_t i = 0; i < 9; i++) {
+        sensorData[i] = onewire.read();
+    }
+    rawData = (sensorData[1] << 8) | sensorData[0];
+    float celsius = (float)rawData / 16.0;
+    return celsius;
+}
+
+void getSensorsTemperature() {
+    sensorTemperatureValue1 = getSensorTemperature(sensorTemperatureAddress1);
+    sensorTemperatureValue2 = getSensorTemperature(sensorTemperatureAddress2);
+    Serial.printf_P(PSTR(" [T1: %s°]  [T2: %s°]\n"), String(sensorTemperatureValue1).c_str(),
+                    String(sensorTemperatureValue2).c_str());
+}
+
 void delPtr(const char* p) {
     delete[] p;
 }
@@ -829,20 +869,59 @@ void postBoot() {
     message.clear();
 }
 
+bool checkSettingsForUpdate() {
+    // TODO Create method
+    return false;
+}
+
+void printLedsParam() {
+    Serial.printf_P(PSTR("%s\n"), "Настройки прожекторов");
+    for (auto& led : leds) {
+        Serial.printf_P(PSTR(" Вкл-%02d:%02d. Выкл-%02d:%02d. Состояние: %s. Разрешен: %s. PIN: %d\n"), led.led.HOn, led.led.MOn,
+                        led.led.HOff, led.led.MOff, (led.led.currentState ? "включен" : "выключен"),
+                        ((led.led.enabled == true) ? "да" : "нет"), led.led.pin
+
+        );
+    }
+}
+
+void printDosersParam() {
+    Serial.printf_P(PSTR("%s\n"), "Настройки дозаторов");
+    for (auto& doser : dosersArray) {
+        Serial.printf_P(
+            PSTR("%d => %s: Вкл %02d:%02d. Pins: dir=%d step=%d enable=%d sleep=%d.\nОбъём: %d. Modes:%d.%d.%d Steps:%d\n"),
+            doser.index, doser.name.c_str(), doser.hour, doser.minute, doser.dirPin, doser.stepPin, doser.enablePin, doser.sleepPin,
+            doser.volume, doser.mode0_pin, doser.mode1_pin, doser.mode2_pin, doser.steps);
+    }
+}
+
+void printCompressorParam() {
+    Serial.printf_P(PSTR("%s\n"), "Настройки компрессора");
+    Serial.printf_P(PSTR(" Вкл-%02d:%02d. Выкл-%02d:%02d. Состояние: %s. Разрешен: %s. PIN: %d\n"), compressor.led.HOn,
+                    compressor.led.MOn, compressor.led.HOff, compressor.led.MOff,
+                    (compressor.led.currentState ? "включен" : "выключен"), (compressor.led.enabled ? "да" : "нет"),
+                    compressor.led.pin
+
+    );
+}
+
+void printParams() {
+    printLedsParam();
+    printDosersParam();
+    printCompressorParam();
+}
+
 void timer1() {
     char* df = clockRTC.dateFormat("H:i:s", clockRTC.getDateTime());
     Serial.printf_P(PSTR("Сейчас %s\n"), String(df).c_str());
     free(df);
+    getSensorsTemperature();
 
-    /*
-     getTemperature();
-     checkUpdateSettings();
-     if (shouldUpdateFlag) {
-         readOptionsFirebase();
-         printAll();
-         shouldUpdateFlag = false;
-     }
-     */
+    if (checkSettingsForUpdate()) {
+        getParamsBackEnd();
+        printParams();
+    }
+
     if (!vectorRefLeds.empty()) {
         for (auto& device : vectorRefLeds) {
             setCurrentState(device);
@@ -851,9 +930,61 @@ void timer1() {
     }
 }
 
+String serializeTemperature() {
+    String output = "";
+    const int capacity = JSON_OBJECT_SIZE(4);
+    StaticJsonDocument<capacity> doc;
+
+    char* currentTime = clockRTC.dateFormat("d.m.Y H:i:s", clockRTC.getDateTime());
+    doc["sensor1"] = floatToDouble(sensorTemperatureValue1);
+    doc["sensor2"] = floatToDouble(sensorTemperatureValue2);
+    doc["time"] = currentTime;
+    doc["unixtime"] = clockRTC.getDateTime().unixtime;
+    serializeJson(doc, output);
+    return output;
+}
+
+void sendTemperature() {
+    char* urlPost = nullptr;
+    char* urlPut = nullptr;
+    urlPost = getPGMString(urlPostTemperature);
+    urlPut = getPGMString(urlPutTemperature);
+    String payload = serializeTemperature();
+
+    if (https.begin(*client, String(urlPost))) {
+        https.addHeader(String(getPGMString(contentType)), String(getPGMString(applicationJson)));
+        int httpCode = https.POST(payload);
+        if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
+            Serial.println(F("Значения датчиков температуры отправлены"));
+        } else {
+            Serial.printf_P(PSTR("postTemperature() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
+        }
+        https.end();
+    } else {
+        Serial.printf_P(PSTR("%s\n"), "postTemperature() -> Невозможно подключиться\n");
+    }
+    delPtr(urlPost);
+
+    if (https.begin(*client, String(urlPut))) {
+        https.addHeader(String(getPGMString(contentType)), String(getPGMString(applicationJson)));
+        int httpCode = https.PUT(payload);
+        if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
+        } else {
+            Serial.printf_P(PSTR("putTemperature() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
+        }
+        https.end();
+    } else {
+        Serial.printf_P(PSTR("%s\n"), "putTemperature() -> Невозможно подключиться\n");
+    }
+    delPtr(urlPut);
+    payload.clear();
+}
+
 void timer5() {
     uptime();
     lastOnline();
+    getSensorsTemperature();
+    sendTemperature();
 }
 
 void startTimers() {
@@ -881,15 +1012,13 @@ void setup() {
         getParamsBackEnd();
         syncTime();
         setInternalClock();
-        // printAll();
+        printParams();
     }
 
     startTimers();
     timer5();
 }
 
-// TODO Добавить вывод информации по устройствам
-// TODO Чтение температуры
 // TODO EEPROM чтение и запись
 
 void loop() {
