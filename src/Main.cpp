@@ -10,7 +10,11 @@
 #include "RtcDS3231.h"         // Время
 #include "Shiftduino.h"        // Сдвиговый регистр
 #include "TimeAlarms.h"        // Таймеры
+#include "uEEPROMLib.h"        // EEPROM
 #include "uptime_formatter.h"  // Время работы
+
+//// EEPROM
+uEEPROMLib eeprom(0x57);
 
 //// Сдвиговый регистр
 #define dataPin 10
@@ -609,20 +613,32 @@ void getParamCompressor() {
     }
 }
 
+void setParamsEEPROM() {
+    uint8_t address = 0;
+    uint8_t szLed = sizeof(ledDescription_t);
+    uint8_t szDoser = sizeof(doser_t);
+
+    for (auto& led : leds) {
+        eeprom.eeprom_write<ledDescription_t>(address, led);
+        address += szLed + 1;
+    }
+    address -= szLed;
+    for (auto& doser : dosersArray) {
+        eeprom.eeprom_write<doser_t>(address, doser);
+        address += szDoser + 1;
+    }
+    address -= szDoser;
+    eeprom.eeprom_write<ledDescription_t>(address, compressor);
+}
+
 void getParamsBackEnd() {
     Serial.printf_P(PSTR("%s\n"), "Чтение параметров из облака");
     getParamLights();
     getParamDosers();
     getParamCompressor();
-    /*
-        Serial.printf_P(PSTR("%s\n"), "Запись в EEPROM");
-        writeEEPROMLed();
-        writeEEPROMDoser();
-        writeEEPROMAir();
-        */
-}
 
-void getParamsEEPROM() {
+    Serial.printf_P(PSTR("%s\n"), "Запись в EEPROM");
+    setParamsEEPROM();
 }
 
 void setInternalClock() {
