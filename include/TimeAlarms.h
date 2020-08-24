@@ -167,7 +167,7 @@ class TimeAlarmsClass {
             return dtINVALID_ALARM_ID;
         return createbyte(value, onTickByteHandler, false, dtDailyAlarm, param);
     }
-    AlarmID_t alarmRepeat(time_t value, OnTickLed_t onTickLedHandler, ledDescription param) {
+    AlarmID_t alarmRepeat(time_t value, OnTickLed_t onTickLedHandler, ledDescription_t param) {
         if ((unsigned)value > SECS_PER_DAY)
             return dtINVALID_ALARM_ID;
         return createled(value, onTickLedHandler, false, dtDailyAlarm, param);
@@ -184,7 +184,7 @@ class TimeAlarmsClass {
     AlarmID_t alarmRepeat(const int H, const int M, const int S, OnTickByte_t onTickByteHandler, byte param) {
         return alarmRepeat(AlarmHMS(H, M, S), onTickByteHandler, param);
     }
-    AlarmID_t alarmRepeat(const int H, const int M, const int S, OnTickLed_t onTickLedHandler, ledDescription param) {
+    AlarmID_t alarmRepeat(const int H, const int M, const int S, OnTickLed_t onTickLedHandler, ledDescription_t param) {
         return alarmRepeat(AlarmHMS(H, M, S), onTickLedHandler, param);
     }
     AlarmID_t alarmRepeat(const int H, const int M, const int S, OnTickDoser_t onTickDoserHandler, doser param) {
@@ -214,7 +214,7 @@ class TimeAlarmsClass {
                           const int M,
                           const int S,
                           OnTickLed_t onTickLedHandler,
-                          ledDescription param) {
+                          ledDescription_t param) {
         time_t value = (DOW - 1) * SECS_PER_DAY + AlarmHMS(H, M, S);
         if (value <= 0)
             return dtINVALID_ALARM_ID;
@@ -246,7 +246,7 @@ class TimeAlarmsClass {
             return dtINVALID_ALARM_ID;
         return createbyte(value, onTickByteHandler, true, dtTimer, param);
     }
-    AlarmID_t timerOnce(time_t value, OnTickLed_t onTickLedHandler, ledDescription param) {
+    AlarmID_t timerOnce(time_t value, OnTickLed_t onTickLedHandler, ledDescription_t param) {
         if (value <= 0)
             return dtINVALID_ALARM_ID;
         return createled(value, onTickLedHandler, true, dtTimer, param);
@@ -274,12 +274,12 @@ class TimeAlarmsClass {
     AlarmID_t timerRepeat(const int H, const int M, const int S, OnTickByte_t onTickByteHandler, byte param) {
         return timerRepeat(AlarmHMS(H, M, S), onTickByteHandler, param);
     }
-    AlarmID_t timerRepeat(time_t value, OnTickLed_t onTickLedHandler, ledDescription param) {
+    AlarmID_t timerRepeat(time_t value, OnTickLed_t onTickLedHandler, ledDescription_t param) {
         if (value <= 0)
             return dtINVALID_ALARM_ID;
         return createled(value, onTickLedHandler, false, dtTimer, param);
     }
-    AlarmID_t timerRepeat(const int H, const int M, const int S, OnTickLed_t onTickLedHandler, ledDescription param) {
+    AlarmID_t timerRepeat(const int H, const int M, const int S, OnTickLed_t onTickLedHandler, ledDescription_t param) {
         return timerRepeat(AlarmHMS(H, M, S), onTickLedHandler, param);
     }
     AlarmID_t timerRepeat(time_t value, OnTickDoser_t onTickDoserHandler, doser param) {

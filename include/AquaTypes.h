@@ -5,6 +5,7 @@
 #include "TimeAlarms.h"
 enum ledPosition { ONE, TWO, THREE, FOUR, FIVE, SIX };
 enum doserType { K, NP, Fe };
+enum deviceType { Light, Compressor };
 typedef struct ledStruct_t {
     byte HOn, HOff;
     byte MOn, MOff;
@@ -18,12 +19,8 @@ typedef struct ledDescription_t {
     ledPosition position;
     String name;
     ledStruct_t led;
+    deviceType device;
 } ledDescription;
-
-typedef struct ledState_t {
-    String name;
-    bool state;
-} ledState;
 
 typedef struct doser_t {
     byte dirPin;

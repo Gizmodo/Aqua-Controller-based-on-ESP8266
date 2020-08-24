@@ -44,6 +44,12 @@ const char urlPostBoot[] PROGMEM = {
     "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/BootHistory"};
 const char urlPushMessage[] PROGMEM = {
     "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/messaging/Default"};
+const char urlPutLight[] PROGMEM = {
+    "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/"
+    "Light?where=name%3D'"};
+const char urlPutCompressor[] PROGMEM = {
+    "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/Compressor/"
+    "CB8B3EC7-2C05-4D0B-99BE-DE276D98DBDF"};
 //// RTC
 DS3231 clockRTC;
 RtcDS3231 rtc;
@@ -88,25 +94,24 @@ std::unique_ptr<GBasic> doserFe{};
 
 // Прожекторы
 ledDescription_t leds[6];
-std::vector<ledState_t> vectorState;
+std::vector<std::reference_wrapper<ledDescription_t>> vectorRefLeds;
 typedef Iterator<ledPosition, ledPosition::ONE, ledPosition::SIX> ledPositionIterator;
 typedef Iterator<doserType, doserType::K, doserType::Fe> doserTypeIterator;
 
 //// METHODS
-
 void delPtr(const char* p) {
     delete[] p;
 }
 
-char* _newPtr(size_t len) {
+char* newPtr(size_t len) {
     char* p = new char[len];
     memset(p, 0, len);
     return p;
 }
 
-char* _getPGMString(PGM_P pgm) {
+char* getPGMString(PGM_P pgm) {
     size_t len = strlen_P(pgm) + 1;
-    char* buf = _newPtr(len);
+    char* buf = newPtr(len);
     strcpy_P(buf, pgm);
     buf[len - 1] = 0;
     return buf;
@@ -114,14 +119,14 @@ char* _getPGMString(PGM_P pgm) {
 
 void sendMessage(const String& message) {
     char* url = nullptr;
-    url = _getPGMString(urlPushMessage);
+    url = getPGMString(urlPushMessage);
     if (https.begin(*client, String(url))) {
         String data;
         data = "{\"message\":\"" + message + "\"}";
-        https.addHeader(String(_getPGMString(contentType)), String(_getPGMString(applicationJson)));
-        https.addHeader(String(_getPGMString(androidTickerText)), F("You just got a push notification!"));
-        https.addHeader(String(_getPGMString(androidContentTitle)), F("This is a notification title"));
-        https.addHeader(String(_getPGMString(androidContentText)), F("Push Notifications are cool"));
+        https.addHeader(String(getPGMString(contentType)), String(getPGMString(applicationJson)));
+        https.addHeader(String(getPGMString(androidTickerText)), F("You just got a push notification!"));
+        https.addHeader(String(getPGMString(androidContentTitle)), F("This is a notification title"));
+        https.addHeader(String(getPGMString(androidContentText)), F("Push Notifications are cool"));
 
         int httpCode = https.POST(data);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
@@ -136,7 +141,7 @@ void sendMessage(const String& message) {
     delPtr(url);
 }
 
-void sendMessage(ledDescription& led, bool state) {
+void sendMessage(ledDescription_t& led, bool state) {
     char dataMsg[100];
     String stateString = state ? "Включение" : "Выключение";
     char* p = clockRTC.dateFormat("H:i:s", clockRTC.getDateTime());
@@ -144,14 +149,14 @@ void sendMessage(ledDescription& led, bool state) {
     delPtr(p);
 
     char* url = nullptr;
-    url = _getPGMString(urlPushMessage);
+    url = getPGMString(urlPushMessage);
     if (https.begin(*client, String(url))) {
         String data;
         data = "{\"message\":\"" + stateString + "\"}";
-        https.addHeader(String(_getPGMString(contentType)), String(_getPGMString(applicationJson)));
-        https.addHeader(String(_getPGMString(androidTickerText)), F("You just got a push notification!"));
-        https.addHeader(String(_getPGMString(androidContentTitle)), F("This is a notification title"));
-        https.addHeader(String(_getPGMString(androidContentText)), String(dataMsg));
+        https.addHeader(String(getPGMString(contentType)), String(getPGMString(applicationJson)));
+        https.addHeader(String(getPGMString(androidTickerText)), F("You just got a push notification!"));
+        https.addHeader(String(getPGMString(androidContentTitle)), F("This is a notification title"));
+        https.addHeader(String(getPGMString(androidContentText)), String(dataMsg));
 
         int httpCode = https.POST(data);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
@@ -167,20 +172,16 @@ void sendMessage(ledDescription& led, bool state) {
     stateString.clear();
 }
 
-void ledOnHandler(ledDescription& led) {
+void ledOnHandler(ledDescription_t& led) {
     if (led.led.enabled) {
         Serial.printf_P(PSTR("  Включение прожектора PIN %d\n"), led.led.pin);
         shiftRegister.setPin(countShiftRegister, led.led.pin, HIGH);
         sendMessage(led, true);
         Alarm.enable(led.led.off);
         Alarm.enable(led.led.on);
-
         led.led.currentState = true;
 
-        ledState_t state;
-        state.name = led.name;
-        state.state = true;
-        vectorState.push_back(state);
+        vectorRefLeds.push_back(led);
     } else {
         Serial.printf_P(PSTR("%s\n"), "Прожектор не доступен для изменения состояния");
         Alarm.disable(led.led.off);
@@ -188,20 +189,16 @@ void ledOnHandler(ledDescription& led) {
     }
 }
 
-void ledOffHandler(ledDescription& led) {
+void ledOffHandler(ledDescription_t& led) {
     if (led.led.enabled) {
         Serial.printf_P(PSTR("  Выключение прожектора PIN %d\n"), led.led.pin);
         shiftRegister.setPin(countShiftRegister, led.led.pin, LOW);
         sendMessage(led, false);
         Alarm.enable(led.led.off);
         Alarm.enable(led.led.on);
-
         led.led.currentState = false;
 
-        ledState_t state;
-        state.name = led.name;
-        state.state = false;
-        vectorState.push_back(state);
+        vectorRefLeds.push_back(led);
     } else {
         Serial.printf_P(PSTR("%s\n"), "Прожектор не доступен для изменения состояния");
         Alarm.disable(led.led.off);
@@ -209,20 +206,16 @@ void ledOffHandler(ledDescription& led) {
     }
 }
 
-void compressorOnHandler(ledDescription& led) {
+void compressorOnHandler(ledDescription_t& led) {
     if (led.led.enabled) {
         Serial.printf_P(PSTR("  Включение компрессора PIN %d\n"), led.led.pin);
         shiftRegister.setPin(countShiftRegister, led.led.pin, HIGH);
         sendMessage(led, true);  // отправка события о включении компрессора
         Alarm.enable(led.led.off);
         Alarm.enable(led.led.on);
-
         led.led.currentState = true;
 
-        ledState_t state;
-        state.name = led.name;
-        state.state = true;
-        vectorState.push_back(state);
+        vectorRefLeds.push_back(led);
     } else {
         Serial.printf_P(PSTR("%s\n"), "Компрессор не доступен для изменения состояния");
         Alarm.disable(led.led.off);
@@ -230,20 +223,16 @@ void compressorOnHandler(ledDescription& led) {
     }
 }
 
-void compressorOffHandler(ledDescription& led) {
+void compressorOffHandler(ledDescription_t& led) {
     if (led.led.enabled) {
         Serial.printf_P(PSTR("  Выключение компрессора PIN %d\n"), led.led.pin);
         shiftRegister.setPin(countShiftRegister, led.led.pin, LOW);
         sendMessage(led, false);  // отправка события о выключении компрессора
         Alarm.enable(led.led.off);
         Alarm.enable(led.led.on);
-
         led.led.currentState = false;
 
-        ledState_t state;
-        state.name = led.name;
-        state.state = false;
-        vectorState.push_back(state);
+        vectorRefLeds.push_back(led);
     } else {
         Serial.printf_P(PSTR("%s\n"), "Компрессор не доступен для изменения состояния");
         Alarm.disable(led.led.off);
@@ -499,7 +488,7 @@ boolean initWiFi() {
 
 void getParamLights() {
     char* url = nullptr;
-    url = _getPGMString(urlLights);
+    url = getPGMString(urlLights);
     Serial.printf_P(PSTR(" %s\n"), "Прожекторы...");
     if (https.begin(*client, String(url))) {
         int httpCode = https.GET();
@@ -525,7 +514,7 @@ void getParamLights() {
 
 void getParamDosers() {
     char* url = nullptr;
-    url = _getPGMString(urlDosers);
+    url = getPGMString(urlDosers);
     Serial.printf_P(PSTR(" %s\n"), "Дозаторы...");
     if (https.begin(*client, String(url))) {
         int httpCode = https.GET();
@@ -556,7 +545,7 @@ void getParamDosers() {
 
 void getParamCompressor() {
     char* url = nullptr;
-    url = _getPGMString(urlCompressor);
+    url = getPGMString(urlCompressor);
     Serial.printf_P(PSTR(" %s\n"), "Компрессор...");
     if (https.begin(*client, String(url))) {
         int httpCode = https.GET();
@@ -688,6 +677,7 @@ void initHTTPClient() {
 
 void initCompressor() {
     compressor.name = "Компрессор";
+    compressor.device = Compressor;
 }
 
 void initLedsArray() {
@@ -703,6 +693,9 @@ void initLedsArray() {
     leds[4].position = FIVE;
     leds[5].name = "Six";
     leds[5].position = SIX;
+    for (auto& led : leds) {
+        led.device = Light;
+    }
 }
 
 void initDosersArray() {
@@ -714,36 +707,60 @@ void initDosersArray() {
     dosersArray[2].type = Fe;
 }
 
-void setCurrentState(boolean state, const String& name) {
-    // TODO Посмотреть
-    // String stateString = state ? "ON" : "OFF";
-    if (name == "Компрессор") {
-        //"on=13:22#off=23:54#e=1#s=1#p=12"
-        /*
-         char buff[50];
-         snprintf(buff, sizeof(buff), "on=%02d:%02d#off=%02d:%02d#e=%d#s=%d#p=%d", air.led.HOn, air.led.MOn, air.led.HOff,
-                  air.led.MOff, air.led.enabled, state, air.led.pin);
-         std::string buffAsStdStr = buff;
-         */
+String serializeDevice(const ledDescription_t& device) {
+    String output = "";
+    const int capacity = JSON_OBJECT_SIZE(11);
+    StaticJsonDocument<capacity> doc;
+    doc["enabled"] = device.led.enabled;
+    doc["On"] = String(device.led.HOn) + ":" + String(device.led.MOn);
+    doc["Off"] = String(device.led.HOff) + ":" + String(device.led.MOff);
+    doc["pin"] = device.led.pin;
+    doc["state"] = device.led.currentState;
+
+    if (device.device == Light) {
+        doc["name"] = device.name;
+    }
+    serializeJson(doc, output);
+    return output;
+}
+
+void setCurrentState(const ledDescription_t& led) {
+    char* url = nullptr;
+    String urlString;
+    String payload;
+    if (led.device == Compressor) {
+        url = getPGMString(urlPutCompressor);
+        urlString = String(url);
     } else {
-        // TODO Отправка нового состояния на backend
-        /*
-        if (!Firebase.setBool(data, pathLight + name + "/state", state)) {
-            Serial.printf_P(PSTR("Не удалось установить состояние прожектора %s в %s\n"), name.c_str(), stateString.c_str());
+        url = getPGMString(urlPutLight);
+        urlString = String(url) + led.name + "'";
+    }
+    delPtr(url);
+    payload = serializeDevice(led);
+    if (https.begin(*client, urlString)) {
+        https.addHeader(String(getPGMString(contentType)), String(getPGMString(applicationJson)));
+        int httpCode = https.PUT(payload);
+        if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
+            String name;
+            (led.device == Compressor) ? name = "" : name = led.name;
+            Serial.printf_P(PSTR("Состояние %s %s установлено в %s\n"), (led.device == Compressor ? "компрессора" : "прожектора "),
+                            (name.c_str()), (led.led.currentState ? "ON" : "OFF"));
         } else {
-            Serial.printf_P(PSTR("Состояние прожектора %s установлено в %s\n"), name.c_str(), stateString.c_str());
+            Serial.printf_P(PSTR("setCurrentState() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
         }
-        */
+        https.end();
+    } else {
+        Serial.printf_P(PSTR("%s\n"), "setCurrentState() -> Невозможно подключиться\n");
     }
 }
 
 void putUptime(const String& uptime) {
     char* url = nullptr;
-    url = _getPGMString(urlPutUptime);
+    url = getPGMString(urlPutUptime);
     if (https.begin(*client, String(url))) {
         String payload;
         payload = "{\"uptime\":\"" + uptime + "\"}";
-        https.addHeader(String(_getPGMString(contentType)), String(_getPGMString(applicationJson)));
+        https.addHeader(String(getPGMString(contentType)), String(getPGMString(applicationJson)));
         int httpCode = https.PUT(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
         } else {
@@ -764,11 +781,11 @@ void uptime() {
 
 void putLastOnline(const String& currentTime) {
     char* url = nullptr;
-    url = _getPGMString(urlPutLastOnline);
+    url = getPGMString(urlPutLastOnline);
     if (https.begin(*client, String(url))) {
         String payload;
         payload = "{\"lastonline\":\"" + currentTime + "\"}";
-        https.addHeader(String(_getPGMString(contentType)), String(_getPGMString(applicationJson)));
+        https.addHeader(String(getPGMString(contentType)), String(getPGMString(applicationJson)));
         int httpCode = https.PUT(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
         } else {
@@ -791,11 +808,11 @@ void lastOnline() {
 void postBoot() {
     char* url = nullptr;
     char* currentTime = clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime());
-    url = _getPGMString(urlPostBoot);
+    url = getPGMString(urlPostBoot);
     if (https.begin(*client, String(url))) {
         String payload;
         payload = "{\"time\":\"" + String(currentTime) + "\"}";
-        https.addHeader(String(_getPGMString(contentType)), String(_getPGMString(applicationJson)));
+        https.addHeader(String(getPGMString(contentType)), String(getPGMString(applicationJson)));
         int httpCode = https.POST(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
         } else {
@@ -813,7 +830,6 @@ void postBoot() {
 }
 
 void timer1() {
-    ledState_t currentLed;
     char* df = clockRTC.dateFormat("H:i:s", clockRTC.getDateTime());
     Serial.printf_P(PSTR("Сейчас %s\n"), String(df).c_str());
     free(df);
@@ -827,12 +843,12 @@ void timer1() {
          shouldUpdateFlag = false;
      }
      */
-    while (!vectorState.empty()) {
-        currentLed = vectorState.back();
-        setCurrentState(currentLed.state, currentLed.name);
-        vectorState.pop_back();
+    if (!vectorRefLeds.empty()) {
+        for (auto& device : vectorRefLeds) {
+            setCurrentState(device);
+        }
+        vectorRefLeds.clear();
     }
-    vectorState.clear();
 }
 
 void timer5() {
