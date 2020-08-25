@@ -61,6 +61,11 @@ const char urlPostTemperature[] PROGMEM = {
 const char urlPutTemperature[] PROGMEM = {
     "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/Temperature/"
     "6D267F27-84A2-4F80-816F-550790E07C34"};
+const char urlPutUpdateSettings[] PROGMEM = {
+    "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/UpdateSettings/"
+    "60A7BF1D-355E-4796-9A17-EFCC8E12B41E"};
+const char urlGetUpdateSettings[] PROGMEM = {
+    "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/UpdateSettings"};
 //// RTC
 DS3231 clockRTC;
 RtcDS3231 rtc;
@@ -586,11 +591,6 @@ void getParamDosers() {
         parseJSONDosers(responseString);
         responseString.clear();
     }
-    /*
-     for (doserType i : doserTypeIterator()) {
-         setDoser(i);
-     }
-     */
 }
 
 void getParamCompressor() {
@@ -931,9 +931,69 @@ void postBoot() {
     message.clear();
 }
 
-bool checkSettingsForUpdate() {
-    // TODO Create method
-    return false;
+void parseJSONUpdateSettings(const String& response, bool& result) {
+    const size_t capacity = JSON_ARRAY_SIZE(1) + JSON_OBJECT_SIZE(6) + 110;
+    DynamicJsonDocument doc(capacity);
+    DeserializationError err = deserializeJson(doc, response);
+    if (err) {
+        Serial.print(F("parseJSONCompressor -> Ошибка разбора: "));
+        Serial.println(err.c_str());
+        result = false;
+    } else {
+        JsonArray array = doc.as<JsonArray>();
+        for (JsonObject obj : array) {
+            result = obj["flag"];
+        }
+        doc.shrinkToFit();
+        doc.clear();
+    }
+}
+
+void putUpdateSettings() {
+    char* url = nullptr;
+    url = getPGMString(urlPutUpdateSettings);
+    if (https.begin(*client, String(url))) {
+        String payload = "{\"flag\": false }";
+        https.addHeader(String(getPGMString(contentType)), String(getPGMString(applicationJson)));
+        int httpCode = https.PUT(payload);
+        if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
+            Serial.printf_P(PSTR("putUpdateSettings() -> Флаг сброшен\n"));
+        } else {
+            Serial.printf_P(PSTR("putUpdateSettings() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
+        }
+        https.end();
+    } else {
+        Serial.printf_P(PSTR("%s\n"), "putUpdateSettings() -> Невозможно подключиться\n");
+    }
+    delPtr(url);
+}
+
+bool getUpdateSettings() {
+    char* url = nullptr;
+    bool flag = false;
+    url = getPGMString(urlGetUpdateSettings);
+    Serial.printf_P(PSTR(" %s\n"), "Запрос на обновление всех настроек");
+    if (https.begin(*client, String(url))) {
+        int httpCode = https.GET();
+        if (httpCode > 0) {
+            if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
+                responseString = https.getString();
+            }
+        } else {
+            Serial.printf_P(PSTR("getUpdateSettings() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
+        }
+        https.end();
+    } else {
+        Serial.printf_P(PSTR("%s\n"), "getUpdateSettings() -> Невозможно подключиться\n");
+    }
+    delPtr(url);
+    if (responseString.isEmpty()) {
+        Serial.printf_P(PSTR(" %s\n"), "getUpdateSettings() -> Ответ пустой");
+    } else {
+        parseJSONUpdateSettings(responseString, flag);
+        responseString.clear();
+    }
+    return flag;
 }
 
 void printLedsParam() {
@@ -979,9 +1039,10 @@ void timer1() {
     free(df);
     getSensorsTemperature();
 
-    if (checkSettingsForUpdate()) {
+    if (getUpdateSettings()) {
         getParamsBackEnd();
         printParams();
+        putUpdateSettings();
     }
 
     if (!vectorRefLeds.empty()) {
