@@ -4,3 +4,8 @@
 .vscode/launch.json
 .vscode/ipch
 .vscode/extensions.json
+cmake-build-esp12e
+cmake-build-debug
+.idea
+CMakeLists.txt
+CMakeListsPrivate.txt
