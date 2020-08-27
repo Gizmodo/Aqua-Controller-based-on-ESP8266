@@ -181,14 +181,24 @@ char* getPGMString(PGM_P pgm) {
 
 void sendMessage(const String& message) {
     char* url = nullptr;
+    char* ct = nullptr;
+    char* att = nullptr;
+    char* actitle = nullptr;
+    char* actext = nullptr;
+    char* aj = nullptr;
     url = getPGMString(urlPushMessage);
+    aj = getPGMString(applicationJson);
+    ct = getPGMString(contentType);
+    att = getPGMString(androidTickerText);
+    actitle = getPGMString(androidContentTitle);
+    actext = getPGMString(androidContentText);
     if (https.begin(*client, String(url))) {
         String data;
         data = "{\"message\":\"" + message + "\"}";
-        https.addHeader(String(getPGMString(contentType)), String(getPGMString(applicationJson)));
-        https.addHeader(String(getPGMString(androidTickerText)), F("You just got a push notification!"));
-        https.addHeader(String(getPGMString(androidContentTitle)), F("This is a notification title"));
-        https.addHeader(String(getPGMString(androidContentText)), F("Push Notifications are cool"));
+        https.addHeader(String(ct), String(aj));
+        https.addHeader(String(att), F("You just got a push notification!"));
+        https.addHeader(String(actitle), F("This is a notification title"));
+        https.addHeader(String(actext), F("Push Notifications are cool"));
 
         int httpCode = https.POST(data);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
@@ -201,6 +211,11 @@ void sendMessage(const String& message) {
         Serial.printf_P(PSTR("%s\n"), "sendMessage() -> Невозможно подключиться\n");
     }
     delPtr(url);
+    delPtr(ct);
+    delPtr(att);
+    delPtr(actitle);
+    delPtr(actext);
+    delPtr(aj);
 }
 
 void sendMessage(ledDescription_t& led, bool state) {
@@ -211,15 +226,25 @@ void sendMessage(ledDescription_t& led, bool state) {
     delPtr(p);
 
     char* url = nullptr;
+    char* ct = nullptr;
+    char* att = nullptr;
+    char* actitle = nullptr;
+    char* actext = nullptr;
+    char* aj = nullptr;
     url = getPGMString(urlPushMessage);
+    aj = getPGMString(applicationJson);
+    ct = getPGMString(contentType);
+    att = getPGMString(androidTickerText);
+    actitle = getPGMString(androidContentTitle);
+    actext = getPGMString(androidContentText);
+
     if (https.begin(*client, String(url))) {
         String data;
         data = "{\"message\":\"" + stateString + "\"}";
-        https.addHeader(String(getPGMString(contentType)), String(getPGMString(applicationJson)));
-        https.addHeader(String(getPGMString(androidTickerText)), F("You just got a push notification!"));
-        https.addHeader(String(getPGMString(androidContentTitle)), F("This is a notification title"));
-        https.addHeader(String(getPGMString(androidContentText)), String(dataMsg));
-
+        https.addHeader(String(ct), String(aj));
+        https.addHeader(String(att), F("You just got a push notification!"));
+        https.addHeader(String(actitle), F("This is a notification title"));
+        https.addHeader(String(actext), String(dataMsg));
         int httpCode = https.POST(data);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
             Serial.println(F("  Сообщение отправлено"));
@@ -231,6 +256,11 @@ void sendMessage(ledDescription_t& led, bool state) {
         Serial.printf_P(PSTR("%s\n"), "sendMessage() -> Невозможно подключиться\n");
     }
     delPtr(url);
+    delPtr(ct);
+    delPtr(att);
+    delPtr(actitle);
+    delPtr(actext);
+    delPtr(aj);
     stateString.clear();
 }
 
@@ -828,6 +858,8 @@ String serializeDevice(const ledDescription_t& device) {
 
 void setCurrentState(const ledDescription_t& led) {
     char* url = nullptr;
+    char* ct = nullptr;
+    char* aj = nullptr;
     String urlString;
     String payload;
     if (led.device == Compressor) {
@@ -838,9 +870,11 @@ void setCurrentState(const ledDescription_t& led) {
         urlString = String(url) + led.led.objectId;
     }
     delPtr(url);
+    ct = getPGMString(contentType);
+    aj = getPGMString(applicationJson);
     payload = serializeDevice(led);
     if (https.begin(*client, urlString)) {
-        https.addHeader(String(getPGMString(contentType)), String(getPGMString(applicationJson)));
+        https.addHeader(String(ct), String(aj));
         int httpCode = https.PUT(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
             String name;
@@ -854,15 +888,21 @@ void setCurrentState(const ledDescription_t& led) {
     } else {
         Serial.printf_P(PSTR("%s\n"), "setCurrentState() -> Невозможно подключиться\n");
     }
+    delPtr(ct);
+    delPtr(aj);
 }
 
 void putUptime(const String& uptime) {
     char* url = nullptr;
+    char* ct = nullptr;
+    char* aj = nullptr;
     url = getPGMString(urlPutUptime);
+    ct = getPGMString(contentType);
+    aj = getPGMString(applicationJson);
     if (https.begin(*client, String(url))) {
         String payload;
         payload = "{\"uptime\":\"" + uptime + "\"}";
-        https.addHeader(String(getPGMString(contentType)), String(getPGMString(applicationJson)));
+        https.addHeader(String(ct), String(aj));
         int httpCode = https.PUT(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
         } else {
@@ -873,6 +913,8 @@ void putUptime(const String& uptime) {
         Serial.printf_P(PSTR("%s\n"), "putUptime() -> Невозможно подключиться\n");
     }
     delPtr(url);
+    delPtr(ct);
+    delPtr(aj);
 }
 
 void uptime() {
@@ -883,11 +925,15 @@ void uptime() {
 
 void putLastOnline(const String& currentTime) {
     char* url = nullptr;
+    char* ct = nullptr;
+    char* aj = nullptr;
+    ct = getPGMString(contentType);
+    aj = getPGMString(applicationJson);
     url = getPGMString(urlPutLastOnline);
     if (https.begin(*client, String(url))) {
         String payload;
         payload = "{\"lastonline\":\"" + currentTime + "\"}";
-        https.addHeader(String(getPGMString(contentType)), String(getPGMString(applicationJson)));
+        https.addHeader(String(ct), String(aj));
         int httpCode = https.PUT(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
         } else {
@@ -898,6 +944,8 @@ void putLastOnline(const String& currentTime) {
         Serial.printf_P(PSTR("%s\n"), "postLastOnline() -> Невозможно подключиться\n");
     }
     delPtr(url);
+    delPtr(ct);
+    delPtr(aj);
 }
 
 void lastOnline() {
@@ -909,12 +957,16 @@ void lastOnline() {
 
 void postBoot() {
     char* url = nullptr;
+    char* ct = nullptr;
+    char* aj = nullptr;
     char* currentTime = clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime());
     url = getPGMString(urlPostBoot);
+    ct = getPGMString(contentType);
+    aj = getPGMString(applicationJson);
     if (https.begin(*client, String(url))) {
         String payload;
         payload = "{\"time\":\"" + String(currentTime) + "\"}";
-        https.addHeader(String(getPGMString(contentType)), String(getPGMString(applicationJson)));
+        https.addHeader(String(ct), String(aj));
         int httpCode = https.POST(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
         } else {
@@ -925,6 +977,8 @@ void postBoot() {
         Serial.printf_P(PSTR("%s\n"), "postBoot() -> Невозможно подключиться\n");
     }
     delPtr(url);
+    delPtr(ct);
+    delPtr(aj);
     String message;
     message = "Перезагрузка " + String(currentTime);
     sendMessage(message);
@@ -951,10 +1005,14 @@ void parseJSONUpdateSettings(const String& response, bool& result) {
 
 void putUpdateSettings() {
     char* url = nullptr;
+    char* ct = nullptr;
+    char* aj = nullptr;
     url = getPGMString(urlPutUpdateSettings);
+    ct = getPGMString(contentType);
+    aj = getPGMString(applicationJson);
     if (https.begin(*client, String(url))) {
         String payload = "{\"flag\": false }";
-        https.addHeader(String(getPGMString(contentType)), String(getPGMString(applicationJson)));
+        https.addHeader(String(ct), String(aj));
         int httpCode = https.PUT(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
             Serial.printf_P(PSTR("putUpdateSettings() -> Флаг сброшен\n"));
@@ -966,6 +1024,8 @@ void putUpdateSettings() {
         Serial.printf_P(PSTR("%s\n"), "putUpdateSettings() -> Невозможно подключиться\n");
     }
     delPtr(url);
+    delPtr(ct);
+    delPtr(aj);
 }
 
 bool getUpdateSettings() {
@@ -1069,12 +1129,16 @@ String serializeTemperature() {
 void sendTemperature() {
     char* urlPost = nullptr;
     char* urlPut = nullptr;
+    char* ct = nullptr;
+    char* aj = nullptr;
     urlPost = getPGMString(urlPostTemperature);
     urlPut = getPGMString(urlPutTemperature);
+    ct = getPGMString(contentType);
+    aj = getPGMString(applicationJson);
     String payload = serializeTemperature();
 
     if (https.begin(*client, String(urlPost))) {
-        https.addHeader(String(getPGMString(contentType)), String(getPGMString(applicationJson)));
+        https.addHeader(String(ct), String(aj));
         int httpCode = https.POST(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
             Serial.println(F("Значения датчиков температуры отправлены"));
@@ -1086,9 +1150,8 @@ void sendTemperature() {
         Serial.printf_P(PSTR("%s\n"), "postTemperature() -> Невозможно подключиться\n");
     }
     delPtr(urlPost);
-
     if (https.begin(*client, String(urlPut))) {
-        https.addHeader(String(getPGMString(contentType)), String(getPGMString(applicationJson)));
+        https.addHeader(String(ct), String(aj));
         int httpCode = https.PUT(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
         } else {
@@ -1099,6 +1162,9 @@ void sendTemperature() {
         Serial.printf_P(PSTR("%s\n"), "putTemperature() -> Невозможно подключиться\n");
     }
     delPtr(urlPut);
+    delPtr(ct);
+    delPtr(aj);
+
     payload.clear();
 }
 
