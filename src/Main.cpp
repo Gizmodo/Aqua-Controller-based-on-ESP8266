@@ -5,14 +5,13 @@
 #include <OneWire.h>  // OneWire
 #include <WiFiClientSecure.h>
 #include <WiFiUdp.h>
-#include "DS3231.h"            // Чип RTC
+#include "DS3231.h"  // Чип RTC
 #include "GBasic.h"            // DRV8825
 #include "RtcDS3231.h"         // Время
 #include "Shiftduino.h"        // Сдвиговый регистр
 #include "TimeAlarms.h"        // Таймеры
 #include "uEEPROMLib.h"        // EEPROM
 #include "uptime_formatter.h"  // Время работы
-
 //// EEPROM
 uEEPROMLib eeprom(0x57);
 
@@ -107,16 +106,16 @@ HTTPClient https;
 String responseString = "";
 
 //// DEVICES
-//Аэратор
+//// Аэратор
 ledDescription_t compressor;
 
-//Дозаторы
+//// Дозаторы
 doser_t dosersArray[3];
 std::unique_ptr<GBasic> doserK{};
 std::unique_ptr<GBasic> doserNP{};
 std::unique_ptr<GBasic> doserFe{};
 
-// Прожекторы
+//// Прожекторы
 ledDescription_t leds[6];
 std::vector<std::reference_wrapper<ledDescription_t>> vectorRefLeds;
 
@@ -302,7 +301,7 @@ void compressorOnHandler(ledDescription_t& led) {
     if (led.led.enabled) {
         Serial.printf_P(PSTR("  Включение компрессора PIN %d\n"), led.led.pin);
         shiftRegister.setPin(countShiftRegister, led.led.pin, HIGH);
-        sendMessage(led, true);  // отправка события о включении компрессора
+        sendMessage(led, true);
         Alarm.enable(led.led.off);
         Alarm.enable(led.led.on);
         led.led.currentState = true;
@@ -319,7 +318,7 @@ void compressorOffHandler(ledDescription_t& led) {
     if (led.led.enabled) {
         Serial.printf_P(PSTR("  Выключение компрессора PIN %d\n"), led.led.pin);
         shiftRegister.setPin(countShiftRegister, led.led.pin, LOW);
-        sendMessage(led, false);  // отправка события о выключении компрессора
+        sendMessage(led, false);
         Alarm.enable(led.led.off);
         Alarm.enable(led.led.on);
         led.led.currentState = false;
@@ -1095,7 +1094,7 @@ void printParams() {
 
 void timer1() {
     char* df = clockRTC.dateFormat("H:i:s", clockRTC.getDateTime());
-    Serial.printf_P(PSTR("Сейчас %s\n"), String(df).c_str());
+    Serial.printf_P(PSTR("Время %s\n"), String(df).c_str());
     free(df);
     getSensorsTemperature();
 
@@ -1114,58 +1113,65 @@ void timer1() {
 }
 
 String serializeTemperature() {
-    String output = "";
-    const int capacity = JSON_OBJECT_SIZE(4);
-    StaticJsonDocument<capacity> doc;
-
+    String output;
+    const int capacity = JSON_OBJECT_SIZE(5);
+    DynamicJsonDocument doc(capacity);
     char* currentTime = clockRTC.dateFormat("d.m.Y H:i:s", clockRTC.getDateTime());
+    String time = String(currentTime);
+
     doc["sensor1"] = floatToDouble(sensorTemperatureValue1);
     doc["sensor2"] = floatToDouble(sensorTemperatureValue2);
-    doc["time"] = currentTime;
+    doc["time"] = time;
     serializeJson(doc, output);
+    delPtr(currentTime);
     return output;
 }
 
 void sendTemperature() {
-    char* urlPost = nullptr;
-    char* urlPut = nullptr;
-    char* ct = nullptr;
-    char* aj = nullptr;
-    urlPost = getPGMString(urlPostTemperature);
-    urlPut = getPGMString(urlPutTemperature);
-    ct = getPGMString(contentType);
-    aj = getPGMString(applicationJson);
+    char* urlPost = getPGMString(urlPostTemperature);
+    char* urlPut = getPGMString(urlPutTemperature);
+    char* ct = getPGMString(contentType);
+    char* aj = getPGMString(applicationJson);
     String payload = serializeTemperature();
+    String urlPostString = String(urlPost);
+    String urlPutString = String(urlPut);
+    String ctString = String(ct);
+    String ajString = String(aj);
 
-    if (https.begin(*client, String(urlPost))) {
-        https.addHeader(String(ct), String(aj));
+    if (https.begin(*client, urlPostString)) {
+        https.addHeader(ctString, ajString);
         int httpCode = https.POST(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
             Serial.println(F("Значения датчиков температуры отправлены"));
         } else {
             Serial.printf_P(PSTR("postTemperature() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
         }
-        https.end();
     } else {
         Serial.printf_P(PSTR("%s\n"), "postTemperature() -> Невозможно подключиться\n");
     }
-    delPtr(urlPost);
-    if (https.begin(*client, String(urlPut))) {
-        https.addHeader(String(ct), String(aj));
+    https.end();
+    urlPostString.clear();
+
+    if (https.begin(*client, urlPutString)) {
+        https.addHeader(ctString, ajString);
         int httpCode = https.PUT(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
         } else {
             Serial.printf_P(PSTR("putTemperature() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
         }
-        https.end();
     } else {
         Serial.printf_P(PSTR("%s\n"), "putTemperature() -> Невозможно подключиться\n");
     }
-    delPtr(urlPut);
+    https.end();
+    payload.clear();
+    urlPutString.clear();
+    ctString.clear();
+    ajString.clear();
+
     delPtr(ct);
     delPtr(aj);
-
-    payload.clear();
+    delPtr(urlPost);
+    delPtr(urlPut);
 }
 
 void timer5() {
@@ -1186,7 +1192,6 @@ void setup() {
     Serial.begin(115200);
     Serial.println();
 
-    //  getTemperature();
     initRealTimeClock();
     initLedsArray();
     initDosersArray();
