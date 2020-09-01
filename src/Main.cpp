@@ -6,6 +6,7 @@
 #include <WiFiClientSecure.h>
 #include <WiFiUdp.h>
 #include "DS3231.h"  // Чип RTC
+#include "Device.h"
 #include "GBasic.h"            // DRV8825
 #include "RtcDS3231.h"         // Время
 #include "Shiftduino.h"        // Сдвиговый регистр
