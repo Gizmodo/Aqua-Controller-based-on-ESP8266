@@ -1,12 +1,20 @@
+#include <Arduino.h>
 #include <ArduinoJson.h>
-#include <EEPROM.h>
+#include <memory>
+#include <string>
+#if defined(ARDUINO_ARCH_ESP8266)
 #include <ESP8266HTTPClient.h>
 #include <ESP8266WiFi.h>
+#elif defined(ARDUINO_ARCH_ESP32)
+#include <HTTPClient.h>
+#include <WiFi.h>
+#include <vector>
+#else
+#endif
 #include <OneWire.h>  // OneWire
 #include <WiFiClientSecure.h>
 #include <WiFiUdp.h>
-#include "DS3231.h"  // Чип RTC
-#include "Device.h"
+#include "DS3231.h"            // Чип RTC
 #include "GBasic.h"            // DRV8825
 #include "RtcDS3231.h"         // Время
 #include "Shiftduino.h"        // Сдвиговый регистр
@@ -15,7 +23,6 @@
 #include "uptime_formatter.h"  // Время работы
 //// EEPROM
 uEEPROMLib eeprom(0x57);
-
 //// Сдвиговый регистр
 #define dataPin 10
 #define clockPin 14
@@ -102,7 +109,11 @@ uint8_t wifiConnectCount = 0;
 const char* WiFi_hostname = "ESP8266";
 
 //// HTTPS
+#ifdef ARDUINO_ARCH_ESP8266
 std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
+#else
+std::unique_ptr<WiFiClientSecure> client(new WiFiClientSecure);
+#endif
 HTTPClient https;
 String responseString = "";
 
@@ -194,7 +205,7 @@ void sendMessage(const String& message) {
     actext = getPGMString(androidContentText);
     if (https.begin(*client, String(url))) {
         String data;
-        data = "{\"message\":\"" + message + "\"}";
+        data = R"({"message":")" + message + "\"}";
         https.addHeader(String(ct), String(aj));
         https.addHeader(String(att), F("You just got a push notification!"));
         https.addHeader(String(actitle), F("This is a notification title"));
@@ -240,7 +251,7 @@ void sendMessage(ledDescription_t& led, bool state) {
 
     if (https.begin(*client, String(url))) {
         String data;
-        data = "{\"message\":\"" + stateString + "\"}";
+        data = R"({"message":")" + stateString + "\"}";
         https.addHeader(String(ct), String(aj));
         https.addHeader(String(att), F("You just got a push notification!"));
         https.addHeader(String(actitle), F("This is a notification title"));
@@ -458,7 +469,6 @@ void parseJSONDosers(const String& response) {
                             k = dosersCount;
                         }
                     }
-
                     dosersArray[ind].dirPin = dirPin;
                     dosersArray[ind].stepPin = stepPin;
                     dosersArray[ind].enablePin = enablePin;
@@ -472,10 +482,17 @@ void parseJSONDosers(const String& response) {
                     dosersArray[ind].volume = volume;
 
                     splitTime(dupTime, dosersArray[ind].hour, dosersArray[ind].minute);
+#ifdef ARDUINO_ARCH_ESP32
+                    emptyDoser = std_esp32::make_unique<GBasic>(dosersArray[ind].steps, dosersArray[ind].dirPin,
+                                                                dosersArray[ind].stepPin, dosersArray[ind].enablePin,
+                                                                dosersArray[ind].mode0_pin, dosersArray[ind].mode1_pin,
+                                                                dosersArray[ind].mode2_pin, shiftRegister, dosersArray[ind].index);
+#else
                     emptyDoser =
                         std::make_unique<GBasic>(dosersArray[ind].steps, dosersArray[ind].dirPin, dosersArray[ind].stepPin,
                                                  dosersArray[ind].enablePin, dosersArray[ind].mode0_pin, dosersArray[ind].mode1_pin,
                                                  dosersArray[ind].mode2_pin, shiftRegister, dosersArray[ind].index);
+#endif
                     switch (doserItem.type) {
                         case K:
                             doserK = std::move(emptyDoser);
@@ -566,7 +583,11 @@ boolean initWiFi() {
         return false;
     } else {
         Serial.printf_P(PSTR("\n%s: %s IP: %s\n"), "Успешное подключение к WiFi", WIFI_SSID, WiFi.localIP().toString().c_str());
+#ifdef ARDUINO_ARCH_ESP8266
         WiFi.hostname(WiFi_hostname);
+#else
+        WiFi.setHostname(WiFi_hostname);
+#endif
         return true;
     }
 }
@@ -757,7 +778,7 @@ void sendNTPpacket(const IPAddress& address) {
 }
 
 void syncTime() {
-    Serial.printf_P(PSTR("Синхронизация времени\n"), ntpServerName);
+    Serial.printf_P(PSTR("Синхронизация времени с %s\n"), ntpServerName);
     udp.begin(2390);
     WiFi.hostByName(ntpServerName, timeServerIP);
     sendNTPpacket(timeServerIP);
@@ -782,15 +803,15 @@ void syncTime() {
         rtc.dateTimeToStr(str);
         Serial.printf_P(PSTR(" %s\n"), str);
         uint32_t rtcEpoch = rtc.getEpoch();
-        Serial.printf_P(PSTR(" RTC: %d\n"), rtcEpoch);
-        Serial.printf_P(PSTR(" NTP: %d\n"), epoch);
+        Serial.printf_P(PSTR(" RTC: %lu\n"), rtcEpoch);
+        Serial.printf_P(PSTR(" NTP: %lu\n"), epoch);
 
-        if (abs(rtcEpoch - epoch) > 2) {
+        if (fabs(rtcEpoch - epoch) > 2) {
             Serial.printf_P(PSTR(" %s"), "Обновляем RTC (разница между эпохами = ");
-            if (abs(rtcEpoch - epoch) > 10000) {
-                Serial.printf_P(PSTR(" %s\n"), abs(epoch - rtcEpoch));
+            if (fabs(rtcEpoch - epoch) > 10000) {
+                Serial.printf_P(PSTR(" %s\n"), fabs(epoch - rtcEpoch));
             } else {
-                Serial.printf_P(PSTR(" %s\n"), abs(rtcEpoch - epoch));
+                Serial.printf_P(PSTR(" %s\n"), fabs(rtcEpoch - epoch));
             }
             rtc.setEpoch(epoch);
         } else {
@@ -800,11 +821,13 @@ void syncTime() {
 }
 
 void initHTTPClient() {
+#ifdef ARDUINO_ARCH_ESP8266
     client->setInsecure();
     bool mfl = client->probeMaxFragmentLength("api.backendless.com", 443, 1024);
     if (mfl) {
         client->setBufferSizes(1024, 1024);
     }
+#endif
 }
 
 void initCompressor() {
@@ -901,7 +924,7 @@ void putUptime(const String& uptime) {
     aj = getPGMString(applicationJson);
     if (https.begin(*client, String(url))) {
         String payload;
-        payload = "{\"uptime\":\"" + uptime + "\"}";
+        payload = R"({"uptime":")" + uptime + "\"}";
         https.addHeader(String(ct), String(aj));
         int httpCode = https.PUT(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
@@ -932,7 +955,7 @@ void putLastOnline(const String& currentTime) {
     url = getPGMString(urlPutLastOnline);
     if (https.begin(*client, String(url))) {
         String payload;
-        payload = "{\"lastonline\":\"" + currentTime + "\"}";
+        payload = R"({"lastonline":")" + currentTime + "\"}";
         https.addHeader(String(ct), String(aj));
         int httpCode = https.PUT(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
@@ -965,7 +988,7 @@ void postBoot() {
     aj = getPGMString(applicationJson);
     if (https.begin(*client, String(url))) {
         String payload;
-        payload = "{\"time\":\"" + String(currentTime) + "\"}";
+        payload = R"({"time":")" + String(currentTime) + "\"}";
         https.addHeader(String(ct), String(aj));
         int httpCode = https.POST(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
@@ -1201,7 +1224,9 @@ void setup() {
     if (!initWiFi()) {
         getParamsEEPROM();
     } else {
+#ifdef ARDUINO_ARCH_ESP8266
         initHTTPClient();
+#endif
         postBoot();
         getParamsBackEnd();
         syncTime();

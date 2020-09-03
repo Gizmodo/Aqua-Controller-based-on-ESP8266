@@ -7,7 +7,7 @@
 #if !defined(dtNBR_ALARMS)
 #if defined(__AVR__)
 #define dtNBR_ALARMS 6  // max is 255
-#elif defined(ESP8266)
+#elif defined(ESP8266) || defined (ARDUINO_ARCH_ESP32)
 #define dtNBR_ALARMS 20  // for esp8266 chip - max is 255
 #else
 #define dtNBR_ALARMS 12  // assume non-AVR has more memory
@@ -81,7 +81,7 @@ typedef AlarmID_t AlarmId;  // Arduino friendly name
 
 #include "AquaTypes.h"
 
-#ifdef ARDUINO_ARCH_ESP8266
+#if defined (ARDUINO_ARCH_ESP8266) || defined(ARDUINO_ARCH_ESP32)
 #include <functional>
 typedef std::function<void()> OnTick_t;
 typedef std::function<void(byte)> OnTickByte_t;
