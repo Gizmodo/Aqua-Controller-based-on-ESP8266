@@ -3,3 +3,11 @@
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+.vscode/extensions.json
+cmake-build-esp12e
+cmake-build-debug
+.idea
+CMakeLists.txt
+CMakeListsPrivate.txt
+cmake-build-esp32
+cmake-build-esp8266
