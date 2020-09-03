@@ -1,7 +1,7 @@
 //
 // Created by IT on 28.08.2020.
 //
-
+#include <Arduino.h>
 #include "Device.h"
 #include <ArduinoJson.h>
 #include <string>
@@ -64,7 +64,7 @@ void Device::setAlarmOn(AlarmId alarmOn) {
 void Device::setAlarmOff(AlarmId alarmOff) {
     this->_alarmOff = alarmOff;
 }
-uint8 Device::getPin() const {
+uint8_t Device::getPin() const {
     return this->_pin;
 }
 std::string& Device::getName() {

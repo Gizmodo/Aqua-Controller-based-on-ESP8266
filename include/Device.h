@@ -2,8 +2,9 @@
 // Created by IT on 28.08.2020.
 //
 
-#ifndef AQUACONTROLLER_ESP8266_DEVICE_H
-#define AQUACONTROLLER_ESP8266_DEVICE_H
+#ifndef AQUACONTROLLER_DEVICE_H
+#define AQUACONTROLLER_DEVICE_H
+#include <Arduino.h>
 #include <TimeAlarms.h>
 #include <string>
 class Device {
@@ -45,7 +46,7 @@ class Device {
     void setObjectId(const std::string& objectId);
     void setAlarmOn(AlarmId alarmOn);
     void setAlarmOff(AlarmId alarmOff);
-    uint8 getPin() const;
+    uint8_t getPin() const;
     std::string& getName();
     uint8_t getHourOn() const;
     uint8_t getMinuteOn() const;
