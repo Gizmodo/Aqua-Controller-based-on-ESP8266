@@ -2,15 +2,19 @@
 #include <ArduinoJson.h>
 #include <memory>
 #include <string>
+#include <vector>
+
 #if defined(ARDUINO_ARCH_ESP8266)
+#define HOSTNAME "ESP8266"
 #include <ESP8266HTTPClient.h>
 #include <ESP8266WiFi.h>
 #elif defined(ARDUINO_ARCH_ESP32)
+#define HOSTNAME "ESP32"
 #include <HTTPClient.h>
 #include <WiFi.h>
-#include <vector>
 #else
 #endif
+#include <Device.h>
 #include <OneWire.h>  // OneWire
 #include <WiFiClientSecure.h>
 #include <WiFiUdp.h>
@@ -98,15 +102,13 @@ float sensorTemperatureValue1, sensorTemperatureValue2;
 #ifdef WORK_DEF
 #define WIFI_SSID "Wi-Fi"
 #define WIFI_PASSWORD "1357924680"
-#define WIFI_RETRY 50
 #else
 #define WIFI_SSID "MikroTik"
 #define WIFI_PASSWORD "11111111"
-#define WIFI_RETRY 10
 #endif
-uint8_t wifiMaxTry = WIFI_RETRY;  //Попытки подключения к сети
+uint8_t wifiMaxTry = 10;  //Попытки подключения к сети
 uint8_t wifiConnectCount = 0;
-const char* WiFi_hostname = "ESP8266";
+const char* WiFi_hostname = HOSTNAME;
 
 //// HTTPS
 #ifdef ARDUINO_ARCH_ESP8266
@@ -129,7 +131,13 @@ std::unique_ptr<GBasic> doserFe{};
 
 //// Прожекторы
 ledDescription_t leds[6];
+std::array<Device, 6> devicesArray;
+std::array<Scheduler, 6> lampsSchedulesArray;
 std::vector<std::reference_wrapper<ledDescription_t>> vectorRefLeds;
+std::vector<std::reference_wrapper<Device*>> vectorDevices;
+auto lampsSchedulesUniquePtr = std::unique_ptr<Scheduler[]>(new Scheduler[6]);
+
+void sendMessageNew(Device* pDevice, bool b);
 
 //// METHODS
 double floatToDouble(float x) {
@@ -157,6 +165,19 @@ void getSensorsTemperature() {
     sensorTemperatureValue2 = getSensorTemperature(sensorTemperatureAddress2);
     Serial.printf_P(PSTR(" [T1: %s°]  [T2: %s°]\n"), String(sensorTemperatureValue1).c_str(),
                     String(sensorTemperatureValue2).c_str());
+}
+
+bool shouldRun(Device* lamp) {
+    uint8_t minutes = clockRTC.getDateTime().hour * 60 + clockRTC.getDateTime().minute;
+    uint8_t minutesOn = lamp->getHourOn() * 60 + lamp->getMinuteOn();
+    uint8_t minutesOff = lamp->getHourOff() * 60 + lamp->getMinuteOff();
+    bool result;
+    if ((minutes > minutesOn) && (minutes < minutesOff)) {
+        result = true;
+    } else {
+        result = false;
+    }
+    return result;
 }
 
 bool shouldRun(const ledDescription_t& led) {
@@ -274,7 +295,51 @@ void sendMessage(ledDescription_t& led, bool state) {
     delPtr(aj);
     stateString.clear();
 }
+AlarmID_t findAlarmByDevice(Device* device, bool isOn) {
+    AlarmID_t result = -1;
+    for (auto scheduleItem : lampsSchedulesArray) {
+        auto deviceToFind = scheduleItem.getDevice();
+        if (device == deviceToFind) {
+            result = isOn ? scheduleItem.getOn() : scheduleItem.getOff();
+            break;
+        }
+    }
+    return result;
+}
+void deviceOnHandler(Device* device) {
+    if (device->getEnabled()) {
+        Serial.printf_P(PSTR("  Включение прожектора PIN %d\n"), device->getPin());
+        shiftRegister.setPin(countShiftRegister, device->getPin(), HIGH);
 
+        sendMessageNew(device, true);
+        Alarm.enable(findAlarmByDevice(device, true));
+        Alarm.enable(findAlarmByDevice(device, false));
+        device->setState(true);
+
+        vectorDevices.push_back(device);
+    } else {
+        Serial.printf_P(PSTR("%s\n"), "  Прожектор не доступен для изменения состояния");
+        Alarm.disable(findAlarmByDevice(device, true));
+        Alarm.disable(findAlarmByDevice(device, false));
+    }
+}
+void deviceOffHandler(Device* device) {
+    if (device->getEnabled()) {
+        Serial.printf_P(PSTR("  Выключение прожектора PIN %d\n"), device->getPin());
+        shiftRegister.setPin(countShiftRegister, device->getPin(), LOW);
+
+        sendMessageNew(device, false);
+        Alarm.enable(findAlarmByDevice(device, true));
+        Alarm.enable(findAlarmByDevice(device, false));
+        device->setState(false);
+
+        vectorDevices.push_back(device);
+    } else {
+        Serial.printf_P(PSTR("%s\n"), "  Прожектор не доступен для изменения состояния");
+        Alarm.disable(findAlarmByDevice(device, true));
+        Alarm.disable(findAlarmByDevice(device, false));
+    }
+}
 void ledOnHandler(ledDescription_t& led) {
     if (led.led.enabled) {
         Serial.printf_P(PSTR("  Включение прожектора PIN %d\n"), led.led.pin);
@@ -379,6 +444,65 @@ void splitTime(char* payload, uint8_t& hour, uint8_t& minute) {
     hour = strtol(split, &pEnd, 10);
     split = strtok(nullptr, ":");
     minute = strtol(split, &pEnd, 10);
+}
+
+void sendMessageNew(Device* pDevice, bool b) {
+    // TODO Сделать эту функцию
+}
+
+void parseJSONLights_Device(const String& response) {
+    DynamicJsonDocument doc(2000);
+    DeserializationError err = deserializeJson(doc, response);
+    if (err) {
+        Serial.print(F("parseJSONLights_Device -> Ошибка разбора: "));
+        Serial.println(err.c_str());
+        return;
+    } else {
+        JsonArray array = doc.as<JsonArray>();
+        for (JsonObject obj : array) {
+            boolean enabled = obj["enabled"];
+            const char* name = obj["name"];
+            const char* off = obj["off"];
+            const char* on = obj["on"];
+            uint8_t pin = obj["pin"];
+            boolean state = obj["state"];
+            std::string objectId = obj["objectId"];
+
+            char* dupOn = strdup(on);
+            char* dupOff = strdup(off);
+            for (auto&& device : devicesArray) {
+                if (strcmp(name, device.getName().c_str()) == 0) {
+                    device.setState(state);
+                    device.setEnabled(enabled);
+                    device.setPin(pin);
+                    device.setObjectId(objectId);
+                    device.setTimeOn(dupOn);
+                    device.setTimeOff(dupOff);
+                    // for (auto&& scheduler_item : lampsSchedulesArray) {
+                    for (auto& i : lampsSchedulesArray) {
+                        auto deviceItem = i.getDevice();
+                        auto schedulerItem = i;
+                        if (strcmp(deviceItem->getName().c_str(), name) == 0) {
+                            schedulerItem.setOn(Alarm.alarmRepeat(deviceItem->getHourOn(), deviceItem->getMinuteOn(), 0,
+                                                                  deviceOnHandler, deviceItem));
+                            schedulerItem.setOff(Alarm.alarmRepeat(deviceItem->getHourOff(), deviceItem->getMinuteOff(), 0,
+                                                                   deviceOffHandler, deviceItem));
+                            if (shouldRun(deviceItem)) {
+                                deviceOnHandler(deviceItem);
+                            } else {
+                                deviceOffHandler(deviceItem);
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+            free(dupOn);
+            free(dupOff);
+        }
+        doc.shrinkToFit();
+        doc.clear();
+    }
 }
 
 void parseJSONLights(const String& response) {
@@ -614,6 +738,7 @@ void getParamLights() {
         Serial.printf_P(PSTR(" %s\n"), "getParamLights() -> Ответ пустой");
     } else {
         parseJSONLights(responseString);
+        // parseJSONLights_Device(responseString);
         responseString.clear();
     }
 }
@@ -836,6 +961,19 @@ void initCompressor() {
 }
 
 void initLedsArray() {
+    devicesArray.at(0).setName("One");
+    devicesArray.at(1).setName("Two");
+    devicesArray.at(2).setName("Three");
+    devicesArray.at(3).setName("Four");
+    devicesArray.at(4).setName("Five");
+    devicesArray.at(5).setName("Six");
+
+    for (size_t i = 0; i < devicesArray.size(); ++i) {
+        lampsSchedulesArray.at(i).setDevice(&(devicesArray.at(i)));
+        Serial.println(devicesArray.at(i).getName().c_str());
+        // lampsSchedulesUniquePtr.get()[i].setDevice(devicesArray.at(i));
+    }
+
     leds[0].name = "One";
     leds[0].position = ONE;
     leds[1].name = "Two";
@@ -877,6 +1015,47 @@ String serializeDevice(const ledDescription_t& device) {
     }
     serializeJson(doc, output);
     return output;
+}
+
+void setCurrentState(Device* device) {
+    // TODO Сделать эту функцию
+    char* url = nullptr;
+    char* ct = nullptr;
+    char* aj = nullptr;
+    String urlString;
+    String payload;
+    /* if (led.device == Compressor) {
+         url = getPGMString(urlPutCompressor);
+         urlString = String(url);
+     } else {
+         url = getPGMString(urlPutLight);
+         urlString = String(url) + led.led.objectId;
+     }
+     */
+    url = getPGMString(urlPutLight);
+    urlString = String(url) + device->getObjectId().c_str();
+    delPtr(url);
+    ct = getPGMString(contentType);
+    aj = getPGMString(applicationJson);
+    // maybe fails cuz const char* to String conversion
+    payload = device->serialize().c_str();
+    if (https.begin(*client, urlString)) {
+        https.addHeader(String(ct), String(aj));
+        int httpCode = https.PUT(payload);
+        if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
+            // String name;
+            //(led.device == Compressor) ? name = "" : name = led.name;
+            Serial.printf_P(PSTR("Состояние прожектора %s установлено в %s\n"), device->getName().c_str(),
+                            (device->getState() ? "ON" : "OFF"));
+        } else {
+            Serial.printf_P(PSTR("setCurrentState() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
+        }
+        https.end();
+    } else {
+        Serial.printf_P(PSTR("%s\n"), "setCurrentState() -> Невозможно подключиться\n");
+    }
+    delPtr(ct);
+    delPtr(aj);
 }
 
 void setCurrentState(const ledDescription_t& led) {
@@ -1134,6 +1313,12 @@ void timer1() {
         }
         vectorRefLeds.clear();
     }
+    if (!vectorDevices.empty()) {
+        for (auto& device : vectorDevices) {
+            setCurrentState(device);
+        }
+        vectorDevices.clear();
+    }
 }
 
 String serializeTemperature() {
@@ -1229,7 +1414,7 @@ void setup() {
 #endif
         postBoot();
         getParamsBackEnd();
-        syncTime();
+        // syncTime();
         setInternalClock();
         printParams();
     }

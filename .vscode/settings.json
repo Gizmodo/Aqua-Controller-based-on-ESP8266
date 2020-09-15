@@ -42,5 +42,6 @@
         "algorithm": "cpp",
         "random": "cpp",
         "memory": "cpp"
-    }
+    },
+    "cmake.configureOnOpen": false
 }
