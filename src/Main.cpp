@@ -132,12 +132,9 @@ std::unique_ptr<GBasic> doserFe{};
 //// Прожекторы
 ledDescription_t leds[6];
 std::array<Device, 6> devicesArray;
-std::array<Scheduler, 6> lampsSchedulesArray;
+std::array<Scheduler, 6> schedulesArray;
 std::vector<std::reference_wrapper<ledDescription_t>> vectorRefLeds;
-std::vector<std::reference_wrapper<Device*>> vectorDevices;
-auto lampsSchedulesUniquePtr = std::unique_ptr<Scheduler[]>(new Scheduler[6]);
-
-void sendMessageNew(Device* pDevice, bool b);
+std::vector<Device*> vectorDevices;
 
 //// METHODS
 double floatToDouble(float x) {
@@ -250,6 +247,52 @@ void sendMessage(const String& message) {
     delPtr(aj);
 }
 
+void sendMessage(Device* device, bool state) {
+    char dataMsg[100];
+    String stateString = state ? "Включение" : "Выключение";
+    char* p = clockRTC.dateFormat("H:i:s", clockRTC.getDateTime());
+    sprintf(dataMsg, "Прожектор %s в %s", device->getName().c_str(), String(p).c_str());
+    delPtr(p);
+
+    char* url = nullptr;
+    char* ct = nullptr;
+    char* att = nullptr;
+    char* actitle = nullptr;
+    char* actext = nullptr;
+    char* aj = nullptr;
+    url = getPGMString(urlPushMessage);
+    aj = getPGMString(applicationJson);
+    ct = getPGMString(contentType);
+    att = getPGMString(androidTickerText);
+    actitle = getPGMString(androidContentTitle);
+    actext = getPGMString(androidContentText);
+
+    if (https.begin(*client, String(url))) {
+        String data;
+        data = R"({"message":")" + stateString + "\"}";
+        https.addHeader(String(ct), String(aj));
+        https.addHeader(String(att), F("You just got a push notification!"));
+        https.addHeader(String(actitle), F("This is a notification title"));
+        https.addHeader(String(actext), String(dataMsg));
+        int httpCode = https.POST(data);
+        if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
+            Serial.println(F("  Сообщение отправлено"));
+        } else {
+            Serial.printf_P(PSTR("sendMessage() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
+        }
+        https.end();
+    } else {
+        Serial.printf_P(PSTR("%s\n"), "sendMessage() -> Невозможно подключиться\n");
+    }
+    delPtr(url);
+    delPtr(ct);
+    delPtr(att);
+    delPtr(actitle);
+    delPtr(actext);
+    delPtr(aj);
+    stateString.clear();
+}
+
 void sendMessage(ledDescription_t& led, bool state) {
     char dataMsg[100];
     String stateString = state ? "Включение" : "Выключение";
@@ -295,9 +338,10 @@ void sendMessage(ledDescription_t& led, bool state) {
     delPtr(aj);
     stateString.clear();
 }
+
 AlarmID_t findAlarmByDevice(Device* device, bool isOn) {
     AlarmID_t result = -1;
-    for (auto scheduleItem : lampsSchedulesArray) {
+    for (auto scheduleItem : schedulesArray) {
         auto deviceToFind = scheduleItem.getDevice();
         if (device == deviceToFind) {
             result = isOn ? scheduleItem.getOn() : scheduleItem.getOff();
@@ -306,71 +350,40 @@ AlarmID_t findAlarmByDevice(Device* device, bool isOn) {
     }
     return result;
 }
+
 void deviceOnHandler(Device* device) {
     if (device->getEnabled()) {
-        Serial.printf_P(PSTR("  Включение прожектора PIN %d\n"), device->getPin());
+        Serial.printf_P(PSTR("  Включение прожектора %s PIN %d\n"), device->getName().c_str(), device->getPin());
         shiftRegister.setPin(countShiftRegister, device->getPin(), HIGH);
 
-        sendMessageNew(device, true);
+        sendMessage(device, true);
         Alarm.enable(findAlarmByDevice(device, true));
         Alarm.enable(findAlarmByDevice(device, false));
         device->setState(true);
 
         vectorDevices.push_back(device);
     } else {
-        Serial.printf_P(PSTR("%s\n"), "  Прожектор не доступен для изменения состояния");
+        Serial.printf_P(PSTR("  Прожектор не доступен для изменения состояния\n"), device->getName().c_str());
         Alarm.disable(findAlarmByDevice(device, true));
         Alarm.disable(findAlarmByDevice(device, false));
     }
 }
+
 void deviceOffHandler(Device* device) {
     if (device->getEnabled()) {
-        Serial.printf_P(PSTR("  Выключение прожектора PIN %d\n"), device->getPin());
+        Serial.printf_P(PSTR("  Выключение прожектора %s PIN %d\n"), device->getName().c_str(), device->getPin());
         shiftRegister.setPin(countShiftRegister, device->getPin(), LOW);
 
-        sendMessageNew(device, false);
+        sendMessage(device, false);
         Alarm.enable(findAlarmByDevice(device, true));
         Alarm.enable(findAlarmByDevice(device, false));
         device->setState(false);
 
         vectorDevices.push_back(device);
     } else {
-        Serial.printf_P(PSTR("%s\n"), "  Прожектор не доступен для изменения состояния");
+        Serial.printf_P(PSTR("  Прожектор не доступен для изменения состояния\n"), device->getName().c_str());
         Alarm.disable(findAlarmByDevice(device, true));
         Alarm.disable(findAlarmByDevice(device, false));
-    }
-}
-void ledOnHandler(ledDescription_t& led) {
-    if (led.led.enabled) {
-        Serial.printf_P(PSTR("  Включение прожектора PIN %d\n"), led.led.pin);
-        shiftRegister.setPin(countShiftRegister, led.led.pin, HIGH);
-        sendMessage(led, true);
-        Alarm.enable(led.led.off);
-        Alarm.enable(led.led.on);
-        led.led.currentState = true;
-
-        vectorRefLeds.push_back(led);
-    } else {
-        Serial.printf_P(PSTR("%s\n"), "  Прожектор не доступен для изменения состояния");
-        Alarm.disable(led.led.off);
-        Alarm.disable(led.led.on);
-    }
-}
-
-void ledOffHandler(ledDescription_t& led) {
-    if (led.led.enabled) {
-        Serial.printf_P(PSTR("  Выключение прожектора PIN %d\n"), led.led.pin);
-        shiftRegister.setPin(countShiftRegister, led.led.pin, LOW);
-        sendMessage(led, false);
-        Alarm.enable(led.led.off);
-        Alarm.enable(led.led.on);
-        led.led.currentState = false;
-
-        vectorRefLeds.push_back(led);
-    } else {
-        Serial.printf_P(PSTR("%s\n"), "  Прожектор не доступен для изменения состояния");
-        Alarm.disable(led.led.off);
-        Alarm.disable(led.led.on);
     }
 }
 
@@ -446,15 +459,11 @@ void splitTime(char* payload, uint8_t& hour, uint8_t& minute) {
     minute = strtol(split, &pEnd, 10);
 }
 
-void sendMessageNew(Device* pDevice, bool b) {
-    // TODO Сделать эту функцию
-}
-
-void parseJSONLights_Device(const String& response) {
+void parseJSONLights(const String& response) {
     DynamicJsonDocument doc(2000);
     DeserializationError err = deserializeJson(doc, response);
     if (err) {
-        Serial.print(F("parseJSONLights_Device -> Ошибка разбора: "));
+        Serial.print(F("parseJSONLights -> Ошибка разбора: "));
         Serial.println(err.c_str());
         return;
     } else {
@@ -478,72 +487,32 @@ void parseJSONLights_Device(const String& response) {
                     device.setObjectId(objectId);
                     device.setTimeOn(dupOn);
                     device.setTimeOff(dupOff);
-                    // for (auto&& scheduler_item : lampsSchedulesArray) {
-                    for (auto& i : lampsSchedulesArray) {
+                    // for (auto&& scheduler_item : schedulesArray) {
+                    for (auto& i : schedulesArray) {
                         auto deviceItem = i.getDevice();
                         auto schedulerItem = i;
                         if (strcmp(deviceItem->getName().c_str(), name) == 0) {
-                            schedulerItem.setOn(Alarm.alarmRepeat(deviceItem->getHourOn(), deviceItem->getMinuteOn(), 0,
-                                                                  deviceOnHandler, deviceItem));
-                            schedulerItem.setOff(Alarm.alarmRepeat(deviceItem->getHourOff(), deviceItem->getMinuteOff(), 0,
-                                                                   deviceOffHandler, deviceItem));
+                            Serial.printf_P(PSTR(" Вкл-%02d:%02d. Выкл-%02d:%02d. Состояние: %s. Разрешен: %s. PIN: %d\n"),
+                                            i.getDevice()->getHourOn(), i.getDevice()->getMinuteOn(), i.getDevice()->getHourOff(),
+                                            i.getDevice()->getMinuteOff(), (i.getDevice()->getState() ? "включен" : "выключен"),
+                                            ((i.getDevice()->getEnabled() == true) ? "да" : "нет"), i.getDevice()->getPin());
+
+                            auto alarmOn = Alarm.alarmRepeat(deviceItem->getHourOn(), deviceItem->getMinuteOn(), 0, deviceOnHandler,
+                                                             deviceItem);
+                            Serial.println(alarmOn);
+                            auto alarmOff = Alarm.alarmRepeat(deviceItem->getHourOff(), deviceItem->getMinuteOff(), 0,
+                                                              deviceOffHandler, deviceItem);
+                            Serial.println(alarmOff);
+                            schedulerItem.setOn(alarmOn);
+                            schedulerItem.setOff(alarmOff);
+                            Serial.printf_P(PSTR("%s %d\n"), "Кол-во таймеров", Alarm.count());
+
                             if (shouldRun(deviceItem)) {
                                 deviceOnHandler(deviceItem);
                             } else {
                                 deviceOffHandler(deviceItem);
                             }
                         }
-                    }
-                    break;
-                }
-            }
-            free(dupOn);
-            free(dupOff);
-        }
-        doc.shrinkToFit();
-        doc.clear();
-    }
-}
-
-void parseJSONLights(const String& response) {
-    DynamicJsonDocument doc(2000);
-    DeserializationError err = deserializeJson(doc, response);
-    if (err) {
-        Serial.print(F("parseJSONLights -> Ошибка разбора: "));
-        Serial.println(err.c_str());
-        return;
-    } else {
-        JsonArray array = doc.as<JsonArray>();
-        for (JsonObject obj : array) {
-            boolean enabled = obj["enabled"];
-            const char* name = obj["name"];
-            const char* off = obj["off"];
-            const char* on = obj["on"];
-            uint8_t pin = obj["pin"];
-            boolean state = obj["state"];
-            String objectId = obj["objectId"];
-
-            char* dupOn = strdup(on);
-            char* dupOff = strdup(off);
-            for (auto& ledItem : leds) {
-                if (strcmp(name, ledItem.name.c_str()) == 0) {
-                    ledItem.led.currentState = state;
-                    ledItem.led.enabled = enabled;
-                    ledItem.led.pin = pin;
-                    ledItem.led.objectId = objectId;
-                    splitTime(dupOn, ledItem.led.HOn, ledItem.led.MOn);
-                    splitTime(dupOff, ledItem.led.HOff, ledItem.led.MOff);
-
-                    ledItem.led.off = Alarm.alarmRepeat(ledItem.led.HOff, ledItem.led.MOff, 0, ledOffHandler, ledItem);
-                    ledItem.led.on = Alarm.alarmRepeat(ledItem.led.HOn, ledItem.led.MOn, 0, ledOnHandler, ledItem);
-
-                    uint16_t minutes = clockRTC.getDateTime().hour * 60 + clockRTC.getDateTime().minute;
-                    uint16_t minutesOn = ledItem.led.HOn * 60 + ledItem.led.MOn;
-                    uint16_t minutesOff = ledItem.led.HOff * 60 + ledItem.led.MOff;
-                    if ((minutes > minutesOn) && (minutes < minutesOff)) {
-                        ledOnHandler(ledItem);
-                    } else {
-                        ledOffHandler(ledItem);
                     }
                     break;
                 }
@@ -738,7 +707,6 @@ void getParamLights() {
         Serial.printf_P(PSTR(" %s\n"), "getParamLights() -> Ответ пустой");
     } else {
         parseJSONLights(responseString);
-        // parseJSONLights_Device(responseString);
         responseString.clear();
     }
 }
@@ -804,13 +772,13 @@ void getParamsEEPROM() {
 
     for (auto& led : leds) {
         eeprom.eeprom_read<ledDescription_t>(address, &led);
-        led.led.off = Alarm.alarmRepeat(led.led.HOff, led.led.MOff, 0, ledOffHandler, led);
-        led.led.on = Alarm.alarmRepeat(led.led.HOn, led.led.MOn, 0, ledOnHandler, led);
+        // led.led.off = Alarm.alarmRepeat(led.led.HOff, led.led.MOff, 0, ledOffHandler, led);
+        // led.led.on = Alarm.alarmRepeat(led.led.HOn, led.led.MOn, 0, ledOnHandler, led);
 
         if (shouldRun(led)) {
-            ledOnHandler(led);
+            // ledOnHandler(led);
         } else {
-            ledOffHandler(led);
+            // ledOffHandler(led);
         }
         address += szLed + 1;
     }
@@ -969,9 +937,8 @@ void initLedsArray() {
     devicesArray.at(5).setName("Six");
 
     for (size_t i = 0; i < devicesArray.size(); ++i) {
-        lampsSchedulesArray.at(i).setDevice(&(devicesArray.at(i)));
+        schedulesArray.at(i).setDevice(&(devicesArray.at(i)));
         Serial.println(devicesArray.at(i).getName().c_str());
-        // lampsSchedulesUniquePtr.get()[i].setDevice(devicesArray.at(i));
     }
 
     leds[0].name = "One";
@@ -1018,7 +985,6 @@ String serializeDevice(const ledDescription_t& device) {
 }
 
 void setCurrentState(Device* device) {
-    // TODO Сделать эту функцию
     char* url = nullptr;
     char* ct = nullptr;
     char* aj = nullptr;
@@ -1033,12 +999,12 @@ void setCurrentState(Device* device) {
      }
      */
     url = getPGMString(urlPutLight);
-    urlString = String(url) + device->getObjectId().c_str();
+    urlString = String(url) + String(device->getObjectId().c_str());
     delPtr(url);
     ct = getPGMString(contentType);
     aj = getPGMString(applicationJson);
     // maybe fails cuz const char* to String conversion
-    payload = device->serialize().c_str();
+    payload = String(device->serialize().c_str());
     if (https.begin(*client, urlString)) {
         https.addHeader(String(ct), String(aj));
         int httpCode = https.PUT(payload);
@@ -1234,7 +1200,6 @@ bool getUpdateSettings() {
     char* url = nullptr;
     bool flag = false;
     url = getPGMString(urlGetUpdateSettings);
-    Serial.printf_P(PSTR(" %s\n"), "Запрос на обновление всех настроек");
     if (https.begin(*client, String(url))) {
         int httpCode = https.GET();
         if (httpCode > 0) {
@@ -1258,12 +1223,13 @@ bool getUpdateSettings() {
     return flag;
 }
 
-void printLedsParam() {
+void printLights() {
     Serial.printf_P(PSTR("%s\n"), "Настройки прожекторов");
-    for (auto& led : leds) {
-        Serial.printf_P(PSTR(" Вкл-%02d:%02d. Выкл-%02d:%02d. Состояние: %s. Разрешен: %s. PIN: %d\n"), led.led.HOn, led.led.MOn,
-                        led.led.HOff, led.led.MOff, (led.led.currentState ? "включен" : "выключен"),
-                        ((led.led.enabled == true) ? "да" : "нет"), led.led.pin
+    for (auto item : schedulesArray) {
+        Serial.printf_P(PSTR(" Вкл-%02d:%02d. Выкл-%02d:%02d. Состояние: %s. Разрешен: %s. PIN: %d\n"),
+                        item.getDevice()->getHourOn(), item.getDevice()->getMinuteOn(), item.getDevice()->getHourOff(),
+                        item.getDevice()->getMinuteOff(), (item.getDevice()->getState() ? "включен" : "выключен"),
+                        ((item.getDevice()->getEnabled() == true) ? "да" : "нет"), item.getDevice()->getPin()
 
         );
     }
@@ -1290,7 +1256,7 @@ void printCompressorParam() {
 }
 
 void printParams() {
-    printLedsParam();
+    printLights();
     printDosersParam();
     printCompressorParam();
 }
@@ -1298,23 +1264,19 @@ void printParams() {
 void timer1() {
     char* df = clockRTC.dateFormat("H:i:s", clockRTC.getDateTime());
     Serial.printf_P(PSTR("Время %s\n"), String(df).c_str());
+
     free(df);
     getSensorsTemperature();
 
     if (getUpdateSettings()) {
+        Serial.printf_P(PSTR("%s\n"), "Будет выполнено обновление всех параметров");
         getParamsBackEnd();
         printParams();
         putUpdateSettings();
     }
 
-    if (!vectorRefLeds.empty()) {
-        for (auto& device : vectorRefLeds) {
-            setCurrentState(device);
-        }
-        vectorRefLeds.clear();
-    }
     if (!vectorDevices.empty()) {
-        for (auto& device : vectorDevices) {
+        for (auto device : vectorDevices) {
             setCurrentState(device);
         }
         vectorDevices.clear();
@@ -1391,10 +1353,10 @@ void timer5() {
 }
 
 void startTimers() {
-    Serial.printf_P(PSTR("%s -> %d\n"), "Таймеры: основные", Alarm.count());
+    Serial.printf_P(PSTR("%s %d\n"), "Кол-во таймеров", Alarm.count());
     Alarm.timerRepeat(5 * 60, timer5);
     Alarm.timerRepeat(60, timer1);
-    Serial.printf_P(PSTR("%s -> %d\n"), "Таймеры: основные и прожекторные", Alarm.count());
+    Serial.printf_P(PSTR("%s %d\n"), "Кол-во таймеров", Alarm.count());
 }
 
 void setup() {
