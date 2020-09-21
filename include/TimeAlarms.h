@@ -8,7 +8,7 @@
 #if defined(__AVR__)
 #define dtNBR_ALARMS 6  // max is 255
 #elif defined(ESP8266) || defined(ARDUINO_ARCH_ESP32)
-#define dtNBR_ALARMS 20  // for esp8266 chip - max is 255
+#define dtNBR_ALARMS 30  // for esp8266 chip - max is 255
 #else
 #define dtNBR_ALARMS 12  // assume non-AVR has more memory
 #endif
@@ -84,7 +84,7 @@ typedef AlarmID_t AlarmId;  // Arduino friendly name
 #include "Scheduler.h"
 
 typedef std::function<void()> OnTick_t;
-typedef std::function<void(byte)> OnTickByte_t;
+typedef std::function<void(uint8_t)> OnTickByte_t;
 typedef std::function<void(ledDescription_t&)> OnTickLed_t;
 typedef std::function<void(doser_t&)> OnTickDoser_t;
 typedef std::function<void(Device*)> onTickDevice_t;
@@ -102,10 +102,10 @@ class AlarmClass {
     time_t value;
     time_t nextTrigger;
     AlarmMode_t Mode;
-    byte param_byte;
+    uint8_t param_byte;
     ledDescription_t param_led;
     doser_t param_doser;
-    Device* param_Device;
+    Device* param_Device = nullptr;
 };
 
 // class containing the collection of alarms
@@ -116,7 +116,7 @@ class TimeAlarmsClass {
     bool isServicing;
     uint8_t servicedAlarmId;  // the alarm currently being serviced
     AlarmID_t create(time_t value, OnTick_t onTickHandler, bool isOneShot, dtAlarmPeriod_t alarmType);
-    AlarmID_t createbyte(time_t value, OnTickByte_t onTickByteHandler, bool isOneShot, dtAlarmPeriod_t alarmType, byte param);
+    AlarmID_t createbyte(time_t value, OnTickByte_t onTickByteHandler, bool isOneShot, dtAlarmPeriod_t alarmType, uint8_t param);
     AlarmID_t createled(time_t value,
                         OnTickLed_t onTickLedHandler,
                         bool isOneShot,
@@ -164,7 +164,7 @@ class TimeAlarmsClass {
             return dtINVALID_ALARM_ID;
         return create(value, onTickHandler, false, dtDailyAlarm);
     }
-    AlarmID_t alarmRepeat(time_t value, OnTickByte_t onTickByteHandler, byte param) {
+    AlarmID_t alarmRepeat(time_t value, OnTickByte_t onTickByteHandler, uint8_t param) {
         if ((unsigned)value > SECS_PER_DAY)
             return dtINVALID_ALARM_ID;
         return createbyte(value, onTickByteHandler, false, dtDailyAlarm, param);
@@ -187,7 +187,7 @@ class TimeAlarmsClass {
     AlarmID_t alarmRepeat(const int H, const int M, const int S, OnTick_t onTickHandler) {
         return alarmRepeat(AlarmHMS(H, M, S), onTickHandler);
     }
-    AlarmID_t alarmRepeat(const int H, const int M, const int S, OnTickByte_t onTickByteHandler, byte param) {
+    AlarmID_t alarmRepeat(const int H, const int M, const int S, OnTickByte_t onTickByteHandler, uint8_t param) {
         return alarmRepeat(AlarmHMS(H, M, S), onTickByteHandler, param);
     }
     AlarmID_t alarmRepeat(const int H, const int M, const int S, OnTickLed_t onTickLedHandler, ledDescription_t param) {
@@ -212,7 +212,7 @@ class TimeAlarmsClass {
                           const int M,
                           const int S,
                           OnTickByte_t onTickByteHandler,
-                          byte param) {
+                          uint8_t param) {
         time_t value = (DOW - 1) * SECS_PER_DAY + AlarmHMS(H, M, S);
         if (value <= 0)
             return dtINVALID_ALARM_ID;
@@ -261,7 +261,7 @@ class TimeAlarmsClass {
     AlarmID_t timerOnce(const int H, const int M, const int S, OnTick_t onTickHandler) {
         return timerOnce(AlarmHMS(H, M, S), onTickHandler);
     }
-    AlarmID_t timerOnce(time_t value, OnTickByte_t onTickByteHandler, byte param) {
+    AlarmID_t timerOnce(time_t value, OnTickByte_t onTickByteHandler, uint8_t param) {
         if (value <= 0)
             return dtINVALID_ALARM_ID;
         return createbyte(value, onTickByteHandler, true, dtTimer, param);
@@ -291,12 +291,12 @@ class TimeAlarmsClass {
         return timerRepeat(AlarmHMS(H, M, S), onTickHandler);
     }
 
-    AlarmID_t timerRepeat(time_t value, OnTickByte_t onTickByteHandler, byte param) {
+    AlarmID_t timerRepeat(time_t value, OnTickByte_t onTickByteHandler, uint8_t param) {
         if (value <= 0)
             return dtINVALID_ALARM_ID;
         return createbyte(value, onTickByteHandler, false, dtTimer, param);
     }
-    AlarmID_t timerRepeat(const int H, const int M, const int S, OnTickByte_t onTickByteHandler, byte param) {
+    AlarmID_t timerRepeat(const int H, const int M, const int S, OnTickByte_t onTickByteHandler, uint8_t param) {
         return timerRepeat(AlarmHMS(H, M, S), onTickByteHandler, param);
     }
     AlarmID_t timerRepeat(time_t value, OnTickLed_t onTickLedHandler, ledDescription_t param) {

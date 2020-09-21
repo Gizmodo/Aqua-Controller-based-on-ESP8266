@@ -97,7 +97,6 @@ std::string Device::serialize() {
 
 Device::~Device() {
 }
-// передавать objectid в  Handler и искать девайс. в классе Device оставить оба поля для таймеров
 
 void Device::setTimeOn(char* time) {
     splitTime(time, _hourOn, _minuteOn);

@@ -165,9 +165,9 @@ void getSensorsTemperature() {
 }
 
 bool shouldRun(Device* lamp) {
-    uint8_t minutes = clockRTC.getDateTime().hour * 60 + clockRTC.getDateTime().minute;
-    uint8_t minutesOn = lamp->getHourOn() * 60 + lamp->getMinuteOn();
-    uint8_t minutesOff = lamp->getHourOff() * 60 + lamp->getMinuteOff();
+    uint16_t minutes = clockRTC.getDateTime().hour * 60 + clockRTC.getDateTime().minute;
+    uint16_t minutesOn = lamp->getHourOn() * 60 + lamp->getMinuteOn();
+    uint16_t minutesOff = lamp->getHourOff() * 60 + lamp->getMinuteOff();
     bool result;
     if ((minutes > minutesOn) && (minutes < minutesOff)) {
         result = true;
@@ -178,9 +178,9 @@ bool shouldRun(Device* lamp) {
 }
 
 bool shouldRun(const ledDescription_t& led) {
-    uint8_t minutes = clockRTC.getDateTime().hour * 60 + clockRTC.getDateTime().minute;
-    uint8_t minutesOn = led.led.HOn * 60 + led.led.MOn;
-    uint8_t minutesOff = led.led.HOff * 60 + led.led.MOff;
+    uint16_t minutes = clockRTC.getDateTime().hour * 60 + clockRTC.getDateTime().minute;
+    uint16_t minutesOn = led.led.HOn * 60 + led.led.MOn;
+    uint16_t minutesOff = led.led.HOff * 60 + led.led.MOff;
     bool result;
     if ((minutes > minutesOn) && (minutes < minutesOff)) {
         result = true;
@@ -487,7 +487,7 @@ void parseJSONLights(const String& response) {
                     device.setObjectId(objectId);
                     device.setTimeOn(dupOn);
                     device.setTimeOff(dupOff);
-                    // for (auto&& scheduler_item : schedulesArray) {
+
                     for (auto& i : schedulesArray) {
                         auto deviceItem = i.getDevice();
                         auto schedulerItem = i;
@@ -1374,10 +1374,10 @@ void setup() {
 #ifdef ARDUINO_ARCH_ESP8266
         initHTTPClient();
 #endif
+        setInternalClock();
+         // syncTime();
         postBoot();
         getParamsBackEnd();
-        // syncTime();
-        setInternalClock();
         printParams();
     }
 

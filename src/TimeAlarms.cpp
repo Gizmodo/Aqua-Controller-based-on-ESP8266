@@ -291,7 +291,7 @@ AlarmID_t TimeAlarmsClass::createbyte(time_t value,
                                       OnTickByte_t onTickByteHandler,
                                       bool isOneShot,
                                       dtAlarmPeriod_t alarmType,
-                                      byte param) {
+                                      uint8_t param) {
     time_t now = time(nullptr);
     if (!((dtIsAlarm(alarmType) && now < SECS_PER_YEAR) || (dtUseAbsoluteValue(alarmType) && (value == 0)))) {
         // only create alarm ids if the time is at least Jan 1 1971
@@ -363,8 +363,19 @@ AlarmID_t TimeAlarmsClass::createBaseDevice(time_t value,
                                             dtAlarmPeriod_t alarmType,
                                             Device* param) {
     time_t now = time(nullptr);
+    Serial.println(F("createBaseDevice"));
+    Serial.println(dtIsAlarm(alarmType));
+    Serial.println(alarmType);
+    Serial.println(now < SECS_PER_YEAR);
+    Serial.println((dtIsAlarm(alarmType) && now < SECS_PER_YEAR));
+    Serial.println(dtUseAbsoluteValue(alarmType));
+    Serial.println((value == 0));
+    Serial.println((dtUseAbsoluteValue(alarmType) && (value == 0)));
+    Serial.println(!((dtIsAlarm(alarmType) && now < SECS_PER_YEAR) || (dtUseAbsoluteValue(alarmType) && (value == 0))));
+
     if (!((dtIsAlarm(alarmType) && now < SECS_PER_YEAR) || (dtUseAbsoluteValue(alarmType) && (value == 0)))) {
         // only create alarm ids if the time is at least Jan 1 1971
+        Serial.println(F("Will create an alarm"));
         for (uint8_t id = 0; id < dtNBR_ALARMS; id++) {
             if (Alarm[id].Mode.alarmType == dtNotAllocated) {
                 // here if there is an Alarm id that is not allocated
@@ -377,6 +388,10 @@ AlarmID_t TimeAlarmsClass::createBaseDevice(time_t value,
                 return id;  // alarm created ok
             }
         }
+        Serial.println(F("Alarms maximum!"));
+    } else {
+        Serial.println(F("I will not create new alarm!"));
+        Serial.println(F("no IDs available or time is invalid"));
     }
     return dtINVALID_ALARM_ID;  // no IDs available or time is invalid
 }
