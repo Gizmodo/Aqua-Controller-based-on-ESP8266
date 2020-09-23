@@ -81,6 +81,7 @@ const char urlGetUpdateSettings[] PROGMEM = {
 DS3231 clockRTC;
 RtcDS3231 rtc;
 IPAddress timeServerIP;
+#define MYTZ PSTR("MSK-3")
 
 //// Time Synchronization
 const char* ntpServerName = "pool.ntp.org";
@@ -499,13 +500,10 @@ void parseJSONLights(const String& response) {
 
                             auto alarmOn = Alarm.alarmRepeat(deviceItem->getHourOn(), deviceItem->getMinuteOn(), 0, deviceOnHandler,
                                                              deviceItem);
-                            Serial.println(alarmOn);
                             auto alarmOff = Alarm.alarmRepeat(deviceItem->getHourOff(), deviceItem->getMinuteOff(), 0,
                                                               deviceOffHandler, deviceItem);
-                            Serial.println(alarmOff);
                             schedulerItem.setOn(alarmOn);
                             schedulerItem.setOff(alarmOff);
-                            Serial.printf_P(PSTR("%s %d\n"), "Кол-во таймеров", Alarm.count());
 
                             if (shouldRun(deviceItem)) {
                                 deviceOnHandler(deviceItem);
@@ -832,7 +830,7 @@ void getParamsBackEnd() {
 }
 
 void setInternalClock() {
-    configTime(3 * 3600, 0, "pool.ntp.org", "time.nist.gov");
+    configTime(MYTZ, ntpServerName);
     time_t now = time(nullptr);
     uint8_t tryCount = 0;
     while (now < 8 * 3600 * 2) {
@@ -845,6 +843,7 @@ void setInternalClock() {
     }
     struct tm timeinfo {};
     gmtime_r(&now, &timeinfo);
+    Serial.printf_P(PSTR("Time установлено в %d\n"), now);
 }
 
 void initRealTimeClock() {
@@ -1375,7 +1374,7 @@ void setup() {
         initHTTPClient();
 #endif
         setInternalClock();
-         // syncTime();
+        // syncTime();
         postBoot();
         getParamsBackEnd();
         printParams();
