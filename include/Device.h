@@ -3,6 +3,9 @@
 #include <Arduino.h>
 #include <string>
 class Device {
+   public:
+    enum Type { Light, Doser, Compressor };
+
    private:
     std::string _name;
     uint8_t _pin;
@@ -13,6 +16,7 @@ class Device {
     bool _state;
     bool _enabled;
     std::string _objectId;
+    Type _type = Light;
 
    public:
     ~Device();
@@ -43,8 +47,9 @@ class Device {
     std::string serialize();
     void setTimeOn(char* time);
     void setTimeOff(char* time);
+    Type getType();
+    void setType(Type type);
 
-   private:
     void splitTime(char* payload, uint8_t& hour, uint8_t& minute);
 };
 

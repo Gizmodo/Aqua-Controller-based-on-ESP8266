@@ -113,3 +113,9 @@ void Device::splitTime(char* payload, uint8_t& hour, uint8_t& minute) {
     split = strtok(nullptr, ":");
     minute = strtol(split, &pEnd, 10);
 }
+Device::Type Device::getType() {
+    return Device::_type;
+}
+void Device::setType(Device::Type type) {
+    this->_type = type;
+}
