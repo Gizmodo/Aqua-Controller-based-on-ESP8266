@@ -333,7 +333,7 @@ AlarmID_t TimeAlarmsClass::createBaseDevice(time_t value,
                                             onTickDevice_t onTickDeviceHandler,
                                             bool isOneShot,
                                             dtAlarmPeriod_t alarmType,
-                                            Device* param) {
+                                            sensor2* param) {
     time_t now = time(nullptr);
 
     if (!((dtIsAlarm(alarmType) && now < SECS_PER_YEAR) || (dtUseAbsoluteValue(alarmType) && (value == 0)))) {
