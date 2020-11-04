@@ -6,11 +6,11 @@ Scheduler::~Scheduler() {
 Scheduler::Scheduler() {
 }
 
-sensor2* Scheduler::getDevice() {
+Sensor* Scheduler::getDevice() {
     return this->_device;
 }
 
-void Scheduler::setDevice(sensor2* device) {
+void Scheduler::setDevice(Sensor* device) {
     this->_device = device;
 }
 

@@ -3,7 +3,7 @@
 #include <memory>
 #include <vector>
 #include "Mediator.h"
-#include "sensor2.h"
+#include "Sensor.h"
 
 #if defined(ARDUINO_ARCH_ESP8266)
 #define HOSTNAME "ESP8266"
@@ -31,8 +31,8 @@ uEEPROMLib eeprom(0x57);
 #define dataPin 10
 #define clockPin 14
 #define latchPin 16
-#define countShiftRegister 4  // Кол-во сдвиговых регистров
-#define LIGHTS_COUNT (6)  // Кол-во прожекторов
+#define countShiftRegister 4         // Кол-во сдвиговых регистров
+#define LIGHTS_COUNT (6)             // Кол-во прожекторов
 #define DEVICE_COUNT (LIGHTS_COUNT)  // Кол-во всех устройств (нужно для Alarm'ов)
 
 Shiftduino shiftRegister(dataPin, clockPin, latchPin, countShiftRegister);
@@ -135,36 +135,36 @@ std::array<Scheduler, DEVICE_COUNT> schedulesArray;
 
 //----------------Медиаторы----------------
 //Компрессор
-Mediator<sensor2> medCompressor;
+Mediator<Sensor> medCompressor;
 //Помпа течения
-Mediator<sensor2> medFlow;
+Mediator<Sensor> medFlow;
 //Помпа подъемная
-Mediator<sensor2> medPump;
+Mediator<Sensor> medPump;
 //Прожекторы
-Mediator<sensor2> medLight;
+Mediator<Sensor> medLight;
 //Кормушка
-// TODO сменить класс sensor2 на определенный класс данного устройства
-Mediator<sensor2> medFeeder;
+// TODO сменить класс Sensor на определенный класс данного устройства
+Mediator<Sensor> medFeeder;
 // CO2
-Mediator<sensor2> medCO2;
+Mediator<Sensor> medCO2;
 //Нагреватель
-Mediator<sensor2> medHeater;
+Mediator<Sensor> medHeater;
 //Дозатор
-// TODO сменить класс sensor2 на определенный класс данного устройства
-Mediator<sensor2> medDoser;
+// TODO сменить класс Sensor на определенный класс данного устройства
+Mediator<Sensor> medDoser;
 
 //-----------------------------------------
 //Датчики
-sensor2* compressor;
-sensor2* flow;
-sensor2* pump;
-std::array<sensor2, LIGHTS_COUNT> lights{sensor2(medLight, "", sensor2::light), sensor2(medLight, "", sensor2::light),
-                                         sensor2(medLight, "", sensor2::light), sensor2(medLight, "", sensor2::light),
-                                         sensor2(medLight, "", sensor2::light), sensor2(medLight, "", sensor2::light)};
-sensor2* feeder;
-sensor2* co2;
-sensor2* heater;
-sensor2* doserNew;
+Sensor* compressor;
+Sensor* flow;
+Sensor* pump;
+std::array<Sensor, LIGHTS_COUNT> lights{Sensor(medLight, "1", Sensor::light), Sensor(medLight, "2", Sensor::light),
+                                        Sensor(medLight, "3", Sensor::light), Sensor(medLight, "4", Sensor::light),
+                                        Sensor(medLight, "5", Sensor::light), Sensor(medLight, "6", Sensor::light)};
+Sensor* feeder;
+Sensor* co2;
+Sensor* heater;
+Sensor* doserNew;
 
 //-----------------------------------------
 
@@ -174,7 +174,7 @@ std::string string_format(const std::string fmt_str, ...) {
     int final_n, n = ((int)fmt_str.size()) * 2; /* Reserve two times as much as the length of the fmt_str */
     std::unique_ptr<char[]> formatted;
     va_list ap;
-    while (1) {
+    while (true) {
         formatted.reset(new char[n]); /* Wrap the plain char array into the unique_ptr */
         strcpy(&formatted[0], fmt_str.c_str());
         va_start(ap, fmt_str);
@@ -206,22 +206,22 @@ char* getPGMString(PGM_P pgm) {
     return buf;
 }
 
-void callbackCompressor(sensor2 device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName());
+void callbackCompressor(Sensor device) {
+    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
     // url = getPGMString(urlPutCompressor);
     // urlString = String(url);
 }
 
-void callbackFlow(sensor2 device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName());
+void callbackFlow(Sensor device) {
+    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
 }
 
-void callbackPump(sensor2 device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName());
+void callbackPump(Sensor device) {
+    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
 }
 
-void callbackLight(sensor2 device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName());
+void callbackLight(Sensor device) {
+    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
     char* url = nullptr;
     char* ct = nullptr;
     char* aj = nullptr;
@@ -250,20 +250,20 @@ void callbackLight(sensor2 device) {
     delPtr(aj);
 }
 
-void callbackFeeder(sensor2 device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName());
+void callbackFeeder(Sensor device) {
+    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
 }
 
-void callbackCO2(sensor2 device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName());
+void callbackCO2(Sensor device) {
+    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
 }
 
-void callbackHeater(sensor2 device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName());
+void callbackHeater(Sensor device) {
+    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
 }
 
-void callbackDoser(sensor2 device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName());
+void callbackDoser(Sensor device) {
+    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
 }
 
 void initMediators() {
@@ -275,28 +275,34 @@ void initMediators() {
     medCO2.Register("1", callbackCO2);
     medHeater.Register("1", callbackHeater);
     medDoser.Register("1", callbackDoser);
-    
     // TODO добавить медиатор для прожекторов
 }
 
 void createDevicesAndScheduler() {
-    compressor = new sensor2(medCompressor, "Компрессор", sensor2::compressor);
-    flow = new sensor2(medFlow, "Помпа течения", sensor2::flow);
-    pump = new sensor2(medPump, "Помпа подъёмная", sensor2::pump);
-    feeder = new sensor2(medFeeder, "Кормушка", sensor2::feeder);
-    co2 = new sensor2(medCO2, "CO2", sensor2::co2);
-    heater = new sensor2(medHeater, "Нагреватель", sensor2::heater);
-    doserNew = new sensor2(medDoser, "Дозатор", sensor2::doser);
+    Serial.printf_P(PSTR("++++++++createDevicesAndScheduler++++\n"));
+    compressor = new Sensor(medCompressor, "Компрессор", Sensor::compressor);
+    flow = new Sensor(medFlow, "Помпа течения", Sensor::flow);
+    pump = new Sensor(medPump, "Помпа подъёмная", Sensor::pump);
+    feeder = new Sensor(medFeeder, "Кормушка", Sensor::feeder);
+    co2 = new Sensor(medCO2, "CO2", Sensor::co2);
+    heater = new Sensor(medHeater, "Нагреватель", Sensor::heater);
+    doserNew = new Sensor(medDoser, "Дозатор", Sensor::doser);
+    Serial.println("---------------------");
     for (int i = 0; i < LIGHTS_COUNT; ++i) {
         std::string buffer = string_format("%s %d", "Прожектор", i + 1);
         auto item = lights.at(i);
+        Serial.println("Before");
+        Serial.println(item.getName().c_str());
         item.setName(buffer);
+        Serial.println("After");
+        Serial.println(item.getName().c_str());
         schedulesArray.at(i).setDevice(&item);
     }
+     Serial.printf_P(PSTR("++++++++createDevicesAndScheduler++++\n"));
 }
 
-void printDevice(sensor2* device) {
-    Serial.printf_P(PSTR("%s\n"), device->printDevice());
+void printDevice(Sensor* device) {
+    Serial.printf_P(PSTR("%s\n"), device->printDevice().c_str());
 }
 
 void printAllDevices() {
@@ -335,7 +341,7 @@ void getSensorsTemperature() {
                     String(sensorTemperatureValue2).c_str());
 }
 
-bool shouldRun(sensor2* lamp) {
+bool shouldRun(Sensor* lamp) {
     uint16_t minutes = clockRTC.getDateTime().hour * 60 + clockRTC.getDateTime().minute;
     uint16_t minutesOn = lamp->getHourOn() * 60 + lamp->getMinuteOn();
     uint16_t minutesOff = lamp->getHourOff() * 60 + lamp->getMinuteOff();
@@ -387,7 +393,7 @@ void sendMessage(const String& message) {
     delPtr(aj);
 }
 
-void sendMessage(sensor2* device, bool state) {
+void sendMessage(Sensor* device, bool state) {
     char dataMsg[100];
     String stateString = state ? "включение" : "выключение";
     char* p = clockRTC.dateFormat("H:i:s", clockRTC.getDateTime());
@@ -433,7 +439,7 @@ void sendMessage(sensor2* device, bool state) {
     stateString.clear();
 }
 
-AlarmID_t findAlarmByDevice(sensor2* device, bool isOn) {
+AlarmID_t findAlarmByDevice(Sensor* device, bool isOn) {
     AlarmID_t result = -1;
     for (auto scheduleItem : schedulesArray) {
         auto deviceToFind = scheduleItem.getDevice();
@@ -445,7 +451,7 @@ AlarmID_t findAlarmByDevice(sensor2* device, bool isOn) {
     return result;
 }
 
-void deviceOnHandler(sensor2* device) {
+void deviceOnHandler(Sensor* device) {
     if (device->getEnabled()) {
         Serial.printf_P(PSTR("  %s: включение, pin %d\n"), device->getName().c_str(), device->getPin());
         shiftRegister.setPin(countShiftRegister, device->getPin(), HIGH);
@@ -461,7 +467,7 @@ void deviceOnHandler(sensor2* device) {
     }
 }
 
-void deviceOffHandler(sensor2* device) {
+void deviceOffHandler(Sensor* device) {
     if (device->getEnabled()) {
         Serial.printf_P(PSTR("  %s: выключение, pin %d\n"), device->getName().c_str(), device->getPin());
         shiftRegister.setPin(countShiftRegister, device->getPin(), LOW);
@@ -516,6 +522,7 @@ void splitTime(char* payload, uint8_t& hour, uint8_t& minute) {
 }
 
 void parseJSONLights(const String& response) {
+    Serial.println("parseJSONLights");
     DynamicJsonDocument doc(2000);
     DeserializationError err = deserializeJson(doc, response);
     if (err) {
@@ -538,7 +545,12 @@ void parseJSONLights(const String& response) {
             for (auto&& device : lights) {
                 // if (strcmp(name, device.getName().c_str()) == 0) {
                 //Сравниваем предустановленное имя с результатом из JSON ответа от сервера
-                if (name.compare(device.getName()) == 0) {
+                Serial.print("name=");
+                Serial.println(name.c_str());
+                Serial.print("device.getName()=");
+                Serial.println(device.getName().c_str());
+
+                if (name == device.getName()) {
                     device.setState(state);
                     device.setEnabled(enabled);
                     device.setPin(pin);
@@ -549,7 +561,7 @@ void parseJSONLights(const String& response) {
                     for (auto& i : schedulesArray) {
                         auto deviceItem = i.getDevice();
                         auto schedulerItem = i;
-                        if (name.compare(deviceItem->getName()) == 0) {
+                        if (name == deviceItem->getName()) {
                             Serial.printf_P(PSTR(" Вкл-%02d:%02d. Выкл-%02d:%02d. Состояние: %s. Разрешен: %s. PIN: %d\n"),
                                             i.getDevice()->getHourOn(), i.getDevice()->getMinuteOn(), i.getDevice()->getHourOff(),
                                             i.getDevice()->getMinuteOff(), (i.getDevice()->getState() ? "включен" : "выключен"),
@@ -760,6 +772,7 @@ void getParamLights() {
         if (httpCode > 0) {
             if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
                 responseString = https.getString();
+                Serial.println(responseString);
             }
         } else {
             Serial.printf_P(PSTR(" %s %s\n"), "Ошибка:", HTTPClient::errorToString(httpCode).c_str());
@@ -891,6 +904,10 @@ void setParamsEEPROM() {
 
 void getParamsBackEnd() {
     Serial.printf_P(PSTR("%s\n"), "Чтение параметров из облака");
+    for (int i = 0; i < LIGHTS_COUNT; ++i) {
+        auto item = lights.at(i);
+        Serial.println(item.getName().c_str());
+    }
     getParamLights();
     // TODO отрефакторить блок ниже отсюда
     /* getParamDosers();
@@ -898,9 +915,6 @@ void getParamsBackEnd() {
 
     setParamsEEPROM(); */
     // TODO до сюда
-}
-void getParamsBackEnd2() {
-    Serial.printf_P(PSTR("%s\n"), "Чтение параметров из облака");
 }
 
 void setInternalClock() {
@@ -1216,7 +1230,7 @@ String serializeTemperature() {
     String time = String(currentTime);
 
     doc["sensor1"] = static_cast<double>(sensorTemperatureValue1);
-    doc["sensor2"] = static_cast<double>(sensorTemperatureValue2);
+    doc["Sensor"] = static_cast<double>(sensorTemperatureValue2);
     doc["time"] = time;
     serializeJson(doc, output);
     delPtr(currentTime);
@@ -1287,12 +1301,10 @@ void startTimers() {
 void setup() {
     Serial.begin(115200);
     Serial.println();
-
     initRealTimeClock();
     initMediators();
     createDevicesAndScheduler();
     initDosersArray();
-
     if (!initWiFi()) {
         getParamsEEPROM();
     } else {

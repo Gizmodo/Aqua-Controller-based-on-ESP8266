@@ -7,20 +7,19 @@
 #include "Mediator.h"
 #define UNDEFINED (-1)
 
-class sensor2 {
+class Sensor {
    public:
     enum SensorType { unknown, light, compressor, co2, doser, feeder, flow, pump, heater };
 
-    ~sensor2() = default;
+    ~Sensor() = default;
 
-    sensor2(Mediator<sensor2> mediator, std::string name, SensorType type) {
+    Sensor(Mediator<Sensor> mediator, std::string name, SensorType type) {
         mMediator = mediator;
         _type = type;
-        _name = name;
+        _name = std::move(name);
     }
 
-    sensor2(Mediator<sensor2> mediator,
-            const char* name,
+    Sensor(Mediator<Sensor> mediator,
             SensorType type,
             uint8_t pin,
             uint8_t hourOn,
@@ -31,7 +30,6 @@ class sensor2 {
             bool state) {
         mMediator = mediator;
         _type = type;
-        // strcpy(_name, name);
         _pin = pin;
         _hourOn = hourOn;
         _minuteOn = minuteOn;
@@ -80,38 +78,38 @@ class sensor2 {
     }
 
     void setName(std::string name) {
-        this->_name = name;
+        this->_name = std::move(name);
     }
 
     std::string getName() {
         return this->_name;
     }
 
-    uint8_t getHourOn() {
+    uint8_t getHourOn() const {
         return this->_hourOn;
     }
 
-    uint8_t getHourOff() {
+    uint8_t getHourOff() const {
         return this->_hourOff;
     }
 
-    uint8_t getMinuteOn() {
+    uint8_t getMinuteOn() const {
         return this->_minuteOn;
     }
 
-    uint8_t getMinuteOff() {
+    uint8_t getMinuteOff() const {
         return this->_minuteOff;
     }
 
-    uint8_t getPin() {
+    uint8_t getPin() const {
         return this->_pin;
     }
 
-    bool getState() {
+    bool getState() const {
         return this->_state;
     }
 
-    bool getEnabled() {
+    bool getEnabled() const {
         return this->_enabled;
     }
 
@@ -155,7 +153,7 @@ class sensor2 {
     uint8_t _minuteOff = UNDEFINED;
     bool _state = false;
     bool _enabled = false;
-    Mediator<sensor2> mMediator;
+    Mediator<Sensor> mMediator;
 
     void splitTime(const char* payload, uint8_t& hour, uint8_t& minute) {
         char buffer[10];
