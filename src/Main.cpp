@@ -158,9 +158,9 @@ Mediator<Sensor> medDoser;
 Sensor* compressor;
 Sensor* flow;
 Sensor* pump;
-std::array<Sensor, LIGHTS_COUNT> lights{Sensor(medLight, "1", Sensor::light), Sensor(medLight, "2", Sensor::light),
-                                        Sensor(medLight, "3", Sensor::light), Sensor(medLight, "4", Sensor::light),
-                                        Sensor(medLight, "5", Sensor::light), Sensor(medLight, "6", Sensor::light)};
+std::array<Sensor, LIGHTS_COUNT> lights{Sensor(medLight, "", Sensor::light), Sensor(medLight, "", Sensor::light),
+                                        Sensor(medLight, "", Sensor::light), Sensor(medLight, "", Sensor::light),
+                                        Sensor(medLight, "", Sensor::light), Sensor(medLight, "", Sensor::light)};
 Sensor* feeder;
 Sensor* co2;
 Sensor* heater;
@@ -277,9 +277,18 @@ void initMediators() {
     medDoser.Register("1", callbackDoser);
     // TODO добавить медиатор для прожекторов
 }
+void printLights() {
+    Serial.printf_P(PSTR("%s\n"), "Расписания прожекторов");
+    for (auto item : schedulesArray) {
+        Serial.printf_P(PSTR(" Вкл-%02d:%02d. Выкл-%02d:%02d. Состояние: %s. Разрешен: %s. PIN: %d\n"),
+                        item.getDevice()->getHourOn(), item.getDevice()->getMinuteOn(), item.getDevice()->getHourOff(),
+                        item.getDevice()->getMinuteOff(), (item.getDevice()->getState() ? "включен" : "выключен"),
+                        (item.getDevice()->getEnabled() ? "да" : "нет"), item.getDevice()->getPin()
 
+        );
+    }
+}
 void createDevicesAndScheduler() {
-    Serial.printf_P(PSTR("++++++++createDevicesAndScheduler++++\n"));
     compressor = new Sensor(medCompressor, "Компрессор", Sensor::compressor);
     flow = new Sensor(medFlow, "Помпа течения", Sensor::flow);
     pump = new Sensor(medPump, "Помпа подъёмная", Sensor::pump);
@@ -287,18 +296,13 @@ void createDevicesAndScheduler() {
     co2 = new Sensor(medCO2, "CO2", Sensor::co2);
     heater = new Sensor(medHeater, "Нагреватель", Sensor::heater);
     doserNew = new Sensor(medDoser, "Дозатор", Sensor::doser);
-    Serial.println("---------------------");
     for (int i = 0; i < LIGHTS_COUNT; ++i) {
         std::string buffer = string_format("%s %d", "Прожектор", i + 1);
         auto item = lights.at(i);
-        Serial.println("Before");
-        Serial.println(item.getName().c_str());
         item.setName(buffer);
-        Serial.println("After");
-        Serial.println(item.getName().c_str());
-        schedulesArray.at(i).setDevice(&item);
+        lights.at(i) = item;
+        schedulesArray.at(i).setDevice(&(lights.at(i)));
     }
-     Serial.printf_P(PSTR("++++++++createDevicesAndScheduler++++\n"));
 }
 
 void printDevice(Sensor* device) {
@@ -342,6 +346,7 @@ void getSensorsTemperature() {
 }
 
 bool shouldRun(Sensor* lamp) {
+    // TODO вынести метод в класс Sensor
     uint16_t minutes = clockRTC.getDateTime().hour * 60 + clockRTC.getDateTime().minute;
     uint16_t minutesOn = lamp->getHourOn() * 60 + lamp->getMinuteOn();
     uint16_t minutesOff = lamp->getHourOff() * 60 + lamp->getMinuteOff();
@@ -522,7 +527,6 @@ void splitTime(char* payload, uint8_t& hour, uint8_t& minute) {
 }
 
 void parseJSONLights(const String& response) {
-    Serial.println("parseJSONLights");
     DynamicJsonDocument doc(2000);
     DeserializationError err = deserializeJson(doc, response);
     if (err) {
@@ -542,38 +546,24 @@ void parseJSONLights(const String& response) {
 
             char* dupOn = strdup(on);
             char* dupOff = strdup(off);
-            for (auto&& device : lights) {
-                // if (strcmp(name, device.getName().c_str()) == 0) {
-                //Сравниваем предустановленное имя с результатом из JSON ответа от сервера
-                Serial.print("name=");
-                Serial.println(name.c_str());
-                Serial.print("device.getName()=");
-                Serial.println(device.getName().c_str());
-
-                if (name == device.getName()) {
-                    device.setState(state);
-                    device.setEnabled(enabled);
-                    device.setPin(pin);
-                    device.setObjectID(objectId);
-                    device.setTimeOn(dupOn);
-                    device.setTimeOff(dupOff);
-
-                    for (auto& i : schedulesArray) {
-                        auto deviceItem = i.getDevice();
-                        auto schedulerItem = i;
-                        if (name == deviceItem->getName()) {
-                            Serial.printf_P(PSTR(" Вкл-%02d:%02d. Выкл-%02d:%02d. Состояние: %s. Разрешен: %s. PIN: %d\n"),
-                                            i.getDevice()->getHourOn(), i.getDevice()->getMinuteOn(), i.getDevice()->getHourOff(),
-                                            i.getDevice()->getMinuteOff(), (i.getDevice()->getState() ? "включен" : "выключен"),
-                                            (i.getDevice()->getEnabled() ? "да" : "нет"), i.getDevice()->getPin());
-
+            for (auto&& light : lights) {
+                if (name == light.getName()) {
+                    light.setState(state);
+                    light.setEnabled(enabled);
+                    light.setPin(pin);
+                    light.setObjectID(objectId);
+                    light.setTimeOn(dupOn);
+                    light.setTimeOff(dupOff);
+                    for (auto& schedule : schedulesArray) {
+                        auto deviceItem = schedule.getDevice();
+                        auto schedulerItem = schedule;
+                        if (light.getName() == deviceItem->getName()) {
                             auto alarmOn = Alarm.alarmRepeat(deviceItem->getHourOn(), deviceItem->getMinuteOn(), 0, deviceOnHandler,
                                                              deviceItem);
                             auto alarmOff = Alarm.alarmRepeat(deviceItem->getHourOff(), deviceItem->getMinuteOff(), 0,
                                                               deviceOffHandler, deviceItem);
                             schedulerItem.setOn(alarmOn);
                             schedulerItem.setOff(alarmOff);
-
                             if (shouldRun(deviceItem)) {
                                 deviceOnHandler(deviceItem);
                             } else {
@@ -772,7 +762,6 @@ void getParamLights() {
         if (httpCode > 0) {
             if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
                 responseString = https.getString();
-                Serial.println(responseString);
             }
         } else {
             Serial.printf_P(PSTR(" %s %s\n"), "Ошибка:", HTTPClient::errorToString(httpCode).c_str());
@@ -904,10 +893,6 @@ void setParamsEEPROM() {
 
 void getParamsBackEnd() {
     Serial.printf_P(PSTR("%s\n"), "Чтение параметров из облака");
-    for (int i = 0; i < LIGHTS_COUNT; ++i) {
-        auto item = lights.at(i);
-        Serial.println(item.getName().c_str());
-    }
     getParamLights();
     // TODO отрефакторить блок ниже отсюда
     /* getParamDosers();
@@ -931,7 +916,6 @@ void setInternalClock() {
     }
     struct tm timeinfo {};
     gmtime_r(&now, &timeinfo);
-    Serial.printf_P(PSTR("Time установлено в %d\n"), now);
 }
 
 void initRealTimeClock() {
@@ -1178,18 +1162,6 @@ bool getUpdateSettings() {
         responseString.clear();
     }
     return flag;
-}
-
-void printLights() {
-    Serial.printf_P(PSTR("%s\n"), "Настройки прожекторов");
-    for (auto item : schedulesArray) {
-        Serial.printf_P(PSTR(" Вкл-%02d:%02d. Выкл-%02d:%02d. Состояние: %s. Разрешен: %s. PIN: %d\n"),
-                        item.getDevice()->getHourOn(), item.getDevice()->getMinuteOn(), item.getDevice()->getHourOff(),
-                        item.getDevice()->getMinuteOff(), (item.getDevice()->getState() ? "включен" : "выключен"),
-                        (item.getDevice()->getEnabled() ? "да" : "нет"), item.getDevice()->getPin()
-
-        );
-    }
 }
 
 void printDosersParam() {
