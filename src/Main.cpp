@@ -84,8 +84,9 @@ const char urlGetUpdateSettings[] PROGMEM = {
 DS3231 clockRTC;
 RtcDS3231 rtc;
 IPAddress timeServerIP;
+#ifdef ARDUINO_ARCH_ESP8266
 #define MYTZ PSTR("MSK-3")
-
+#endif
 //// Time Synchronization
 const char* ntpServerName = "pool.ntp.org";
 const int NTP_PACKET_SIZE = 48;
@@ -903,7 +904,11 @@ void getParamsBackEnd() {
 }
 
 void setInternalClock() {
+#ifdef ARDUINO_ARCH_ESP32
+    configTime(60 * 60 * 3, 0, ntpServerName);
+#else
     configTime(MYTZ, ntpServerName);
+#endif
     time_t now = time(nullptr);
     uint8_t tryCount = 0;
     while (now < 8 * 3600 * 2) {

@@ -11,3 +11,4 @@ CMakeLists.txt
 CMakeListsPrivate.txt
 cmake-build-esp32
 cmake-build-esp8266
+cmake-build-*
