@@ -20,14 +20,14 @@ class Sensor {
     }
 
     Sensor(Mediator<Sensor> mediator,
-            SensorType type,
-            uint8_t pin,
-            uint8_t hourOn,
-            uint8_t minuteOn,
-            uint8_t hourOff,
-            uint8_t minuteOff,
-            bool enabled,
-            bool state) {
+           SensorType type,
+           uint8_t pin,
+           uint8_t hourOn,
+           uint8_t minuteOn,
+           uint8_t hourOff,
+           uint8_t minuteOff,
+           bool enabled,
+           bool state) {
         mMediator = mediator;
         _type = type;
         _pin = pin;
@@ -117,12 +117,14 @@ class Sensor {
         return this->_objectID;
     }
 
-    std::string printDevice() {
+    std::string sensorInfo() {
         std::string buffer;
-        buffer = this->_name + "\n" + " [ON] " + std::to_string(this->_hourOn) + ":" + std::to_string(this->_minuteOn) + " [OFF] " +
-                 std::to_string(this->_hourOff) + ":" + std::to_string(this->_minuteOff) + "\n" + " [STATE] " +
-                 std::to_string(this->_state) + " [ENABLED] " + std::to_string(this->_enabled) + " [PIN] " +
-                 std::to_string(this->_pin) + " [OBJECTID] " + this->_objectID + "\n";
+        std::string typeName;
+        typeName = sensorTypeToString(this->_type);
+        buffer = "[Название] " + this->_name + " [Тип] " + typeName + "\n" + " [ON] " + std::to_string(this->_hourOn) + ":" +
+                 std::to_string(this->_minuteOn) + " [OFF] " + std::to_string(this->_hourOff) + ":" +
+                 std::to_string(this->_minuteOff) + "\n" + " [STATE] " + std::to_string(this->_state) + " [ENABLED] " +
+                 std::to_string(this->_enabled) + " [PIN] " + std::to_string(this->_pin) + " [OBJECTID] " + this->_objectID + "\n";
         return buffer;
     }
 
@@ -142,6 +144,19 @@ class Sensor {
         return output;
     }
 
+    bool shouldRun(uint8 hour, uint8_t minute) {
+        uint16_t minutes = hour * 60 + minute;
+        uint16_t minutesOn = this->_hourOn * 60 + this->_minuteOn;
+        uint16_t minutesOff = this->_hourOff * 60 + this->_minuteOff;
+        bool result;
+        if ((minutes > minutesOn) && (minutes < minutesOff)) {
+            result = true;
+        } else {
+            result = false;
+        }
+        return result;
+    }
+
    private:
     std::string _name;
     std::string _objectID;
@@ -154,6 +169,29 @@ class Sensor {
     bool _state = false;
     bool _enabled = false;
     Mediator<Sensor> mMediator;
+
+    std::string sensorTypeToString(SensorType type) {
+        switch (type) {
+            case light:
+                return "Прожектор";
+            case compressor:
+                return "Компрессор";
+            case co2:
+                return "CO2";
+            case doser:
+                return "Дозатор";
+            case feeder:
+                return "Кормушка";
+            case flow:
+                return "Помпа течения";
+            case pump:
+                return "Помпа подъёмная";
+            case heater:
+                return "Нагреватель";
+            default:
+                return "Unknown";
+        }
+    }
 
     void splitTime(const char* payload, uint8_t& hour, uint8_t& minute) {
         char buffer[10];

@@ -31,9 +31,7 @@ uEEPROMLib eeprom(0x57);
 #define dataPin 10
 #define clockPin 14
 #define latchPin 16
-#define countShiftRegister 4         // Кол-во сдвиговых регистров
-#define LIGHTS_COUNT (6)             // Кол-во прожекторов
-#define DEVICE_COUNT (LIGHTS_COUNT)  // Кол-во всех устройств (нужно для Alarm'ов)
+#define countShiftRegister 4  // Кол-во сдвиговых регистров
 
 Shiftduino shiftRegister(dataPin, clockPin, latchPin, countShiftRegister);
 
@@ -80,6 +78,7 @@ const char urlPutUpdateSettings[] PROGMEM = {
     "60A7BF1D-355E-4796-9A17-EFCC8E12B41E"};
 const char urlGetUpdateSettings[] PROGMEM = {
     "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/UpdateSettings"};
+
 //// RTC
 DS3231 clockRTC;
 RtcDS3231 rtc;
@@ -125,14 +124,16 @@ String responseString = "";
 
 //// DEVICES
 
+#define LIGHTS_COUNT (6)             // Кол-во прожекторов
+#define DEVICE_COUNT (LIGHTS_COUNT)  // Кол-во всех устройств (нужно для Alarm'ов)
 //// Дозаторы
 doser_t dosersArray[3];
 std::unique_ptr<GBasic> doserK{};
 std::unique_ptr<GBasic> doserNP{};
 std::unique_ptr<GBasic> doserFe{};
 
-//// Прожекторы
-std::array<Scheduler, DEVICE_COUNT> schedulesArray;
+//// Расписания всех устройств
+std::array<Scheduler, DEVICE_COUNT> schedules;
 
 //----------------Медиаторы----------------
 //Компрессор
@@ -155,17 +156,18 @@ Mediator<Sensor> medHeater;
 Mediator<Sensor> medDoser;
 
 //-----------------------------------------
-//Датчики
+//Устройства
 Sensor* compressor;
 Sensor* flow;
 Sensor* pump;
-std::array<Sensor, LIGHTS_COUNT> lights{Sensor(medLight, "", Sensor::light), Sensor(medLight, "", Sensor::light),
-                                        Sensor(medLight, "", Sensor::light), Sensor(medLight, "", Sensor::light),
-                                        Sensor(medLight, "", Sensor::light), Sensor(medLight, "", Sensor::light)};
 Sensor* feeder;
 Sensor* co2;
 Sensor* heater;
 Sensor* doserNew;
+
+std::array<Sensor, LIGHTS_COUNT> lights{Sensor(medLight, "", Sensor::light), Sensor(medLight, "", Sensor::light),
+                                        Sensor(medLight, "", Sensor::light), Sensor(medLight, "", Sensor::light),
+                                        Sensor(medLight, "", Sensor::light), Sensor(medLight, "", Sensor::light)};
 
 //-----------------------------------------
 
@@ -278,17 +280,7 @@ void initMediators() {
     medDoser.Register("1", callbackDoser);
     // TODO добавить медиатор для прожекторов
 }
-void printLights() {
-    Serial.printf_P(PSTR("%s\n"), "Расписания прожекторов");
-    for (auto item : schedulesArray) {
-        Serial.printf_P(PSTR(" Вкл-%02d:%02d. Выкл-%02d:%02d. Состояние: %s. Разрешен: %s. PIN: %d\n"),
-                        item.getDevice()->getHourOn(), item.getDevice()->getMinuteOn(), item.getDevice()->getHourOff(),
-                        item.getDevice()->getMinuteOff(), (item.getDevice()->getState() ? "включен" : "выключен"),
-                        (item.getDevice()->getEnabled() ? "да" : "нет"), item.getDevice()->getPin()
 
-        );
-    }
-}
 void createDevicesAndScheduler() {
     compressor = new Sensor(medCompressor, "Компрессор", Sensor::compressor);
     flow = new Sensor(medFlow, "Помпа течения", Sensor::flow);
@@ -302,22 +294,24 @@ void createDevicesAndScheduler() {
         auto item = lights.at(i);
         item.setName(buffer);
         lights.at(i) = item;
-        schedulesArray.at(i).setDevice(&(lights.at(i)));
+        schedules.at(i).setDevice(&(lights.at(i)));
     }
 }
 
 void printDevice(Sensor* device) {
-    Serial.printf_P(PSTR("%s\n"), device->printDevice().c_str());
+    Serial.printf_P(PSTR("%s\n"), device->sensorInfo().c_str());
 }
 
 void printAllDevices() {
-    printDevice(compressor);
-    printDevice(flow);
-    printDevice(pump);
-    printDevice(feeder);
-    printDevice(co2);
-    printDevice(heater);
-    printDevice(doserNew);
+    /*
+      printDevice(compressor);
+      printDevice(flow);
+      printDevice(pump);
+      printDevice(feeder);
+      printDevice(co2);
+      printDevice(heater);
+      printDevice(doserNew);
+      */
     for (auto light : lights) {
         printDevice(&light);
     }
@@ -344,20 +338,6 @@ void getSensorsTemperature() {
     sensorTemperatureValue2 = getSensorTemperature(sensorTemperatureAddress2);
     Serial.printf_P(PSTR(" [T1: %s°]  [T2: %s°]\n"), String(sensorTemperatureValue1).c_str(),
                     String(sensorTemperatureValue2).c_str());
-}
-
-bool shouldRun(Sensor* lamp) {
-    // TODO вынести метод в класс Sensor
-    uint16_t minutes = clockRTC.getDateTime().hour * 60 + clockRTC.getDateTime().minute;
-    uint16_t minutesOn = lamp->getHourOn() * 60 + lamp->getMinuteOn();
-    uint16_t minutesOff = lamp->getHourOff() * 60 + lamp->getMinuteOff();
-    bool result;
-    if ((minutes > minutesOn) && (minutes < minutesOff)) {
-        result = true;
-    } else {
-        result = false;
-    }
-    return result;
 }
 
 void sendMessage(const String& message) {
@@ -447,7 +427,7 @@ void sendMessage(Sensor* device, bool state) {
 
 AlarmID_t findAlarmByDevice(Sensor* device, bool isOn) {
     AlarmID_t result = -1;
-    for (auto scheduleItem : schedulesArray) {
+    for (auto scheduleItem : schedules) {
         auto deviceToFind = scheduleItem.getDevice();
         if (device == deviceToFind) {
             result = isOn ? scheduleItem.getOn() : scheduleItem.getOff();
@@ -555,7 +535,7 @@ void parseJSONLights(const String& response) {
                     light.setObjectID(objectId);
                     light.setTimeOn(dupOn);
                     light.setTimeOff(dupOff);
-                    for (auto& schedule : schedulesArray) {
+                    for (auto& schedule : schedules) {
                         auto deviceItem = schedule.getDevice();
                         auto schedulerItem = schedule;
                         if (light.getName() == deviceItem->getName()) {
@@ -565,7 +545,7 @@ void parseJSONLights(const String& response) {
                                                               deviceOffHandler, deviceItem);
                             schedulerItem.setOn(alarmOn);
                             schedulerItem.setOff(alarmOff);
-                            if (shouldRun(deviceItem)) {
+                            if (deviceItem->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) {
                                 deviceOnHandler(deviceItem);
                             } else {
                                 deviceOffHandler(deviceItem);
@@ -696,7 +676,7 @@ void parseJSONCompressor(const String& response) {
                     device.setPin(pin);
                     device.setTimeOn(dupOn);
                     device.setTimeOff(dupOff);
-                    for (auto& i : schedulesArray) {
+                    for (auto& i : schedules) {
                         auto deviceItem = i.getDevice();
                         auto schedulerItem = i;
                         Serial.printf_P(PSTR(" Вкл-%02d:%02d. Выкл-%02d:%02d. Состояние: %s. Разрешен: %s. PIN: %d\n"),
@@ -711,11 +691,11 @@ void parseJSONCompressor(const String& response) {
                         schedulerItem.setOn(alarmOn);
                         schedulerItem.setOff(alarmOff);
 
-                        if (shouldRun(deviceItem)) {
-                            deviceOnHandler(deviceItem);
-                        } else {
-                            deviceOffHandler(deviceItem);
-                        }
+                        if (deviceItem->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) {
+                                deviceOnHandler(deviceItem);
+                            } else {
+                                deviceOffHandler(deviceItem);
+                            }
                     }
                     break;
                 }
@@ -1179,11 +1159,6 @@ void printDosersParam() {
     }
 }
 
-void printParams() {
-    printLights();
-    printDosersParam();
-}
-
 void timer1() {
     char* df = clockRTC.dateFormat("H:i:s", clockRTC.getDateTime());
     Serial.printf_P(PSTR("Время %s\n"), String(df).c_str());
@@ -1194,7 +1169,7 @@ void timer1() {
     if (getUpdateSettings()) {
         Serial.printf_P(PSTR("%s\n"), "Будет выполнено обновление всех параметров");
         getParamsBackEnd();
-        printParams();
+        printAllDevices();
         putUpdateSettings();
     }
 }
@@ -1292,7 +1267,7 @@ void setup() {
         // syncTime();
         postBoot();
         getParamsBackEnd();
-        printParams();
+        printAllDevices();
     }
 
     startTimers();
