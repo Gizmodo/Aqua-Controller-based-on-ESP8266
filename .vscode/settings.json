@@ -52,7 +52,8 @@
         "optional": "cpp",
         "string_view": "cpp",
         "system_error": "cpp",
-        "ranges": "cpp"
+        "ranges": "cpp",
+        "ctime": "cpp"
     },
     "cmake.configureOnOpen": false
 }
