@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <ctime>
 #include <memory>
 #include <vector>
 #include "Mediator.h"
@@ -83,9 +84,7 @@ const char urlGetUpdateSettings[] PROGMEM = {
 DS3231 clockRTC;
 RtcDS3231 rtc;
 IPAddress timeServerIP;
-#ifdef ARDUINO_ARCH_ESP8266
-#define MYTZ PSTR("MSK-3")
-#endif
+
 //// Time Synchronization
 const char* ntpServerName = "pool.ntp.org";
 const int NTP_PACKET_SIZE = 48;
@@ -132,9 +131,6 @@ std::unique_ptr<GBasic> doserK{};
 std::unique_ptr<GBasic> doserNP{};
 std::unique_ptr<GBasic> doserFe{};
 
-//// Расписания всех устройств
-std::array<Scheduler, DEVICE_COUNT> schedules;
-
 //----------------Медиаторы----------------
 //Компрессор
 Mediator<Sensor> medCompressor;
@@ -168,17 +164,43 @@ Sensor* doserNew;
 std::array<Sensor, LIGHTS_COUNT> lights{Sensor(medLight, "", Sensor::light), Sensor(medLight, "", Sensor::light),
                                         Sensor(medLight, "", Sensor::light), Sensor(medLight, "", Sensor::light),
                                         Sensor(medLight, "", Sensor::light), Sensor(medLight, "", Sensor::light)};
-
+//// Расписания всех устройств
+std::array<Scheduler, DEVICE_COUNT> schedules;
 //-----------------------------------------
 
 //// METHODS
 
-std::string string_format(const std::string fmt_str, ...) {
-    int final_n, n = ((int)fmt_str.size()) * 2; /* Reserve two times as much as the length of the fmt_str */
+void getTime() {
+    char* strDateTime = clockRTC.dateFormat("H:i:s", clockRTC.getDateTime());
+    Serial.printf_P(PSTR("Время %s\n"), String(strDateTime).c_str());
+    free(strDateTime);
+}
+
+[[maybe_unused]] void printSheduler() {
+    auto startDayUTC = 1604966400;
+    Serial.printf_P(PSTR("%s\n"), "Информация о расписаниях:");
+    for (auto item : schedules) {
+        Serial.printf_P(PSTR("%s %s\n"), "Устройство:", item.getDevice()->getName().c_str());
+        auto alarmTimeOn = Alarm.read(item.getOn()) + startDayUTC;
+        auto tmOn = localtime(&alarmTimeOn);
+        char bufferOn[32];
+        strftime(bufferOn, 32, "%H:%M:%S", tmOn);
+        Serial.printf_P(PSTR("%s %s\n"), "Включение", bufferOn);
+
+        auto alarmTimeOff = Alarm.read(item.getOff()) + startDayUTC;
+        auto tmOff = localtime(&alarmTimeOff);
+        char bufferOff[32];
+        strftime(bufferOff, 32, "%H:%M:%S", tmOff);
+        Serial.printf_P(PSTR("%s %s\n\n"), "Выключение", bufferOff);
+    }
+}
+
+std::string string_format(const std::string& fmt_str, ...) {
+    int final_n, n = ((int)fmt_str.size()) * 2;
     std::unique_ptr<char[]> formatted;
     va_list ap;
     while (true) {
-        formatted.reset(new char[n]); /* Wrap the plain char array into the unique_ptr */
+        formatted.reset(new char[n]);
         strcpy(&formatted[0], fmt_str.c_str());
         va_start(ap, fmt_str);
         final_n = vsnprintf(&formatted[0], n, fmt_str.c_str(), ap);
@@ -278,7 +300,6 @@ void initMediators() {
     medCO2.Register("1", callbackCO2);
     medHeater.Register("1", callbackHeater);
     medDoser.Register("1", callbackDoser);
-    // TODO добавить медиатор для прожекторов
 }
 
 void createDevicesAndScheduler() {
@@ -293,8 +314,11 @@ void createDevicesAndScheduler() {
         std::string buffer = string_format("%s %d", "Прожектор", i + 1);
         auto item = lights.at(i);
         item.setName(buffer);
+        item.setMediator(medLight);
         lights.at(i) = item;
-        schedules.at(i).setDevice(&(lights.at(i)));
+        auto schedule = schedules.at(i);
+        schedule.setDevice(&(lights.at(i)));
+        schedules.at(i) = schedule;
     }
 }
 
@@ -303,6 +327,7 @@ void printDevice(Sensor* device) {
 }
 
 void printAllDevices() {
+    Serial.printf_P(PSTR("%s\n"), "Вывод информации об устройствах:");
     /*
       printDevice(compressor);
       printDevice(flow);
@@ -311,7 +336,7 @@ void printAllDevices() {
       printDevice(co2);
       printDevice(heater);
       printDevice(doserNew);
-      */
+*/
     for (auto light : lights) {
         printDevice(&light);
     }
@@ -341,18 +366,12 @@ void getSensorsTemperature() {
 }
 
 void sendMessage(const String& message) {
-    char* url = nullptr;
-    char* ct = nullptr;
-    char* att = nullptr;
-    char* actitle = nullptr;
-    char* actext = nullptr;
-    char* aj = nullptr;
-    url = getPGMString(urlPushMessage);
-    aj = getPGMString(applicationJson);
-    ct = getPGMString(contentType);
-    att = getPGMString(androidTickerText);
-    actitle = getPGMString(androidContentTitle);
-    actext = getPGMString(androidContentText);
+    char* url = getPGMString(urlPushMessage);
+    char* aj = getPGMString(applicationJson);
+    char* ct = getPGMString(contentType);
+    char* att = getPGMString(androidTickerText);
+    char* actitle = getPGMString(androidContentTitle);
+    char* actext = getPGMString(androidContentText);
     if (https.begin(*client, String(url))) {
         String data;
         data = R"({"message":")" + message + "\"}";
@@ -386,18 +405,12 @@ void sendMessage(Sensor* device, bool state) {
     sprintf(dataMsg, "%s: %s", device->getName().c_str(), String(p).c_str());
     delPtr(p);
 
-    char* url = nullptr;
-    char* ct = nullptr;
-    char* att = nullptr;
-    char* actitle = nullptr;
-    char* actext = nullptr;
-    char* aj = nullptr;
-    url = getPGMString(urlPushMessage);
-    aj = getPGMString(applicationJson);
-    ct = getPGMString(contentType);
-    att = getPGMString(androidTickerText);
-    actitle = getPGMString(androidContentTitle);
-    actext = getPGMString(androidContentText);
+    char* url = getPGMString(urlPushMessage);
+    char* aj = getPGMString(applicationJson);
+    char* ct = getPGMString(contentType);
+    char* att = getPGMString(androidTickerText);
+    char* actitle = getPGMString(androidContentTitle);
+    char* actext = getPGMString(androidContentText);
 
     if (https.begin(*client, String(url))) {
         String data;
@@ -438,32 +451,32 @@ AlarmID_t findAlarmByDevice(Sensor* device, bool isOn) {
 }
 
 void deviceOnHandler(Sensor* device) {
+    getTime();
     if (device->getEnabled()) {
-        Serial.printf_P(PSTR("  %s: включение, pin %d\n"), device->getName().c_str(), device->getPin());
+        Serial.printf_P(PSTR("%s: включение, pin %d\n"), device->getName().c_str(), device->getPin());
         shiftRegister.setPin(countShiftRegister, device->getPin(), HIGH);
         sendMessage(device, true);
         Alarm.enable(findAlarmByDevice(device, true));
         Alarm.enable(findAlarmByDevice(device, false));
-        device->setState(true);
         device->setStateNotify(true);
     } else {
-        Serial.printf_P(PSTR("  %s %s\n"), device->getName().c_str(), "нельзя изменять.");
+        Serial.printf_P(PSTR("%s %s\n"), device->getName().c_str(), "нельзя изменять.");
         Alarm.disable(findAlarmByDevice(device, true));
         Alarm.disable(findAlarmByDevice(device, false));
     }
 }
 
 void deviceOffHandler(Sensor* device) {
+    getTime();
     if (device->getEnabled()) {
-        Serial.printf_P(PSTR("  %s: выключение, pin %d\n"), device->getName().c_str(), device->getPin());
+        Serial.printf_P(PSTR("%s: выключение, pin %d\n"), device->getName().c_str(), device->getPin());
         shiftRegister.setPin(countShiftRegister, device->getPin(), LOW);
         sendMessage(device, false);
         Alarm.enable(findAlarmByDevice(device, true));
         Alarm.enable(findAlarmByDevice(device, false));
-        device->setState(false);
         device->setStateNotify(false);
     } else {
-        Serial.printf_P(PSTR("  %s %s\n"), device->getName().c_str(), "нельзя изменять.");
+        Serial.printf_P(PSTR("%s %s\n"), device->getName().c_str(), "нельзя изменять.");
         Alarm.disable(findAlarmByDevice(device, true));
         Alarm.disable(findAlarmByDevice(device, false));
     }
@@ -508,7 +521,7 @@ void splitTime(char* payload, uint8_t& hour, uint8_t& minute) {
 }
 
 void parseJSONLights(const String& response) {
-    DynamicJsonDocument doc(2000);
+    DynamicJsonDocument doc(1300);
     DeserializationError err = deserializeJson(doc, response);
     if (err) {
         Serial.print(F(" Ошибка разбора: "));
@@ -519,44 +532,24 @@ void parseJSONLights(const String& response) {
         for (JsonObject obj : array) {
             boolean enabled = obj["enabled"];
             std::string name = obj["name"];
-            const char* off = obj["off"];
-            const char* on = obj["on"];
+            std::string off = obj["off"];
+            std::string on = obj["on"];
             uint8_t pin = obj["pin"];
             boolean state = obj["state"];
             std::string objectId = obj["objectId"];
+            off = off.substr(0, 10);
+            on = on.substr(0, 10);
 
-            char* dupOn = strdup(on);
-            char* dupOff = strdup(off);
             for (auto&& light : lights) {
                 if (name == light.getName()) {
                     light.setState(state);
                     light.setEnabled(enabled);
                     light.setPin(pin);
                     light.setObjectID(objectId);
-                    light.setTimeOn(dupOn);
-                    light.setTimeOff(dupOff);
-                    for (auto& schedule : schedules) {
-                        auto deviceItem = schedule.getDevice();
-                        auto schedulerItem = schedule;
-                        if (light.getName() == deviceItem->getName()) {
-                            auto alarmOn = Alarm.alarmRepeat(deviceItem->getHourOn(), deviceItem->getMinuteOn(), 0, deviceOnHandler,
-                                                             deviceItem);
-                            auto alarmOff = Alarm.alarmRepeat(deviceItem->getHourOff(), deviceItem->getMinuteOff(), 0,
-                                                              deviceOffHandler, deviceItem);
-                            schedulerItem.setOn(alarmOn);
-                            schedulerItem.setOff(alarmOff);
-                            if (deviceItem->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) {
-                                deviceOnHandler(deviceItem);
-                            } else {
-                                deviceOffHandler(deviceItem);
-                            }
-                        }
-                    }
-                    break;
+                    light.setOn(static_cast<time_t>(std::stoul(on)));
+                    light.setOff(static_cast<time_t>(std::stoul(off)));
                 }
             }
-            free(dupOn);
-            free(dupOff);
         }
         doc.shrinkToFit();
         doc.clear();
@@ -708,6 +701,15 @@ void parseJSONCompressor(const String& response) {
     }
 }
  */
+
+void setHostName() {
+#ifdef ARDUINO_ARCH_ESP8266
+    WiFi.hostname(WiFi_hostname);
+#else
+    WiFi.setHostname(WiFi_hostname);
+#endif
+}
+
 boolean initWiFi() {
     Serial.printf_P(PSTR("%s: %s\n"), "Подключение к WiFi", WIFI_SSID);
     WiFi.mode(WIFI_STA);
@@ -725,18 +727,31 @@ boolean initWiFi() {
         return false;
     } else {
         Serial.printf_P(PSTR("\n%s: %s IP: %s\n"), "Успешное подключение к WiFi", WIFI_SSID, WiFi.localIP().toString().c_str());
-#ifdef ARDUINO_ARCH_ESP8266
-        WiFi.hostname(WiFi_hostname);
-#else
-        WiFi.setHostname(WiFi_hostname);
-#endif
+        setHostName();
         return true;
     }
 }
 
+void attachLightScheduler() {
+    for (size_t i = 0; i < DEVICE_COUNT; i++) {
+        if (!schedules.at(i).getDevice()->isLight()) {
+            continue;
+        }
+        auto schedule = schedules.at(i);
+        auto sensor = schedule.getDevice();
+        auto alarmOn = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), 0, deviceOnHandler, sensor);
+        auto alarmOff = Alarm.alarmRepeat(sensor->getHourOff(), sensor->getMinuteOff(), 0, deviceOffHandler, sensor);
+
+        schedule.setOn(alarmOn);
+        schedule.setOff(alarmOff);
+        schedules.at(i) = schedule;
+        (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? deviceOnHandler(sensor)
+                                                                                        : deviceOffHandler(sensor);
+    }
+}
+
 void getParamLights() {
-    char* url = nullptr;
-    url = getPGMString(urlLights);
+    char* url = getPGMString(urlLights);
     Serial.printf_P(PSTR(" %s\n"), "Прожекторы...");
     if (https.begin(*client, String(url))) {
         int httpCode = https.GET();
@@ -757,12 +772,12 @@ void getParamLights() {
     } else {
         parseJSONLights(responseString);
         responseString.clear();
+        attachLightScheduler();
     }
 }
 /*
 void getParamDosers() {
-    char* url = nullptr;
-    url = getPGMString(urlDosers);
+    char* url  = getPGMString(urlDosers);
     Serial.printf_P(PSTR(" %s\n"), "Дозаторы...");
     if (https.begin(*client, String(url))) {
         int httpCode = https.GET();
@@ -787,8 +802,7 @@ void getParamDosers() {
 }
 
 void getParamCompressor() {
-    char* url = nullptr;
-    url = getPGMString(urlCompressor);
+    char* url  = getPGMString(urlCompressor);
     Serial.printf_P(PSTR(" %s\n"), "Компрессор...");
     if (https.begin(*client, String(url))) {
         int httpCode = https.GET();
@@ -878,35 +892,19 @@ void getParamsBackEnd() {
     // TODO отрефакторить блок ниже отсюда
     /* getParamDosers();
     getParamCompressor();
-
     setParamsEEPROM(); */
-    // TODO до сюда
 }
 
-void setInternalClock() {
-#ifdef ARDUINO_ARCH_ESP32
-    configTime(60 * 60 * 3, 0, ntpServerName);
-#else
-    configTime(MYTZ, ntpServerName);
-#endif
-    time_t now = time(nullptr);
-    uint8_t tryCount = 0;
-    while (now < 8 * 3600 * 2) {
-        delay(100);
-        now = time(nullptr);
-        tryCount++;
-        if (tryCount > 50) {
-            break;
-        }
-    }
-    struct tm timeinfo {};
-    gmtime_r(&now, &timeinfo);
+void initLocalClock() {
+    configTime(0, 0, ntpServerName);
+    setenv("TZ", "MSK-3MSD,M3.5.0/2,M10.5.0/3", 1);
+    tzset();
 }
 
-void initRealTimeClock() {
+void initDS3231() {
     clockRTC.begin();
-    char* df = clockRTC.dateFormat("H:i:s Y-m-d", clockRTC.getDateTime());
-    Serial.printf_P(PSTR("Время: %s\n"), String(df).c_str());
+    char* df = clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime());
+    Serial.printf_P(PSTR("Время DS3231: %s\n"), String(df).c_str());
     free(df);
 }
 
@@ -927,11 +925,11 @@ void sendNTPpacket(const IPAddress& address) {
 }
 
 void syncTime() {
-    Serial.printf_P(PSTR("Синхронизация времени с %s\n"), ntpServerName);
+    Serial.printf_P(PSTR("Синхронизация DS3231/NTP %s\n"), ntpServerName);
     udp.begin(2390);
     WiFi.hostByName(ntpServerName, timeServerIP);
     sendNTPpacket(timeServerIP);
-    delay(1000);
+    delay(100);
     int cb = udp.parsePacket();
     if (!cb) {
         Serial.printf_P(PSTR(" Нет ответа от сервера времени %s\n"), ntpServerName);
@@ -952,11 +950,11 @@ void syncTime() {
         rtc.dateTimeToStr(str);
         Serial.printf_P(PSTR(" %s\n"), str);
         uint32_t rtcEpoch = rtc.getEpoch();
-        Serial.printf_P(PSTR(" RTC: %lu\n"), rtcEpoch);
-        Serial.printf_P(PSTR(" NTP: %lu\n"), epoch);
+        Serial.printf_P(PSTR(" DS3231: %lu\n"), rtcEpoch);
+        Serial.printf_P(PSTR("    NTP: %lu\n"), epoch);
 
         if ((rtcEpoch - epoch) > 2) {
-            Serial.printf_P(PSTR(" %s"), "Обновляем RTC (разница между эпохами = ");
+            Serial.printf_P(PSTR(" %s"), "Обновляем DS3231 (разница между эпохами = ");
             if ((rtcEpoch - epoch) > 10000) {
                 Serial.printf_P(PSTR(" %s\n"), (epoch - rtcEpoch));
             } else {
@@ -964,7 +962,7 @@ void syncTime() {
             }
             rtc.setEpoch(epoch);
         } else {
-            Serial.printf_P(PSTR(" %s\n"), "Дата и время RTC не требуют синхронизации");
+            Serial.printf_P(PSTR(" %s\n"), "Дата и время DS3231 не требуют синхронизации");
         }
     }
 }
@@ -989,12 +987,9 @@ void initDosersArray() {
 }
 
 void putUptime(const String& uptime) {
-    char* url = nullptr;
-    char* ct = nullptr;
-    char* aj = nullptr;
-    url = getPGMString(urlPutUptime);
-    ct = getPGMString(contentType);
-    aj = getPGMString(applicationJson);
+    char* url = getPGMString(urlPutUptime);
+    char* ct = getPGMString(contentType);
+    char* aj = getPGMString(applicationJson);
     if (https.begin(*client, String(url))) {
         String payload;
         payload = R"({"uptime":")" + uptime + "\"}";
@@ -1020,12 +1015,9 @@ void uptime() {
 }
 
 void putLastOnline(const String& currentTime) {
-    char* url = nullptr;
-    char* ct = nullptr;
-    char* aj = nullptr;
-    ct = getPGMString(contentType);
-    aj = getPGMString(applicationJson);
-    url = getPGMString(urlPutLastOnline);
+    char* ct = getPGMString(contentType);
+    char* aj = getPGMString(applicationJson);
+    char* url = getPGMString(urlPutLastOnline);
     if (https.begin(*client, String(url))) {
         String payload;
         payload = R"({"lastonline":")" + currentTime + "\"}";
@@ -1052,13 +1044,10 @@ void lastOnline() {
 }
 
 void postBoot() {
-    char* url = nullptr;
-    char* ct = nullptr;
-    char* aj = nullptr;
     char* currentTime = clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime());
-    url = getPGMString(urlPostBoot);
-    ct = getPGMString(contentType);
-    aj = getPGMString(applicationJson);
+    char* url = getPGMString(urlPostBoot);
+    char* ct = getPGMString(contentType);
+    char* aj = getPGMString(applicationJson);
     if (https.begin(*client, String(url))) {
         String payload;
         payload = R"({"time":")" + String(currentTime) + "\"}";
@@ -1086,7 +1075,7 @@ void parseJSONUpdateSettings(const String& response, bool& result) {
     DynamicJsonDocument doc(capacity);
     DeserializationError err = deserializeJson(doc, response);
     if (err) {
-        Serial.print(F("parseJSONCompressor -> Ошибка разбора: "));
+        Serial.print(F("Ошибка разбора: "));
         Serial.println(err.c_str());
         result = false;
     } else {
@@ -1100,12 +1089,9 @@ void parseJSONUpdateSettings(const String& response, bool& result) {
 }
 
 void putUpdateSettings() {
-    char* url = nullptr;
-    char* ct = nullptr;
-    char* aj = nullptr;
-    url = getPGMString(urlPutUpdateSettings);
-    ct = getPGMString(contentType);
-    aj = getPGMString(applicationJson);
+    char* url = getPGMString(urlPutUpdateSettings);
+    char* ct = getPGMString(contentType);
+    char* aj = getPGMString(applicationJson);
     if (https.begin(*client, String(url))) {
         String payload = "{\"flag\": false }";
         https.addHeader(String(ct), String(aj));
@@ -1123,9 +1109,8 @@ void putUpdateSettings() {
 }
 
 bool getUpdateSettings() {
-    char* url = nullptr;
+    char* url = getPGMString(urlGetUpdateSettings);
     bool flag = false;
-    url = getPGMString(urlGetUpdateSettings);
     if (https.begin(*client, String(url))) {
         int httpCode = https.GET();
         if (httpCode > 0) {
@@ -1160,10 +1145,7 @@ void printDosersParam() {
 }
 
 void timer1() {
-    char* df = clockRTC.dateFormat("H:i:s", clockRTC.getDateTime());
-    Serial.printf_P(PSTR("Время %s\n"), String(df).c_str());
-
-    free(df);
+    getTime();
     getSensorsTemperature();
 
     if (getUpdateSettings()) {
@@ -1244,26 +1226,23 @@ void timer5() {
 }
 
 void startTimers() {
-    Serial.printf_P(PSTR("%s %d\n"), "Кол-во таймеров", Alarm.count());
     Alarm.timerRepeat(5 * 60, timer5);
     Alarm.timerRepeat(60, timer1);
-    Serial.printf_P(PSTR("%s %d\n"), "Кол-во таймеров", Alarm.count());
+    Serial.printf_P(PSTR("%s %d\n"), "Всего таймеров", Alarm.count());
 }
 
 void setup() {
     Serial.begin(115200);
     Serial.println();
-    initRealTimeClock();
+    initDS3231();
     initMediators();
     createDevicesAndScheduler();
     initDosersArray();
     if (!initWiFi()) {
         getParamsEEPROM();
     } else {
-#ifdef ARDUINO_ARCH_ESP8266
         initHTTPClient();
-#endif
-        setInternalClock();
+        initLocalClock();
         // syncTime();
         postBoot();
         getParamsBackEnd();

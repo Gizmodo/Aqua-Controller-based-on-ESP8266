@@ -1,3 +1,6 @@
+#pragma clang diagnostic push
+#pragma ide diagnostic ignored "modernize-use-nodiscard"
+#pragma ide diagnostic ignored "OCUnusedGlobalDeclarationInspection"
 #ifndef FACTORYMETHOD_SENSOR2_H
 #define FACTORYMETHOD_SENSOR2_H
 
@@ -19,24 +22,12 @@ class Sensor {
         _name = std::move(name);
     }
 
-    Sensor(Mediator<Sensor> mediator,
-           SensorType type,
-           uint8_t pin,
-           uint8_t hourOn,
-           uint8_t minuteOn,
-           uint8_t hourOff,
-           uint8_t minuteOff,
-           bool enabled,
-           bool state) {
-        mMediator = mediator;
-        _type = type;
-        _pin = pin;
-        _hourOn = hourOn;
-        _minuteOn = minuteOn;
-        _hourOff = hourOff;
-        _minuteOff = minuteOff;
-        _enabled = enabled;
-        _state = state;
+    void setMediator(const Mediator<Sensor>& mMediator) {
+        Sensor::mMediator = mMediator;
+    }
+
+    bool isLight() {
+        return (this->_type == SensorType::light);
     }
 
     void setStateNotify(bool state) {
@@ -53,14 +44,6 @@ class Sensor {
         mMediator.Send("1", *this);
     }
 
-    void setTimeOn(const char* time) {
-        splitTime(time, _hourOn, _minuteOn);
-    }
-
-    void setTimeOff(const char* time) {
-        splitTime(time, _hourOff, _minuteOff);
-    }
-
     void setPin(uint8_t pin) {
         _pin = pin;
     }
@@ -74,7 +57,7 @@ class Sensor {
     }
 
     void setObjectID(std::string objectID) {
-        this->_objectID = objectID;
+        this->_objectID = std::move(objectID);
     }
 
     void setName(std::string name) {
@@ -86,19 +69,35 @@ class Sensor {
     }
 
     uint8_t getHourOn() const {
-        return this->_hourOn;
+        return gmOn()->tm_hour;
     }
 
     uint8_t getHourOff() const {
-        return this->_hourOff;
+        return gmOff()->tm_hour;
     }
 
     uint8_t getMinuteOn() const {
-        return this->_minuteOn;
+        return gmOn()->tm_min;
     }
 
     uint8_t getMinuteOff() const {
-        return this->_minuteOff;
+        return localOff()->tm_min;
+    }
+
+    uint8_t getHourOnLocal() const {
+        return localOn()->tm_hour;
+    }
+
+    uint8_t getHourOffLocal() const {
+        return localOff()->tm_hour;
+    }
+
+    uint8_t getMinuteOnLocal() const {
+        return localOn()->tm_min;
+    }
+
+    uint8_t getMinuteOffLocal() const {
+        return localOff()->tm_min;
     }
 
     uint8_t getPin() const {
@@ -118,36 +117,43 @@ class Sensor {
     }
 
     std::string sensorInfo() {
-        std::string buffer;
+        char bufferOn[32];
+        char bufferOff[32];
+        const tm* tmOn = localtime(&_on);
+        strftime(bufferOn, 32, "%H:%M:%S", tmOn);
+        const tm* tmOff = localtime(&_off);
+        strftime(bufferOff, 32, "%H:%M:%S", tmOff);
+
         std::string typeName;
         typeName = sensorTypeToString(this->_type);
-        buffer = "[Название] " + this->_name + " [Тип] " + typeName + "\n" + " [ON] " + std::to_string(this->_hourOn) + ":" +
-                 std::to_string(this->_minuteOn) + " [OFF] " + std::to_string(this->_hourOff) + ":" +
-                 std::to_string(this->_minuteOff) + "\n" + " [STATE] " + std::to_string(this->_state) + " [ENABLED] " +
-                 std::to_string(this->_enabled) + " [PIN] " + std::to_string(this->_pin) + " [OBJECTID] " + this->_objectID + "\n";
+
+        std::string buffer;
+        buffer = "[Название] " + this->_name + " [Тип] " + typeName + " [ON] " + bufferOn + " [OFF] " + bufferOff + " [STATE] " +
+                 std::to_string(this->_state) + " [ENABLED] " + std::to_string(this->_enabled) + " [PIN] " +
+                 std::to_string(this->_pin) + " [OBJECTID] ..." + tail(this->_objectID, 5);
         return buffer;
     }
 
     std::string serialize() {
         std::string output;
         if (_type == light) {
-            const int capacity = JSON_OBJECT_SIZE(11);
+            const int capacity = JSON_OBJECT_SIZE(7);
             StaticJsonDocument<capacity> doc;
             doc["enabled"] = this->_enabled;
-            doc["on"] = std::to_string(this->_hourOn) + ":" + std::to_string(this->_minuteOn);
-            doc["off"] = std::to_string(this->_hourOff) + ":" + std::to_string(this->_minuteOff);
+            doc["on"] = std::stoull(std::to_string(_on) + "000");
+            doc["off"] = std::stoull(std::to_string(_off) + "000");
             doc["pin"] = this->_pin;
             doc["state"] = this->_state;
-            doc["name"] = this->_name;
+            doc["name"] = this->_name.c_str();
             serializeJson(doc, output);
         }
         return output;
     }
 
-    bool shouldRun(uint8 hour, uint8_t minute) {
+    bool shouldRun(uint8 hour, uint8_t minute) const {
         uint16_t minutes = hour * 60 + minute;
-        uint16_t minutesOn = this->_hourOn * 60 + this->_minuteOn;
-        uint16_t minutesOff = this->_hourOff * 60 + this->_minuteOff;
+        uint16_t minutesOn = getHourOnLocal() * 60 + getMinuteOnLocal();
+        uint16_t minutesOff = getHourOffLocal() * 60 + getMinuteOffLocal();
         bool result;
         if ((minutes > minutesOn) && (minutes < minutesOff)) {
             result = true;
@@ -157,20 +163,59 @@ class Sensor {
         return result;
     }
 
+    time_t getOn() const {
+        return this->_on;
+    }
+
+    void setOn(time_t on) {
+        this->_on = on;
+    }
+
+    time_t getOff() const {
+        return this->_off;
+    }
+
+    void setOff(time_t off) {
+        this->_off = off;
+    }
+
    private:
     std::string _name;
     std::string _objectID;
     SensorType _type = unknown;
     uint8_t _pin = UNDEFINED;
-    uint8_t _hourOn = UNDEFINED;
-    uint8_t _minuteOn = UNDEFINED;
-    uint8_t _hourOff = UNDEFINED;
-    uint8_t _minuteOff = UNDEFINED;
+    //Время в UTC на включение сенсора
+    time_t _on = UNDEFINED;
+    //Время в UTC на выключение сенсора
+    time_t _off = UNDEFINED;
     bool _state = false;
     bool _enabled = false;
     Mediator<Sensor> mMediator;
 
-    std::string sensorTypeToString(SensorType type) {
+    tm* gmOn() const {
+        return gmtime(&_on);
+    }
+
+    tm* gmOff() const {
+        return gmtime(&_off);
+    }
+
+    tm* localOn() const {
+        return localtime(&_on);
+    }
+
+    tm* localOff() const {
+        return localtime(&_off);
+    }
+
+    static std::string tail(std::string const& source, size_t const length) {
+        if (length >= source.size()) {
+            return source;
+        }
+        return source.substr(source.size() - length);
+    }
+
+    static std::string sensorTypeToString(SensorType type) {
         switch (type) {
             case light:
                 return "Прожектор";
@@ -192,16 +237,7 @@ class Sensor {
                 return "Unknown";
         }
     }
-
-    void splitTime(const char* payload, uint8_t& hour, uint8_t& minute) {
-        char buffer[10];
-        strcpy(buffer, payload);
-        char* split = strtok(buffer, ":");
-        char* pEnd;
-        hour = strtol(split, &pEnd, 10);
-        split = strtok(nullptr, ":");
-        minute = strtol(split, &pEnd, 10);
-    }
 };
 
 #endif  // FACTORYMETHOD_SENSOR2_H
+#pragma clang diagnostic pop

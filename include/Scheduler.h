@@ -11,8 +11,8 @@
 class Scheduler {
    private:
     Sensor* _device = nullptr;
-    AlarmID_t _on;
-    AlarmID_t _off;
+    AlarmID_t _on = 255;
+    AlarmID_t _off = 255;
 
    public:
     ~Scheduler();

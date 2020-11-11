@@ -1,10 +1,8 @@
 
 #include "Scheduler.h"
-Scheduler::~Scheduler() {
-}
+Scheduler::~Scheduler() = default;
 
-Scheduler::Scheduler() {
-}
+Scheduler::Scheduler() = default;
 
 Sensor* Scheduler::getDevice() {
     return this->_device;
@@ -15,17 +13,17 @@ void Scheduler::setDevice(Sensor* device) {
 }
 
 AlarmID_t Scheduler::getOn() {
-    return _on;
+    return this->_on;
 }
 
 void Scheduler::setOn(AlarmID_t on) {
-    _on = on;
+    this->_on = on;
 }
 
 AlarmID_t Scheduler::getOff() {
-    return _off;
+    return this->_off;
 }
 
 void Scheduler::setOff(AlarmID_t off) {
-    _off = off;
+    this->_off = off;
 }
