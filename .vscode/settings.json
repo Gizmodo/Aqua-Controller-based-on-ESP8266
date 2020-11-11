@@ -41,6 +41,19 @@
         "string": "cpp",
         "algorithm": "cpp",
         "random": "cpp",
-        "memory": "cpp"
-    }
+        "memory": "cpp",
+        "bit": "cpp",
+        "compare": "cpp",
+        "concepts": "cpp",
+        "cstddef": "cpp",
+        "map": "cpp",
+        "iterator": "cpp",
+        "memory_resource": "cpp",
+        "optional": "cpp",
+        "string_view": "cpp",
+        "system_error": "cpp",
+        "ranges": "cpp",
+        "ctime": "cpp"
+    },
+    "cmake.configureOnOpen": false
 }

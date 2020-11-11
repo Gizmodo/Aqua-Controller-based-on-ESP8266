@@ -1,14 +1,19 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <ctime>
 #include <memory>
-#include <string>
+#include <vector>
+#include "Mediator.h"
+#include "Sensor.h"
+
 #if defined(ARDUINO_ARCH_ESP8266)
+#define HOSTNAME "ESP8266"
 #include <ESP8266HTTPClient.h>
 #include <ESP8266WiFi.h>
 #elif defined(ARDUINO_ARCH_ESP32)
+#define HOSTNAME "ESP32"
 #include <HTTPClient.h>
 #include <WiFi.h>
-#include <vector>
 #else
 #endif
 #include <OneWire.h>  // OneWire
@@ -28,6 +33,7 @@ uEEPROMLib eeprom(0x57);
 #define clockPin 14
 #define latchPin 16
 #define countShiftRegister 4  // Кол-во сдвиговых регистров
+
 Shiftduino shiftRegister(dataPin, clockPin, latchPin, countShiftRegister);
 
 //// PROGMEM
@@ -73,6 +79,7 @@ const char urlPutUpdateSettings[] PROGMEM = {
     "60A7BF1D-355E-4796-9A17-EFCC8E12B41E"};
 const char urlGetUpdateSettings[] PROGMEM = {
     "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/UpdateSettings"};
+
 //// RTC
 DS3231 clockRTC;
 RtcDS3231 rtc;
@@ -94,19 +101,16 @@ uint8_t sensorData[12];
 float sensorTemperatureValue1, sensorTemperatureValue2;
 
 //// WIFI
-#define WORK_DEF1
 #ifdef WORK_DEF
 #define WIFI_SSID "Wi-Fi"
 #define WIFI_PASSWORD "1357924680"
-#define WIFI_RETRY 50
 #else
 #define WIFI_SSID "MikroTik"
 #define WIFI_PASSWORD "11111111"
-#define WIFI_RETRY 10
 #endif
-uint8_t wifiMaxTry = WIFI_RETRY;  //Попытки подключения к сети
+uint8_t wifiMaxTry = 10;  //Попытки подключения к сети
 uint8_t wifiConnectCount = 0;
-const char* WiFi_hostname = "ESP8266";
+const char* WiFi_hostname = HOSTNAME;
 
 //// HTTPS
 #ifdef ARDUINO_ARCH_ESP8266
@@ -118,58 +122,95 @@ HTTPClient https;
 String responseString = "";
 
 //// DEVICES
-//// Аэратор
-ledDescription_t compressor;
 
+#define LIGHTS_COUNT (6)             // Кол-во прожекторов
+#define DEVICE_COUNT (LIGHTS_COUNT)  // Кол-во всех устройств (нужно для Alarm'ов)
 //// Дозаторы
 doser_t dosersArray[3];
 std::unique_ptr<GBasic> doserK{};
 std::unique_ptr<GBasic> doserNP{};
 std::unique_ptr<GBasic> doserFe{};
 
-//// Прожекторы
-ledDescription_t leds[6];
-std::vector<std::reference_wrapper<ledDescription_t>> vectorRefLeds;
+//----------------Медиаторы----------------
+//Компрессор
+Mediator<Sensor> medCompressor;
+//Помпа течения
+Mediator<Sensor> medFlow;
+//Помпа подъемная
+Mediator<Sensor> medPump;
+//Прожекторы
+Mediator<Sensor> medLight;
+//Кормушка
+// TODO сменить класс Sensor на определенный класс данного устройства
+Mediator<Sensor> medFeeder;
+// CO2
+Mediator<Sensor> medCO2;
+//Нагреватель
+Mediator<Sensor> medHeater;
+//Дозатор
+// TODO сменить класс Sensor на определенный класс данного устройства
+Mediator<Sensor> medDoser;
+
+//-----------------------------------------
+//Устройства
+Sensor* compressor;
+Sensor* flow;
+Sensor* pump;
+Sensor* feeder;
+Sensor* co2;
+Sensor* heater;
+Sensor* doserNew;
+
+std::array<Sensor, LIGHTS_COUNT> lights{Sensor(medLight, "", Sensor::light), Sensor(medLight, "", Sensor::light),
+                                        Sensor(medLight, "", Sensor::light), Sensor(medLight, "", Sensor::light),
+                                        Sensor(medLight, "", Sensor::light), Sensor(medLight, "", Sensor::light)};
+//// Расписания всех устройств
+std::array<Scheduler, DEVICE_COUNT> schedules;
+//-----------------------------------------
 
 //// METHODS
-double floatToDouble(float x) {
-    return static_cast<double>(x);
+
+void getTime() {
+    char* strDateTime = clockRTC.dateFormat("H:i:s", clockRTC.getDateTime());
+    Serial.printf_P(PSTR("Время %s\n"), String(strDateTime).c_str());
+    free(strDateTime);
 }
 
-float getSensorTemperature(const uint8_t* sensorAddress) {
-    unsigned int rawData;
-    onewire.reset();
-    onewire.select(sensorAddress);
-    onewire.write(0x44, 1);
-    onewire.reset();
-    onewire.select(sensorAddress);
-    onewire.write(0xBE);
-    for (uint8_t i = 0; i < 9; i++) {
-        sensorData[i] = onewire.read();
+[[maybe_unused]] void printSheduler() {
+    auto startDayUTC = 1604966400;
+    Serial.printf_P(PSTR("%s\n"), "Информация о расписаниях:");
+    for (auto item : schedules) {
+        Serial.printf_P(PSTR("%s %s\n"), "Устройство:", item.getDevice()->getName().c_str());
+        auto alarmTimeOn = Alarm.read(item.getOn()) + startDayUTC;
+        auto tmOn = localtime(&alarmTimeOn);
+        char bufferOn[32];
+        strftime(bufferOn, 32, "%H:%M:%S", tmOn);
+        Serial.printf_P(PSTR("%s %s\n"), "Включение", bufferOn);
+
+        auto alarmTimeOff = Alarm.read(item.getOff()) + startDayUTC;
+        auto tmOff = localtime(&alarmTimeOff);
+        char bufferOff[32];
+        strftime(bufferOff, 32, "%H:%M:%S", tmOff);
+        Serial.printf_P(PSTR("%s %s\n\n"), "Выключение", bufferOff);
     }
-    rawData = (sensorData[1] << 8) | sensorData[0];
-    float celsius = (float)rawData / 16.0;
-    return celsius;
 }
 
-void getSensorsTemperature() {
-    sensorTemperatureValue1 = getSensorTemperature(sensorTemperatureAddress1);
-    sensorTemperatureValue2 = getSensorTemperature(sensorTemperatureAddress2);
-    Serial.printf_P(PSTR(" [T1: %s°]  [T2: %s°]\n"), String(sensorTemperatureValue1).c_str(),
-                    String(sensorTemperatureValue2).c_str());
-}
-
-bool shouldRun(const ledDescription_t& led) {
-    uint8_t minutes = clockRTC.getDateTime().hour * 60 + clockRTC.getDateTime().minute;
-    uint8_t minutesOn = led.led.HOn * 60 + led.led.MOn;
-    uint8_t minutesOff = led.led.HOff * 60 + led.led.MOff;
-    bool result;
-    if ((minutes > minutesOn) && (minutes < minutesOff)) {
-        result = true;
-    } else {
-        result = false;
+std::string string_format(const std::string& fmt_str, ...) {
+    int final_n, n = ((int)fmt_str.size()) * 2;
+    std::unique_ptr<char[]> formatted;
+    va_list ap;
+    while (true) {
+        formatted.reset(new char[n]);
+        strcpy(&formatted[0], fmt_str.c_str());
+        va_start(ap, fmt_str);
+        final_n = vsnprintf(&formatted[0], n, fmt_str.c_str(), ap);
+        va_end(ap);
+        if (final_n < 0 || final_n >= n)
+            n += abs(final_n - n + 1);
+        else
+            break;
     }
-    return result;
+    return std::string(formatted.get());
 }
 
 void delPtr(const char* p) {
@@ -190,19 +231,147 @@ char* getPGMString(PGM_P pgm) {
     return buf;
 }
 
-void sendMessage(const String& message) {
+void callbackCompressor(Sensor device) {
+    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
+    // url = getPGMString(urlPutCompressor);
+    // urlString = String(url);
+}
+
+void callbackFlow(Sensor device) {
+    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
+}
+
+void callbackPump(Sensor device) {
+    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
+}
+
+void callbackLight(Sensor device) {
+    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
     char* url = nullptr;
     char* ct = nullptr;
-    char* att = nullptr;
-    char* actitle = nullptr;
-    char* actext = nullptr;
     char* aj = nullptr;
-    url = getPGMString(urlPushMessage);
-    aj = getPGMString(applicationJson);
+    String urlString;
+    String payload;
+    url = getPGMString(urlPutLight);
+    urlString = String(url) + String(device.getObjectID().c_str());
+
+    delPtr(url);
     ct = getPGMString(contentType);
-    att = getPGMString(androidTickerText);
-    actitle = getPGMString(androidContentTitle);
-    actext = getPGMString(androidContentText);
+    aj = getPGMString(applicationJson);
+    payload = String(device.serialize().c_str());
+    if (https.begin(*client, urlString)) {
+        https.addHeader(String(ct), String(aj));
+        int httpCode = https.PUT(payload);
+        if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
+            Serial.printf_P(PSTR("%s состояние %s\n"), device.getName().c_str(), (device.getState() ? "ON" : "OFF"));
+        } else {
+            Serial.printf_P(PSTR("%s: %s\n"), "Ошибка", HTTPClient::errorToString(httpCode).c_str());
+        }
+        https.end();
+    } else {
+        Serial.printf_P(PSTR("%s\n"), "Невозможно подключиться\n");
+    }
+    delPtr(ct);
+    delPtr(aj);
+}
+
+void callbackFeeder(Sensor device) {
+    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
+}
+
+void callbackCO2(Sensor device) {
+    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
+}
+
+void callbackHeater(Sensor device) {
+    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
+}
+
+void callbackDoser(Sensor device) {
+    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
+}
+
+void initMediators() {
+    medCompressor.Register("1", callbackCompressor);
+    medFlow.Register("1", callbackFlow);
+    medPump.Register("1", callbackPump);
+    medLight.Register("1", callbackLight);
+    medFeeder.Register("1", callbackFeeder);
+    medCO2.Register("1", callbackCO2);
+    medHeater.Register("1", callbackHeater);
+    medDoser.Register("1", callbackDoser);
+}
+
+void createDevicesAndScheduler() {
+    compressor = new Sensor(medCompressor, "Компрессор", Sensor::compressor);
+    flow = new Sensor(medFlow, "Помпа течения", Sensor::flow);
+    pump = new Sensor(medPump, "Помпа подъёмная", Sensor::pump);
+    feeder = new Sensor(medFeeder, "Кормушка", Sensor::feeder);
+    co2 = new Sensor(medCO2, "CO2", Sensor::co2);
+    heater = new Sensor(medHeater, "Нагреватель", Sensor::heater);
+    doserNew = new Sensor(medDoser, "Дозатор", Sensor::doser);
+    for (int i = 0; i < LIGHTS_COUNT; ++i) {
+        std::string buffer = string_format("%s %d", "Прожектор", i + 1);
+        auto item = lights.at(i);
+        item.setName(buffer);
+        item.setMediator(medLight);
+        lights.at(i) = item;
+        auto schedule = schedules.at(i);
+        schedule.setDevice(&(lights.at(i)));
+        schedules.at(i) = schedule;
+    }
+}
+
+void printDevice(Sensor* device) {
+    Serial.printf_P(PSTR("%s\n"), device->sensorInfo().c_str());
+}
+
+void printAllDevices() {
+    Serial.printf_P(PSTR("%s\n"), "Вывод информации об устройствах:");
+    /*
+      printDevice(compressor);
+      printDevice(flow);
+      printDevice(pump);
+      printDevice(feeder);
+      printDevice(co2);
+      printDevice(heater);
+      printDevice(doserNew);
+*/
+    for (auto light : lights) {
+        printDevice(&light);
+    }
+}
+
+float getSensorTemperature(const uint8_t* sensorAddress) {
+    unsigned int rawData;
+    onewire.reset();
+    onewire.select(sensorAddress);
+    onewire.write(0x44, 1);
+    onewire.reset();
+    onewire.select(sensorAddress);
+    onewire.write(0xBE);
+    for (uint8_t i = 0; i < 9; i++) {
+        sensorData[i] = onewire.read();
+    }
+    rawData = (sensorData[1] << 8) | sensorData[0];
+    float celsius = static_cast<float>(rawData) / static_cast<float>(16.0);
+    return celsius;
+}
+
+void getSensorsTemperature() {
+    sensorTemperatureValue1 = getSensorTemperature(sensorTemperatureAddress1);
+    sensorTemperatureValue2 = getSensorTemperature(sensorTemperatureAddress2);
+    Serial.printf_P(PSTR(" [T1: %s°]  [T2: %s°]\n"), String(sensorTemperatureValue1).c_str(),
+                    String(sensorTemperatureValue2).c_str());
+}
+
+void sendMessage(const String& message) {
+    char* url = getPGMString(urlPushMessage);
+    char* aj = getPGMString(applicationJson);
+    char* ct = getPGMString(contentType);
+    char* att = getPGMString(androidTickerText);
+    char* actitle = getPGMString(androidContentTitle);
+    char* actext = getPGMString(androidContentText);
     if (https.begin(*client, String(url))) {
         String data;
         data = R"({"message":")" + message + "\"}";
@@ -229,25 +398,19 @@ void sendMessage(const String& message) {
     delPtr(aj);
 }
 
-void sendMessage(ledDescription_t& led, bool state) {
+void sendMessage(Sensor* device, bool state) {
     char dataMsg[100];
-    String stateString = state ? "Включение" : "Выключение";
+    String stateString = state ? "включение" : "выключение";
     char* p = clockRTC.dateFormat("H:i:s", clockRTC.getDateTime());
-    sprintf(dataMsg, "Прожектор %s в %s", led.name.c_str(), String(p).c_str());
+    sprintf(dataMsg, "%s: %s", device->getName().c_str(), String(p).c_str());
     delPtr(p);
 
-    char* url = nullptr;
-    char* ct = nullptr;
-    char* att = nullptr;
-    char* actitle = nullptr;
-    char* actext = nullptr;
-    char* aj = nullptr;
-    url = getPGMString(urlPushMessage);
-    aj = getPGMString(applicationJson);
-    ct = getPGMString(contentType);
-    att = getPGMString(androidTickerText);
-    actitle = getPGMString(androidContentTitle);
-    actext = getPGMString(androidContentText);
+    char* url = getPGMString(urlPushMessage);
+    char* aj = getPGMString(applicationJson);
+    char* ct = getPGMString(contentType);
+    char* att = getPGMString(androidTickerText);
+    char* actitle = getPGMString(androidContentTitle);
+    char* actext = getPGMString(androidContentText);
 
     if (https.begin(*client, String(url))) {
         String data;
@@ -275,71 +438,47 @@ void sendMessage(ledDescription_t& led, bool state) {
     stateString.clear();
 }
 
-void ledOnHandler(ledDescription_t& led) {
-    if (led.led.enabled) {
-        Serial.printf_P(PSTR("  Включение прожектора PIN %d\n"), led.led.pin);
-        shiftRegister.setPin(countShiftRegister, led.led.pin, HIGH);
-        sendMessage(led, true);
-        Alarm.enable(led.led.off);
-        Alarm.enable(led.led.on);
-        led.led.currentState = true;
+AlarmID_t findAlarmByDevice(Sensor* device, bool isOn) {
+    AlarmID_t result = -1;
+    for (auto scheduleItem : schedules) {
+        auto deviceToFind = scheduleItem.getDevice();
+        if (device == deviceToFind) {
+            result = isOn ? scheduleItem.getOn() : scheduleItem.getOff();
+            break;
+        }
+    }
+    return result;
+}
 
-        vectorRefLeds.push_back(led);
+void deviceOnHandler(Sensor* device) {
+    getTime();
+    if (device->getEnabled()) {
+        Serial.printf_P(PSTR("%s: включение, pin %d\n"), device->getName().c_str(), device->getPin());
+        shiftRegister.setPin(countShiftRegister, device->getPin(), HIGH);
+        sendMessage(device, true);
+        Alarm.enable(findAlarmByDevice(device, true));
+        Alarm.enable(findAlarmByDevice(device, false));
+        device->setStateNotify(true);
     } else {
-        Serial.printf_P(PSTR("%s\n"), "  Прожектор не доступен для изменения состояния");
-        Alarm.disable(led.led.off);
-        Alarm.disable(led.led.on);
+        Serial.printf_P(PSTR("%s %s\n"), device->getName().c_str(), "нельзя изменять.");
+        Alarm.disable(findAlarmByDevice(device, true));
+        Alarm.disable(findAlarmByDevice(device, false));
     }
 }
 
-void ledOffHandler(ledDescription_t& led) {
-    if (led.led.enabled) {
-        Serial.printf_P(PSTR("  Выключение прожектора PIN %d\n"), led.led.pin);
-        shiftRegister.setPin(countShiftRegister, led.led.pin, LOW);
-        sendMessage(led, false);
-        Alarm.enable(led.led.off);
-        Alarm.enable(led.led.on);
-        led.led.currentState = false;
-
-        vectorRefLeds.push_back(led);
+void deviceOffHandler(Sensor* device) {
+    getTime();
+    if (device->getEnabled()) {
+        Serial.printf_P(PSTR("%s: выключение, pin %d\n"), device->getName().c_str(), device->getPin());
+        shiftRegister.setPin(countShiftRegister, device->getPin(), LOW);
+        sendMessage(device, false);
+        Alarm.enable(findAlarmByDevice(device, true));
+        Alarm.enable(findAlarmByDevice(device, false));
+        device->setStateNotify(false);
     } else {
-        Serial.printf_P(PSTR("%s\n"), "  Прожектор не доступен для изменения состояния");
-        Alarm.disable(led.led.off);
-        Alarm.disable(led.led.on);
-    }
-}
-
-void compressorOnHandler(ledDescription_t& led) {
-    if (led.led.enabled) {
-        Serial.printf_P(PSTR("  Включение компрессора PIN %d\n"), led.led.pin);
-        shiftRegister.setPin(countShiftRegister, led.led.pin, HIGH);
-        sendMessage(led, true);
-        Alarm.enable(led.led.off);
-        Alarm.enable(led.led.on);
-        led.led.currentState = true;
-
-        vectorRefLeds.push_back(led);
-    } else {
-        Serial.printf_P(PSTR("%s\n"), "  Компрессор не доступен для изменения состояния");
-        Alarm.disable(led.led.off);
-        Alarm.disable(led.led.on);
-    }
-}
-
-void compressorOffHandler(ledDescription_t& led) {
-    if (led.led.enabled) {
-        Serial.printf_P(PSTR("  Выключение компрессора PIN %d\n"), led.led.pin);
-        shiftRegister.setPin(countShiftRegister, led.led.pin, LOW);
-        sendMessage(led, false);
-        Alarm.enable(led.led.off);
-        Alarm.enable(led.led.on);
-        led.led.currentState = false;
-
-        vectorRefLeds.push_back(led);
-    } else {
-        Serial.printf_P(PSTR("%s\n"), "  Компрессор не доступен для изменения состояния");
-        Alarm.disable(led.led.off);
-        Alarm.disable(led.led.on);
+        Serial.printf_P(PSTR("%s %s\n"), device->getName().c_str(), "нельзя изменять.");
+        Alarm.disable(findAlarmByDevice(device, true));
+        Alarm.disable(findAlarmByDevice(device, false));
     }
 }
 
@@ -382,50 +521,35 @@ void splitTime(char* payload, uint8_t& hour, uint8_t& minute) {
 }
 
 void parseJSONLights(const String& response) {
-    DynamicJsonDocument doc(2000);
+    DynamicJsonDocument doc(1300);
     DeserializationError err = deserializeJson(doc, response);
     if (err) {
-        Serial.print(F("parseJSONLights -> Ошибка разбора: "));
+        Serial.print(F(" Ошибка разбора: "));
         Serial.println(err.c_str());
         return;
     } else {
         JsonArray array = doc.as<JsonArray>();
         for (JsonObject obj : array) {
             boolean enabled = obj["enabled"];
-            const char* name = obj["name"];
-            const char* off = obj["off"];
-            const char* on = obj["on"];
+            std::string name = obj["name"];
+            std::string off = obj["off"];
+            std::string on = obj["on"];
             uint8_t pin = obj["pin"];
             boolean state = obj["state"];
-            String objectId = obj["objectId"];
+            std::string objectId = obj["objectId"];
+            off = off.substr(0, 10);
+            on = on.substr(0, 10);
 
-            char* dupOn = strdup(on);
-            char* dupOff = strdup(off);
-            for (auto& ledItem : leds) {
-                if (strcmp(name, ledItem.name.c_str()) == 0) {
-                    ledItem.led.currentState = state;
-                    ledItem.led.enabled = enabled;
-                    ledItem.led.pin = pin;
-                    ledItem.led.objectId = objectId;
-                    splitTime(dupOn, ledItem.led.HOn, ledItem.led.MOn);
-                    splitTime(dupOff, ledItem.led.HOff, ledItem.led.MOff);
-
-                    ledItem.led.off = Alarm.alarmRepeat(ledItem.led.HOff, ledItem.led.MOff, 0, ledOffHandler, ledItem);
-                    ledItem.led.on = Alarm.alarmRepeat(ledItem.led.HOn, ledItem.led.MOn, 0, ledOnHandler, ledItem);
-
-                    uint16_t minutes = clockRTC.getDateTime().hour * 60 + clockRTC.getDateTime().minute;
-                    uint16_t minutesOn = ledItem.led.HOn * 60 + ledItem.led.MOn;
-                    uint16_t minutesOff = ledItem.led.HOff * 60 + ledItem.led.MOff;
-                    if ((minutes > minutesOn) && (minutes < minutesOff)) {
-                        ledOnHandler(ledItem);
-                    } else {
-                        ledOffHandler(ledItem);
-                    }
-                    break;
+            for (auto&& light : lights) {
+                if (name == light.getName()) {
+                    light.setState(state);
+                    light.setEnabled(enabled);
+                    light.setPin(pin);
+                    light.setObjectID(objectId);
+                    light.setOn(static_cast<time_t>(std::stoul(on)));
+                    light.setOff(static_cast<time_t>(std::stoul(off)));
                 }
             }
-            free(dupOn);
-            free(dupOff);
         }
         doc.shrinkToFit();
         doc.clear();
@@ -519,7 +643,7 @@ void parseJSONDosers(const String& response) {
         doc.clear();
     }
 }
-
+/*
 void parseJSONCompressor(const String& response) {
     DynamicJsonDocument doc(300);
     DeserializationError err = deserializeJson(doc, response);
@@ -535,35 +659,55 @@ void parseJSONCompressor(const String& response) {
             const char* on = obj["on"];
             uint8_t pin = obj["pin"];
             boolean state = obj["state"];
-
             char* dupOn = strdup(on);
             char* dupOff = strdup(off);
 
-            compressor.led.currentState = state;
-            compressor.led.enabled = enabled;
-            compressor.led.pin = pin;
-            splitTime(dupOn, compressor.led.HOn, compressor.led.MOn);
-            splitTime(dupOff, compressor.led.HOff, compressor.led.MOff);
+            for (auto&& device : devicesArray) {
+                if (device.getType() == Device::Compressor) {
+                    device.setState(state);
+                    device.setEnabled(enabled);
+                    device.setPin(pin);
+                    device.setTimeOn(dupOn);
+                    device.setTimeOff(dupOff);
+                    for (auto& i : schedules) {
+                        auto deviceItem = i.getDevice();
+                        auto schedulerItem = i;
+                        Serial.printf_P(PSTR(" Вкл-%02d:%02d. Выкл-%02d:%02d. Состояние: %s. Разрешен: %s. PIN: %d\n"),
+                                        i.getDevice()->getHourOn(), i.getDevice()->getMinuteOn(), i.getDevice()->getHourOff(),
+                                        i.getDevice()->getMinuteOff(), (i.getDevice()->getState() ? "включен" : "выключен"),
+                                        (i.getDevice()->getEnabled() ? "да" : "нет"), i.getDevice()->getPin());
 
-            compressor.led.off = Alarm.alarmRepeat(compressor.led.HOff, compressor.led.MOff, 0, compressorOffHandler, compressor);
-            compressor.led.on = Alarm.alarmRepeat(compressor.led.HOn, compressor.led.MOn, 0, compressorOnHandler, compressor);
+                        auto alarmOn =
+                            Alarm.alarmRepeat(deviceItem->getHourOn(), deviceItem->getMinuteOn(), 0, deviceOnHandler, deviceItem);
+                        auto alarmOff = Alarm.alarmRepeat(deviceItem->getHourOff(), deviceItem->getMinuteOff(), 0, deviceOffHandler,
+                                                          deviceItem);
+                        schedulerItem.setOn(alarmOn);
+                        schedulerItem.setOff(alarmOff);
 
-            uint16_t minutes = clockRTC.getDateTime().hour * 60 + clockRTC.getDateTime().minute;
-            uint16_t minutesOn = compressor.led.HOn * 60 + compressor.led.MOn;
-            uint16_t minutesOff = compressor.led.HOff * 60 + compressor.led.MOff;
-
-            if ((minutes > minutesOn) && (minutes < minutesOff)) {
-                compressorOnHandler(compressor);
-            } else {
-                compressorOffHandler(compressor);
+                        if (deviceItem->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) {
+                                deviceOnHandler(deviceItem);
+                            } else {
+                                deviceOffHandler(deviceItem);
+                            }
+                    }
+                    break;
+                }
             }
-
             free(dupOn);
             free(dupOff);
         }
         doc.shrinkToFit();
         doc.clear();
     }
+}
+ */
+
+void setHostName() {
+#ifdef ARDUINO_ARCH_ESP8266
+    WiFi.hostname(WiFi_hostname);
+#else
+    WiFi.setHostname(WiFi_hostname);
+#endif
 }
 
 boolean initWiFi() {
@@ -583,18 +727,31 @@ boolean initWiFi() {
         return false;
     } else {
         Serial.printf_P(PSTR("\n%s: %s IP: %s\n"), "Успешное подключение к WiFi", WIFI_SSID, WiFi.localIP().toString().c_str());
-#ifdef ARDUINO_ARCH_ESP8266
-        WiFi.hostname(WiFi_hostname);
-#else
-        WiFi.setHostname(WiFi_hostname);
-#endif
+        setHostName();
         return true;
     }
 }
 
+void attachLightScheduler() {
+    for (size_t i = 0; i < DEVICE_COUNT; i++) {
+        if (!schedules.at(i).getDevice()->isLight()) {
+            continue;
+        }
+        auto schedule = schedules.at(i);
+        auto sensor = schedule.getDevice();
+        auto alarmOn = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), 0, deviceOnHandler, sensor);
+        auto alarmOff = Alarm.alarmRepeat(sensor->getHourOff(), sensor->getMinuteOff(), 0, deviceOffHandler, sensor);
+
+        schedule.setOn(alarmOn);
+        schedule.setOff(alarmOff);
+        schedules.at(i) = schedule;
+        (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? deviceOnHandler(sensor)
+                                                                                        : deviceOffHandler(sensor);
+    }
+}
+
 void getParamLights() {
-    char* url = nullptr;
-    url = getPGMString(urlLights);
+    char* url = getPGMString(urlLights);
     Serial.printf_P(PSTR(" %s\n"), "Прожекторы...");
     if (https.begin(*client, String(url))) {
         int httpCode = https.GET();
@@ -603,24 +760,24 @@ void getParamLights() {
                 responseString = https.getString();
             }
         } else {
-            Serial.printf_P(PSTR("getParamLights() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR(" %s %s\n"), "Ошибка:", HTTPClient::errorToString(httpCode).c_str());
         }
         https.end();
     } else {
-        Serial.printf_P(PSTR("%s\n"), "getParamLights() -> Невозможно подключиться\n");
+        Serial.printf_P(PSTR(" %s\n"), "Невозможно подключиться\n");
     }
     delPtr(url);
     if (responseString.isEmpty()) {
-        Serial.printf_P(PSTR(" %s\n"), "getParamLights() -> Ответ пустой");
+        Serial.printf_P(PSTR(" %s\n"), "Ответ пустой");
     } else {
         parseJSONLights(responseString);
         responseString.clear();
+        attachLightScheduler();
     }
 }
-
+/*
 void getParamDosers() {
-    char* url = nullptr;
-    url = getPGMString(urlDosers);
+    char* url  = getPGMString(urlDosers);
     Serial.printf_P(PSTR(" %s\n"), "Дозаторы...");
     if (https.begin(*client, String(url))) {
         int httpCode = https.GET();
@@ -645,8 +802,7 @@ void getParamDosers() {
 }
 
 void getParamCompressor() {
-    char* url = nullptr;
-    url = getPGMString(urlCompressor);
+    char* url  = getPGMString(urlCompressor);
     Serial.printf_P(PSTR(" %s\n"), "Компрессор...");
     if (https.begin(*client, String(url))) {
         int httpCode = https.GET();
@@ -655,7 +811,7 @@ void getParamCompressor() {
                 responseString = https.getString();
             }
         } else {
-            Serial.printf_P(PSTR("getParamCompressor() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR("%s %s\n"), "getParamCompressor() -> Ошибка:", HTTPClient::errorToString(httpCode).c_str());
         }
         https.end();
     } else {
@@ -669,28 +825,28 @@ void getParamCompressor() {
         responseString.clear();
     }
 }
-
+ */
 void getParamsEEPROM() {
     Serial.printf_P(PSTR("%s\n"), "Загрузка настроек из EEPROM");
     uint8_t address = 0;
-    uint8_t szLed = sizeof(ledDescription_t);
+    //    uint8_t szLed = sizeof(ledDescription_t);
     uint8_t szDoser = sizeof(doser_t);
-    ledDescription_t ledFromEEPROM;
+    //   ledDescription_t ledFromEEPROM;
+    /*
+        for (auto& led : leds) {
+            eeprom.eeprom_read<ledDescription_t>(address, &led);
+            // led.led.off = Alarm.alarmRepeat(led.led.HOff, led.led.MOff, 0, ledOffHandler, led);
+            // led.led.on = Alarm.alarmRepeat(led.led.HOn, led.led.MOn, 0, ledOnHandler, led);
 
-    for (auto& led : leds) {
-        eeprom.eeprom_read<ledDescription_t>(address, &led);
-        led.led.off = Alarm.alarmRepeat(led.led.HOff, led.led.MOff, 0, ledOffHandler, led);
-        led.led.on = Alarm.alarmRepeat(led.led.HOn, led.led.MOn, 0, ledOnHandler, led);
-
-        if (shouldRun(led)) {
-            ledOnHandler(led);
-        } else {
-            ledOffHandler(led);
+            if (shouldRun(led)) {
+                // ledOnHandler(led);
+            } else {
+                // ledOffHandler(led);
+            }
+            address += szLed + 1;
         }
-        address += szLed + 1;
-    }
-
-    address -= szLed;
+    */
+    //    address -= szLed;
     for (auto& doser : dosersArray) {
         eeprom.eeprom_read<doser_t>(address, &doser);
         doser.alarm = Alarm.alarmRepeat(doser.hour, doser.minute, 0, doserHandler, doser);
@@ -699,65 +855,56 @@ void getParamsEEPROM() {
     }
 
     address -= szDoser;
-    eeprom.eeprom_read<ledDescription_t>(address, &compressor);
-    compressor.led.on = Alarm.alarmRepeat(compressor.led.HOn, compressor.led.MOn, 0, compressorOnHandler, compressor);
-    compressor.led.off = Alarm.alarmRepeat(compressor.led.HOff, compressor.led.MOff, 0, compressorOffHandler, compressor);
+    // eeprom.eeprom_read<ledDescription_t>(address, &compressor);
+    /* compressor.led.on = Alarm.alarmRepeat(compressor.led.HOn, compressor.led.MOn, 0, compressorOnHandler, compressor);
+     compressor.led.off = Alarm.alarmRepeat(compressor.led.HOff, compressor.led.MOff, 0, compressorOffHandler, compressor);
 
-    if (shouldRun(compressor)) {
-        compressorOnHandler(compressor);
-    } else {
-        compressorOffHandler(compressor);
-    }
+     if (shouldRun(compressor)) {
+         compressorOnHandler(compressor);
+     } else {
+         compressorOffHandler(compressor);
+     }
+     */
 }
 
 void setParamsEEPROM() {
     Serial.printf_P(PSTR("%s\n"), "Запись настроек в EEPROM");
     uint8_t address = 0;
-    uint8_t szLed = sizeof(ledDescription_t);
+    //    uint8_t szLed = sizeof(ledDescription_t);
     uint8_t szDoser = sizeof(doser_t);
 
-    for (auto& led : leds) {
-        eeprom.eeprom_write<ledDescription_t>(address, led);
-        address += szLed + 1;
-    }
-    address -= szLed;
+    /* for (auto& led : leds) {
+         eeprom.eeprom_write<ledDescription_t>(address, led);
+         address += szLed + 1;
+     }*/
+    //  address -= szLed;
     for (auto& doser : dosersArray) {
         eeprom.eeprom_write<doser_t>(address, doser);
         address += szDoser + 1;
     }
     address -= szDoser;
-    eeprom.eeprom_write<ledDescription_t>(address, compressor);
+    //    eeprom.eeprom_write<ledDescription_t>(address, compressor);
 }
 
 void getParamsBackEnd() {
     Serial.printf_P(PSTR("%s\n"), "Чтение параметров из облака");
     getParamLights();
-    getParamDosers();
+    // TODO отрефакторить блок ниже отсюда
+    /* getParamDosers();
     getParamCompressor();
-
-    setParamsEEPROM();
+    setParamsEEPROM(); */
 }
 
-void setInternalClock() {
-    configTime(3 * 3600, 0, "pool.ntp.org", "time.nist.gov");
-    time_t now = time(nullptr);
-    uint8_t tryCount = 0;
-    while (now < 8 * 3600 * 2) {
-        delay(100);
-        now = time(nullptr);
-        tryCount++;
-        if (tryCount > 50) {
-            break;
-        }
-    }
-    struct tm timeinfo {};
-    gmtime_r(&now, &timeinfo);
+void initLocalClock() {
+    configTime(0, 0, ntpServerName);
+    setenv("TZ", "MSK-3MSD,M3.5.0/2,M10.5.0/3", 1);
+    tzset();
 }
 
-void initRealTimeClock() {
+void initDS3231() {
     clockRTC.begin();
-    char* df = clockRTC.dateFormat("H:i:s Y-m-d", clockRTC.getDateTime());
-    Serial.printf_P(PSTR("Время: %s\n"), String(df).c_str());
+    char* df = clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime());
+    Serial.printf_P(PSTR("Время DS3231: %s\n"), String(df).c_str());
     free(df);
 }
 
@@ -778,11 +925,11 @@ void sendNTPpacket(const IPAddress& address) {
 }
 
 void syncTime() {
-    Serial.printf_P(PSTR("Синхронизация времени с %s\n"), ntpServerName);
+    Serial.printf_P(PSTR("Синхронизация DS3231/NTP %s\n"), ntpServerName);
     udp.begin(2390);
     WiFi.hostByName(ntpServerName, timeServerIP);
     sendNTPpacket(timeServerIP);
-    delay(1000);
+    delay(100);
     int cb = udp.parsePacket();
     if (!cb) {
         Serial.printf_P(PSTR(" Нет ответа от сервера времени %s\n"), ntpServerName);
@@ -803,19 +950,19 @@ void syncTime() {
         rtc.dateTimeToStr(str);
         Serial.printf_P(PSTR(" %s\n"), str);
         uint32_t rtcEpoch = rtc.getEpoch();
-        Serial.printf_P(PSTR(" RTC: %lu\n"), rtcEpoch);
-        Serial.printf_P(PSTR(" NTP: %lu\n"), epoch);
+        Serial.printf_P(PSTR(" DS3231: %lu\n"), rtcEpoch);
+        Serial.printf_P(PSTR("    NTP: %lu\n"), epoch);
 
-        if (fabs(rtcEpoch - epoch) > 2) {
-            Serial.printf_P(PSTR(" %s"), "Обновляем RTC (разница между эпохами = ");
-            if (fabs(rtcEpoch - epoch) > 10000) {
-                Serial.printf_P(PSTR(" %s\n"), fabs(epoch - rtcEpoch));
+        if ((rtcEpoch - epoch) > 2) {
+            Serial.printf_P(PSTR(" %s"), "Обновляем DS3231 (разница между эпохами = ");
+            if ((rtcEpoch - epoch) > 10000) {
+                Serial.printf_P(PSTR(" %s\n"), (epoch - rtcEpoch));
             } else {
-                Serial.printf_P(PSTR(" %s\n"), fabs(rtcEpoch - epoch));
+                Serial.printf_P(PSTR(" %s\n"), (rtcEpoch - epoch));
             }
             rtc.setEpoch(epoch);
         } else {
-            Serial.printf_P(PSTR(" %s\n"), "Дата и время RTC не требуют синхронизации");
+            Serial.printf_P(PSTR(" %s\n"), "Дата и время DS3231 не требуют синхронизации");
         }
     }
 }
@@ -830,29 +977,6 @@ void initHTTPClient() {
 #endif
 }
 
-void initCompressor() {
-    compressor.name = "Компрессор";
-    compressor.device = Compressor;
-}
-
-void initLedsArray() {
-    leds[0].name = "One";
-    leds[0].position = ONE;
-    leds[1].name = "Two";
-    leds[1].position = TWO;
-    leds[2].name = "Three";
-    leds[2].position = THREE;
-    leds[3].name = "Four";
-    leds[3].position = FOUR;
-    leds[4].name = "Five";
-    leds[4].position = FIVE;
-    leds[5].name = "Six";
-    leds[5].position = SIX;
-    for (auto& led : leds) {
-        led.device = Light;
-    }
-}
-
 void initDosersArray() {
     dosersArray[0].name = "K";
     dosersArray[0].type = K;
@@ -862,66 +986,10 @@ void initDosersArray() {
     dosersArray[2].type = Fe;
 }
 
-String serializeDevice(const ledDescription_t& device) {
-    String output = "";
-    const int capacity = JSON_OBJECT_SIZE(11);
-    StaticJsonDocument<capacity> doc;
-    doc["enabled"] = device.led.enabled;
-    doc["on"] = String(device.led.HOn) + ":" + String(device.led.MOn);
-    doc["off"] = String(device.led.HOff) + ":" + String(device.led.MOff);
-    doc["pin"] = device.led.pin;
-    doc["state"] = device.led.currentState;
-
-    if (device.device == Light) {
-        doc["name"] = device.name;
-    }
-    serializeJson(doc, output);
-    return output;
-}
-
-void setCurrentState(const ledDescription_t& led) {
-    char* url = nullptr;
-    char* ct = nullptr;
-    char* aj = nullptr;
-    String urlString;
-    String payload;
-    if (led.device == Compressor) {
-        url = getPGMString(urlPutCompressor);
-        urlString = String(url);
-    } else {
-        url = getPGMString(urlPutLight);
-        urlString = String(url) + led.led.objectId;
-    }
-    delPtr(url);
-    ct = getPGMString(contentType);
-    aj = getPGMString(applicationJson);
-    payload = serializeDevice(led);
-    if (https.begin(*client, urlString)) {
-        https.addHeader(String(ct), String(aj));
-        int httpCode = https.PUT(payload);
-        if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
-            String name;
-            (led.device == Compressor) ? name = "" : name = led.name;
-            Serial.printf_P(PSTR("Состояние %s %s установлено в %s\n"), (led.device == Compressor ? "компрессора" : "прожектора"),
-                            (name.c_str()), (led.led.currentState ? "ON" : "OFF"));
-        } else {
-            Serial.printf_P(PSTR("setCurrentState() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
-        }
-        https.end();
-    } else {
-        Serial.printf_P(PSTR("%s\n"), "setCurrentState() -> Невозможно подключиться\n");
-    }
-    delPtr(ct);
-    delPtr(aj);
-}
-
 void putUptime(const String& uptime) {
-    char* url = nullptr;
-    char* ct = nullptr;
-    char* aj = nullptr;
-    url = getPGMString(urlPutUptime);
-    ct = getPGMString(contentType);
-    aj = getPGMString(applicationJson);
+    char* url = getPGMString(urlPutUptime);
+    char* ct = getPGMString(contentType);
+    char* aj = getPGMString(applicationJson);
     if (https.begin(*client, String(url))) {
         String payload;
         payload = R"({"uptime":")" + uptime + "\"}";
@@ -947,12 +1015,9 @@ void uptime() {
 }
 
 void putLastOnline(const String& currentTime) {
-    char* url = nullptr;
-    char* ct = nullptr;
-    char* aj = nullptr;
-    ct = getPGMString(contentType);
-    aj = getPGMString(applicationJson);
-    url = getPGMString(urlPutLastOnline);
+    char* ct = getPGMString(contentType);
+    char* aj = getPGMString(applicationJson);
+    char* url = getPGMString(urlPutLastOnline);
     if (https.begin(*client, String(url))) {
         String payload;
         payload = R"({"lastonline":")" + currentTime + "\"}";
@@ -979,13 +1044,10 @@ void lastOnline() {
 }
 
 void postBoot() {
-    char* url = nullptr;
-    char* ct = nullptr;
-    char* aj = nullptr;
     char* currentTime = clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime());
-    url = getPGMString(urlPostBoot);
-    ct = getPGMString(contentType);
-    aj = getPGMString(applicationJson);
+    char* url = getPGMString(urlPostBoot);
+    char* ct = getPGMString(contentType);
+    char* aj = getPGMString(applicationJson);
     if (https.begin(*client, String(url))) {
         String payload;
         payload = R"({"time":")" + String(currentTime) + "\"}";
@@ -1013,7 +1075,7 @@ void parseJSONUpdateSettings(const String& response, bool& result) {
     DynamicJsonDocument doc(capacity);
     DeserializationError err = deserializeJson(doc, response);
     if (err) {
-        Serial.print(F("parseJSONCompressor -> Ошибка разбора: "));
+        Serial.print(F("Ошибка разбора: "));
         Serial.println(err.c_str());
         result = false;
     } else {
@@ -1027,21 +1089,16 @@ void parseJSONUpdateSettings(const String& response, bool& result) {
 }
 
 void putUpdateSettings() {
-    char* url = nullptr;
-    char* ct = nullptr;
-    char* aj = nullptr;
-    url = getPGMString(urlPutUpdateSettings);
-    ct = getPGMString(contentType);
-    aj = getPGMString(applicationJson);
+    char* url = getPGMString(urlPutUpdateSettings);
+    char* ct = getPGMString(contentType);
+    char* aj = getPGMString(applicationJson);
     if (https.begin(*client, String(url))) {
         String payload = "{\"flag\": false }";
         https.addHeader(String(ct), String(aj));
         int httpCode = https.PUT(payload);
-        if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
-            Serial.printf_P(PSTR("putUpdateSettings() -> Флаг сброшен\n"));
-        } else {
-            Serial.printf_P(PSTR("putUpdateSettings() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
-        }
+        (httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)
+            ? Serial.printf_P(PSTR("%s\n"), "putUpdateSettings() -> Флаг сброшен")
+            : Serial.printf_P(PSTR("%s %s\n"), "putUpdateSettings() -> Ошибка:", HTTPClient::errorToString(httpCode).c_str());
         https.end();
     } else {
         Serial.printf_P(PSTR("%s\n"), "putUpdateSettings() -> Невозможно подключиться\n");
@@ -1052,10 +1109,8 @@ void putUpdateSettings() {
 }
 
 bool getUpdateSettings() {
-    char* url = nullptr;
+    char* url = getPGMString(urlGetUpdateSettings);
     bool flag = false;
-    url = getPGMString(urlGetUpdateSettings);
-    Serial.printf_P(PSTR(" %s\n"), "Запрос на обновление всех настроек");
     if (https.begin(*client, String(url))) {
         int httpCode = https.GET();
         if (httpCode > 0) {
@@ -1079,17 +1134,6 @@ bool getUpdateSettings() {
     return flag;
 }
 
-void printLedsParam() {
-    Serial.printf_P(PSTR("%s\n"), "Настройки прожекторов");
-    for (auto& led : leds) {
-        Serial.printf_P(PSTR(" Вкл-%02d:%02d. Выкл-%02d:%02d. Состояние: %s. Разрешен: %s. PIN: %d\n"), led.led.HOn, led.led.MOn,
-                        led.led.HOff, led.led.MOff, (led.led.currentState ? "включен" : "выключен"),
-                        ((led.led.enabled == true) ? "да" : "нет"), led.led.pin
-
-        );
-    }
-}
-
 void printDosersParam() {
     Serial.printf_P(PSTR("%s\n"), "Настройки дозаторов");
     for (auto& doser : dosersArray) {
@@ -1100,39 +1144,15 @@ void printDosersParam() {
     }
 }
 
-void printCompressorParam() {
-    Serial.printf_P(PSTR("%s\n"), "Настройки компрессора");
-    Serial.printf_P(PSTR(" Вкл-%02d:%02d. Выкл-%02d:%02d. Состояние: %s. Разрешен: %s. PIN: %d\n"), compressor.led.HOn,
-                    compressor.led.MOn, compressor.led.HOff, compressor.led.MOff,
-                    (compressor.led.currentState ? "включен" : "выключен"), (compressor.led.enabled ? "да" : "нет"),
-                    compressor.led.pin
-
-    );
-}
-
-void printParams() {
-    printLedsParam();
-    printDosersParam();
-    printCompressorParam();
-}
-
 void timer1() {
-    char* df = clockRTC.dateFormat("H:i:s", clockRTC.getDateTime());
-    Serial.printf_P(PSTR("Время %s\n"), String(df).c_str());
-    free(df);
+    getTime();
     getSensorsTemperature();
 
     if (getUpdateSettings()) {
+        Serial.printf_P(PSTR("%s\n"), "Будет выполнено обновление всех параметров");
         getParamsBackEnd();
-        printParams();
+        printAllDevices();
         putUpdateSettings();
-    }
-
-    if (!vectorRefLeds.empty()) {
-        for (auto& device : vectorRefLeds) {
-            setCurrentState(device);
-        }
-        vectorRefLeds.clear();
     }
 }
 
@@ -1143,8 +1163,8 @@ String serializeTemperature() {
     char* currentTime = clockRTC.dateFormat("d.m.Y H:i:s", clockRTC.getDateTime());
     String time = String(currentTime);
 
-    doc["sensor1"] = floatToDouble(sensorTemperatureValue1);
-    doc["sensor2"] = floatToDouble(sensorTemperatureValue2);
+    doc["sensor1"] = static_cast<double>(sensorTemperatureValue1);
+    doc["Sensor"] = static_cast<double>(sensorTemperatureValue2);
     doc["time"] = time;
     serializeJson(doc, output);
     delPtr(currentTime);
@@ -1206,32 +1226,27 @@ void timer5() {
 }
 
 void startTimers() {
-    Serial.printf_P(PSTR("%s -> %d\n"), "Таймеры: основные", Alarm.count());
     Alarm.timerRepeat(5 * 60, timer5);
     Alarm.timerRepeat(60, timer1);
-    Serial.printf_P(PSTR("%s -> %d\n"), "Таймеры: основные и прожекторные", Alarm.count());
+    Serial.printf_P(PSTR("%s %d\n"), "Всего таймеров", Alarm.count());
 }
 
 void setup() {
     Serial.begin(115200);
     Serial.println();
-
-    initRealTimeClock();
-    initLedsArray();
+    initDS3231();
+    initMediators();
+    createDevicesAndScheduler();
     initDosersArray();
-    initCompressor();
-
     if (!initWiFi()) {
         getParamsEEPROM();
     } else {
-#ifdef ARDUINO_ARCH_ESP8266
         initHTTPClient();
-#endif
+        initLocalClock();
+        // syncTime();
         postBoot();
         getParamsBackEnd();
-        syncTime();
-        setInternalClock();
-        printParams();
+        printAllDevices();
     }
 
     startTimers();

@@ -32,25 +32,7 @@ template <class T, class... Args>
 typename _Unique_if<T>::_Known_bound make_unique(Args&&...) = delete;
 }  // namespace std_esp32
 #endif
-enum ledPosition { ONE, TWO, THREE, FOUR, FIVE, SIX };
 enum doserType { K, NP, Fe };
-enum deviceType { Light, Compressor };
-typedef struct ledStruct_t {
-    byte HOn, HOff;
-    byte MOn, MOff;
-    byte enabled;
-    bool currentState;
-    AlarmId on, off;
-    byte pin;
-    String objectId;
-} ledStruct;
-
-typedef struct ledDescription_t {
-    ledPosition position;
-    String name;
-    ledStruct_t led;
-    deviceType device;
-} ledDescription;
 
 typedef struct doser_t {
     byte dirPin;
