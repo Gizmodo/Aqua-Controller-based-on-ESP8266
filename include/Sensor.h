@@ -22,8 +22,8 @@ class Sensor {
         _name = std::move(name);
     }
 
-    void setMediator(const Mediator<Sensor>& mMediator) {
-        Sensor::mMediator = mMediator;
+    void setMediator(const Mediator<Sensor>& mediator) {
+        mMediator = mediator;
     }
 
     bool isLight() {
@@ -85,7 +85,7 @@ class Sensor {
     }
 
     uint8_t getMinuteOff() const {
-        return localOff()->tm_min;
+        return gmOff()->tm_min;
     }
 
     uint8_t getHourOnLocal() const {
