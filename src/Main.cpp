@@ -123,8 +123,8 @@ String responseString = "";
 
 //// DEVICES
 
-#define LIGHTS_COUNT (6)             // Кол-во прожекторов
-#define DEVICE_COUNT (LIGHTS_COUNT)  // Кол-во всех устройств (нужно для Alarm'ов)
+#define LIGHTS_COUNT (6)                 // Кол-во прожекторов
+#define DEVICE_COUNT (LIGHTS_COUNT) + 1  // Кол-во всех устройств (нужно для Alarm'ов)
 //// Дозаторы
 doser_t dosersArray[3];
 std::unique_ptr<GBasic> doserK{};
@@ -233,8 +233,32 @@ char* getPGMString(PGM_P pgm) {
 
 void callbackCompressor(Sensor device) {
     Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
-    // url = getPGMString(urlPutCompressor);
-    // urlString = String(url);
+    char* url = nullptr;
+    char* ct = nullptr;
+    char* aj = nullptr;
+    String urlString;
+    String payload;
+    url = getPGMString(urlPutCompressor);
+    urlString = String(url);
+
+    delPtr(url);
+    ct = getPGMString(contentType);
+    aj = getPGMString(applicationJson);
+    payload = String(device.serialize().c_str());
+    if (https.begin(*client, urlString)) {
+        https.addHeader(String(ct), String(aj));
+        int httpCode = https.PUT(payload);
+        if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
+            Serial.printf_P(PSTR("%s состояние %s\n"), device.getName().c_str(), (device.getState() ? "ON" : "OFF"));
+        } else {
+            Serial.printf_P(PSTR("%s: %s\n"), "Ошибка", HTTPClient::errorToString(httpCode).c_str());
+        }
+        https.end();
+    } else {
+        Serial.printf_P(PSTR("%s\n"), "Невозможно подключиться\n");
+    }
+    delPtr(ct);
+    delPtr(aj);
 }
 
 void callbackFlow(Sensor device) {
@@ -320,6 +344,9 @@ void createDevicesAndScheduler() {
         schedule.setDevice(&(lights.at(i)));
         schedules.at(i) = schedule;
     }
+    auto schedule = schedules.at(6);
+    schedule.setDevice(compressor);
+    schedules.at(6) = schedule;
 }
 
 void printDevice(Sensor* device) {
@@ -329,7 +356,6 @@ void printDevice(Sensor* device) {
 void printAllDevices() {
     Serial.printf_P(PSTR("%s\n"), "Вывод информации об устройствах:");
     /*
-      printDevice(compressor);
       printDevice(flow);
       printDevice(pump);
       printDevice(feeder);
@@ -340,6 +366,7 @@ void printAllDevices() {
     for (auto light : lights) {
         printDevice(&light);
     }
+    printDevice(compressor);
 }
 
 float getSensorTemperature(const uint8_t* sensorAddress) {
@@ -643,64 +670,37 @@ void parseJSONDosers(const String& response) {
         doc.clear();
     }
 }
-/*
+
 void parseJSONCompressor(const String& response) {
-    DynamicJsonDocument doc(300);
+    DynamicJsonDocument doc(250);
     DeserializationError err = deserializeJson(doc, response);
     if (err) {
-        Serial.print(F("parseJSONCompressor -> Ошибка разбора: "));
+        Serial.print(F(" Ошибка разбора: "));
         Serial.println(err.c_str());
         return;
     } else {
         JsonArray array = doc.as<JsonArray>();
         for (JsonObject obj : array) {
             boolean enabled = obj["enabled"];
-            const char* off = obj["off"];
-            const char* on = obj["on"];
+            std::string off = obj["off"];
+            std::string on = obj["on"];
             uint8_t pin = obj["pin"];
             boolean state = obj["state"];
-            char* dupOn = strdup(on);
-            char* dupOff = strdup(off);
+            std::string objectId = obj["objectId"];
+            off = off.substr(0, 10);
+            on = on.substr(0, 10);
 
-            for (auto&& device : devicesArray) {
-                if (device.getType() == Device::Compressor) {
-                    device.setState(state);
-                    device.setEnabled(enabled);
-                    device.setPin(pin);
-                    device.setTimeOn(dupOn);
-                    device.setTimeOff(dupOff);
-                    for (auto& i : schedules) {
-                        auto deviceItem = i.getDevice();
-                        auto schedulerItem = i;
-                        Serial.printf_P(PSTR(" Вкл-%02d:%02d. Выкл-%02d:%02d. Состояние: %s. Разрешен: %s. PIN: %d\n"),
-                                        i.getDevice()->getHourOn(), i.getDevice()->getMinuteOn(), i.getDevice()->getHourOff(),
-                                        i.getDevice()->getMinuteOff(), (i.getDevice()->getState() ? "включен" : "выключен"),
-                                        (i.getDevice()->getEnabled() ? "да" : "нет"), i.getDevice()->getPin());
-
-                        auto alarmOn =
-                            Alarm.alarmRepeat(deviceItem->getHourOn(), deviceItem->getMinuteOn(), 0, deviceOnHandler, deviceItem);
-                        auto alarmOff = Alarm.alarmRepeat(deviceItem->getHourOff(), deviceItem->getMinuteOff(), 0, deviceOffHandler,
-                                                          deviceItem);
-                        schedulerItem.setOn(alarmOn);
-                        schedulerItem.setOff(alarmOff);
-
-                        if (deviceItem->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) {
-                                deviceOnHandler(deviceItem);
-                            } else {
-                                deviceOffHandler(deviceItem);
-                            }
-                    }
-                    break;
-                }
-            }
-            free(dupOn);
-            free(dupOff);
+            compressor->setState(state);
+            compressor->setEnabled(enabled);
+            compressor->setPin(pin);
+            compressor->setObjectID(objectId);
+            compressor->setOn(static_cast<time_t>(std::stoul(on)));
+            compressor->setOff(static_cast<time_t>(std::stoul(off)));
         }
         doc.shrinkToFit();
         doc.clear();
     }
 }
- */
 
 void setHostName() {
 #ifdef ARDUINO_ARCH_ESP8266
@@ -735,6 +735,24 @@ boolean initWiFi() {
 void attachLightScheduler() {
     for (size_t i = 0; i < DEVICE_COUNT; i++) {
         if (!schedules.at(i).getDevice()->isLight()) {
+            continue;
+        }
+        auto schedule = schedules.at(i);
+        auto sensor = schedule.getDevice();
+        auto alarmOn = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), 0, deviceOnHandler, sensor);
+        auto alarmOff = Alarm.alarmRepeat(sensor->getHourOff(), sensor->getMinuteOff(), 0, deviceOffHandler, sensor);
+
+        schedule.setOn(alarmOn);
+        schedule.setOff(alarmOff);
+        schedules.at(i) = schedule;
+        (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? deviceOnHandler(sensor)
+                                                                                        : deviceOffHandler(sensor);
+    }
+}
+
+void attachCompressorScheduler() {
+    for (size_t i = 0; i < DEVICE_COUNT; i++) {
+        if (!schedules.at(i).getDevice()->isCompressor()) {
             continue;
         }
         auto schedule = schedules.at(i);
@@ -800,9 +818,9 @@ void getParamDosers() {
         responseString.clear();
     }
 }
-
+*/
 void getParamCompressor() {
-    char* url  = getPGMString(urlCompressor);
+    char* url = getPGMString(urlCompressor);
     Serial.printf_P(PSTR(" %s\n"), "Компрессор...");
     if (https.begin(*client, String(url))) {
         int httpCode = https.GET();
@@ -811,21 +829,22 @@ void getParamCompressor() {
                 responseString = https.getString();
             }
         } else {
-            Serial.printf_P(PSTR("%s %s\n"), "getParamCompressor() -> Ошибка:", HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR(" %s %s\n"), "Ошибка:", HTTPClient::errorToString(httpCode).c_str());
         }
         https.end();
     } else {
-        Serial.printf_P(PSTR("%s\n"), "getParamCompressor() -> Невозможно подключиться\n");
+        Serial.printf_P(PSTR(" %s\n"), "Невозможно подключиться\n");
     }
     delPtr(url);
     if (responseString.isEmpty()) {
-        Serial.printf_P(PSTR(" %s\n"), "getParamCompressor() -> Ответ пустой");
+        Serial.printf_P(PSTR(" %s\n"), "Ответ пустой");
     } else {
         parseJSONCompressor(responseString);
         responseString.clear();
+        attachCompressorScheduler();
     }
 }
- */
+
 void getParamsEEPROM() {
     Serial.printf_P(PSTR("%s\n"), "Загрузка настроек из EEPROM");
     uint8_t address = 0;
@@ -889,9 +908,10 @@ void setParamsEEPROM() {
 void getParamsBackEnd() {
     Serial.printf_P(PSTR("%s\n"), "Чтение параметров из облака");
     getParamLights();
+    getParamCompressor();
     // TODO отрефакторить блок ниже отсюда
     /* getParamDosers();
-    getParamCompressor();
+
     setParamsEEPROM(); */
 }
 

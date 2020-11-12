@@ -30,6 +30,10 @@ class Sensor {
         return (this->_type == SensorType::light);
     }
 
+    bool isCompressor() {
+        return (this->_type == SensorType::compressor);
+    }
+
     void setStateNotify(bool state) {
         this->_state = state;
         mMediator.Send("1", *this);
@@ -136,6 +140,7 @@ class Sensor {
 
     std::string serialize() {
         std::string output;
+        
         if (_type == light) {
             const int capacity = JSON_OBJECT_SIZE(7);
             StaticJsonDocument<capacity> doc;
@@ -145,6 +150,17 @@ class Sensor {
             doc["pin"] = this->_pin;
             doc["state"] = this->_state;
             doc["name"] = this->_name.c_str();
+            serializeJson(doc, output);
+        }
+
+        if (_type == compressor) {
+            const int capacity = JSON_OBJECT_SIZE(6);
+            StaticJsonDocument<capacity> doc;
+            doc["enabled"] = this->_enabled;
+            doc["on"] = std::stoull(std::to_string(_on) + "000");
+            doc["off"] = std::stoull(std::to_string(_off) + "000");
+            doc["pin"] = this->_pin;
+            doc["state"] = this->_state;
             serializeJson(doc, output);
         }
         return output;
