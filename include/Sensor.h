@@ -38,6 +38,10 @@ class Sensor {
         return (this->_type == SensorType::flow);
     }
 
+    bool isCO2() {
+        return (this->_type == SensorType::co2);
+    }
+
     void setStateNotify(bool state) {
         this->_state = state;
         mMediator.Send("1", *this);
@@ -144,7 +148,7 @@ class Sensor {
 
     std::string serialize() {
         std::string output;
-        
+
         if (_type == light) {
             const int capacity = JSON_OBJECT_SIZE(7);
             StaticJsonDocument<capacity> doc;
@@ -157,7 +161,7 @@ class Sensor {
             serializeJson(doc, output);
         }
 
-        if ((_type == compressor) || (_type == flow)) {
+        if ((_type == compressor) || (_type == flow)|| (_type == co2)) {
             const int capacity = JSON_OBJECT_SIZE(6);
             StaticJsonDocument<capacity> doc;
             doc["enabled"] = this->_enabled;
