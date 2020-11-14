@@ -174,7 +174,7 @@ class Sensor {
         return output;
     }
 
-    bool shouldRun(uint8 hour, uint8_t minute) const {
+    bool shouldRun(uint8_t hour, uint8_t minute) const {
         uint16_t minutes = hour * 60 + minute;
         uint16_t minutesOn = getHourOnLocal() * 60 + getMinuteOnLocal();
         uint16_t minutesOff = getHourOffLocal() * 60 + getMinuteOffLocal();
