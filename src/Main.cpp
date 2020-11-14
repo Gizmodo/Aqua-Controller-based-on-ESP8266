@@ -3,6 +3,7 @@
 #include <ctime>
 #include <memory>
 #include <vector>
+#include "Doser.h"
 #include "Mediator.h"
 #include "Sensor.h"
 
@@ -138,6 +139,8 @@ String responseString = "";
 #define LIGHTS_COUNT (6)                 // Кол-во прожекторов
 #define DEVICE_COUNT (LIGHTS_COUNT) + 3  // Кол-во всех устройств (нужно для Alarm'ов)
 //// Дозаторы
+#define DOSERS_COUNT (3)  // Кол-во прожекторов
+
 doser_t dosersArray[3];
 std::unique_ptr<GBasic> doserK{};
 std::unique_ptr<GBasic> doserNP{};
@@ -162,7 +165,7 @@ Mediator<Sensor> medHeater;
 //Дозатор
 // TODO сменить класс Sensor на определенный класс данного устройства
 Mediator<Sensor> medDoser;
-
+Mediator<Doser> medDoser_;
 //-----------------------------------------
 //Устройства
 Sensor* compressor;
@@ -173,6 +176,9 @@ Sensor* co2;
 Sensor* heater;
 Sensor* doserNew;
 
+std::array<Sensor, DOSERS_COUNT> dosers{Doser(medDoser_, "", Doser::Fe), Doser(medDoser_, "", Doser::K),
+                                        Doser(medDoser_, "", Doser::NP)};
+
 std::array<Sensor, LIGHTS_COUNT> lights{Sensor(medLight, "", Sensor::light), Sensor(medLight, "", Sensor::light),
                                         Sensor(medLight, "", Sensor::light), Sensor(medLight, "", Sensor::light),
                                         Sensor(medLight, "", Sensor::light), Sensor(medLight, "", Sensor::light)};
@@ -181,7 +187,10 @@ std::array<Scheduler, DEVICE_COUNT> schedules;
 //-----------------------------------------
 
 //// METHODS
-
+void test(){
+    auto dos=dosers.at(0);
+    dos.
+}
 void getTime() {
     char* strDateTime = clockRTC.dateFormat("H:i:s", clockRTC.getDateTime());
     Serial.printf_P(PSTR("Время %s\n"), String(strDateTime).c_str());

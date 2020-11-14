@@ -22,6 +22,11 @@ class Sensor {
         _name = std::move(name);
     }
 
+    Sensor(std::string name, SensorType type) {
+        _name = std::move(name);
+        _type=type;
+    }
+
     void setMediator(const Mediator<Sensor>& mediator) {
         mMediator = mediator;
     }
