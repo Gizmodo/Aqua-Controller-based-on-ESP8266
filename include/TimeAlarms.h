@@ -8,7 +8,7 @@
 #if defined(__AVR__)
 #define dtNBR_ALARMS 6  // max is 255
 #elif defined(ESP8266) || defined(ARDUINO_ARCH_ESP32)
-#define dtNBR_ALARMS 30  // for esp8266 chip - max is 255
+#define dtNBR_ALARMS 29  // for esp8266 chip - max is 255
 #else
 #define dtNBR_ALARMS 12  // assume non-AVR has more memory
 #endif
@@ -80,11 +80,9 @@ typedef AlarmID_t AlarmId;  // Arduino friendly name
 #define AlarmHMS(_hr_, _min_, _sec_) ((_hr_)*SECS_PER_HOUR + (_min_)*SECS_PER_MIN + (_sec_))
 
 #include <functional>
-#include "AquaTypes.h"
 #include "Scheduler.h"
 
 typedef std::function<void()> OnTick_t;
-typedef std::function<void(doser_t&)> OnTickDoser_t;
 typedef std::function<void(Sensor*)> onTickDevice_t;
 
 // class defining an alarm instance, only used by dtAlarmsClass
@@ -92,13 +90,11 @@ class AlarmClass {
    public:
     AlarmClass();
     OnTick_t onTickHandler;
-    OnTickDoser_t onTickDoserHandler;
     onTickDevice_t onTickDeviceHandler;
     void updateNextTrigger();
     time_t value;
     time_t nextTrigger;
     AlarmMode_t Mode;
-    doser_t param_doser;
     Sensor* param_Device = nullptr;
 };
 
@@ -110,7 +106,6 @@ class TimeAlarmsClass {
     bool isServicing;
     uint8_t servicedAlarmId;  // the alarm currently being serviced
     AlarmID_t create(time_t value, OnTick_t onTickHandler, bool isOneShot, dtAlarmPeriod_t alarmType);
-    AlarmID_t createdoser(time_t value, OnTickDoser_t onTickDoserHandler, bool isOneShot, dtAlarmPeriod_t alarmType, doser_t param);
     AlarmID_t createBaseDevice(time_t value,
                                onTickDevice_t onTickDeviceHandler,
                                bool isOneHsot,
@@ -144,11 +139,6 @@ class TimeAlarmsClass {
             return dtINVALID_ALARM_ID;
         return create(value, onTickHandler, false, dtDailyAlarm);
     }
-    AlarmID_t alarmRepeat(time_t value, OnTickDoser_t onTickDoserHandler, doser param) {
-        if ((unsigned)value > SECS_PER_DAY)
-            return dtINVALID_ALARM_ID;
-        return createdoser(value, onTickDoserHandler, false, dtDailyAlarm, param);
-    }
     AlarmID_t alarmRepeat(time_t value, onTickDevice_t onTickBaseDeviceHandler, Sensor* param) {
         if ((unsigned)value > SECS_PER_DAY)
             return dtINVALID_ALARM_ID;
@@ -156,9 +146,6 @@ class TimeAlarmsClass {
     }
     AlarmID_t alarmRepeat(const int H, const int M, const int S, OnTick_t onTickHandler) {
         return alarmRepeat(AlarmHMS(H, M, S), onTickHandler);
-    }
-    AlarmID_t alarmRepeat(const int H, const int M, const int S, OnTickDoser_t onTickDoserHandler, doser param) {
-        return alarmRepeat(AlarmHMS(H, M, S), onTickDoserHandler, param);
     }
     AlarmID_t alarmRepeat(const int H, const int M, const int S, onTickDevice_t onTickBaseDeviceHandler, Sensor* param) {
         return alarmRepeat(AlarmHMS(H, M, S), onTickBaseDeviceHandler, param);
@@ -181,11 +168,6 @@ class TimeAlarmsClass {
     AlarmID_t timerRepeat(const int H, const int M, const int S, OnTick_t onTickHandler) {
         return timerRepeat(AlarmHMS(H, M, S), onTickHandler);
     }
-    AlarmID_t timerRepeat(time_t value, OnTickDoser_t onTickDoserHandler, doser param) {
-        if (value <= 0)
-            return dtINVALID_ALARM_ID;
-        return createdoser(value, onTickDoserHandler, false, dtTimer, param);
-    }
     AlarmID_t timerRepeat(time_t value, onTickDevice_t onTickBaseDeviceHandler, Sensor* param) {
         if (value <= 0)
             return dtINVALID_ALARM_ID;
@@ -193,9 +175,6 @@ class TimeAlarmsClass {
     }
     AlarmID_t timerRepeat(const int H, const int M, const int S, onTickDevice_t onTickBaseDeviceHandler, Sensor* param) {
         return timerRepeat(AlarmHMS(H, M, S), onTickBaseDeviceHandler, param);
-    }
-    AlarmID_t timerRepeat(const int H, const int M, const int S, OnTickDoser_t onTickDoserHandler, doser param) {
-        return timerRepeat(AlarmHMS(H, M, S), onTickDoserHandler, param);
     }
     void delay(unsigned long ms);
 

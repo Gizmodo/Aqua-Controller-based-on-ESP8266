@@ -24,7 +24,7 @@ class Sensor {
 
     Sensor(std::string name, SensorType type) {
         _name = std::move(name);
-        _type=type;
+        _type = type;
     }
 
     void setMediator(const Mediator<Sensor>& mediator) {
@@ -47,6 +47,10 @@ class Sensor {
         return (this->_type == SensorType::co2);
     }
 
+    bool isDoser() {
+        return (this->_type == SensorType::doser);
+    }
+
     void setStateNotify(bool state) {
         this->_state = state;
         mMediator.Send("1", *this);
@@ -64,7 +68,6 @@ class Sensor {
     void setPin(uint8_t pin) {
         _pin = pin;
     }
-
     void setState(bool b) {
         _state = b;
     }
@@ -166,7 +169,7 @@ class Sensor {
             serializeJson(doc, output);
         }
 
-        if ((_type == compressor) || (_type == flow)|| (_type == co2)) {
+        if ((_type == compressor) || (_type == flow) || (_type == co2)) {
             const int capacity = JSON_OBJECT_SIZE(6);
             StaticJsonDocument<capacity> doc;
             doc["enabled"] = this->_enabled;
