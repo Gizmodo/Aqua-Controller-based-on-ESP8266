@@ -1,3 +1,6 @@
+#pragma clang diagnostic push
+#pragma ide diagnostic ignored "modernize-use-nodiscard"
+#pragma ide diagnostic ignored "OCUnusedGlobalDeclarationInspection"
 #ifndef FACTORYMETHOD_DOSER_H
 #define FACTORYMETHOD_DOSER_H
 
@@ -6,12 +9,36 @@
 #include <utility>
 #include "Mediator.h"
 #include "Sensor.h"
+#define UNDEFINED (-1)
 
 class Doser : public Sensor {
    public:
     enum DoserType { K, NP, Fe };
 
-    Doser(Mediator<Doser> mediator, std::string name, DoserType doserType) : Sensor(name, SensorType::doser) {
+   private:
+    // TODO Mediator unused - doserHandler do the same things!!!
+    Mediator<Doser> mMediator;
+    uint8_t _dirPin = UNDEFINED;
+    uint8_t _stepPin = UNDEFINED;
+    uint8_t _enablePin = UNDEFINED;
+    uint8_t _sleepPin = UNDEFINED;
+    DoserType _doserType;
+    uint8_t _volume = UNDEFINED;
+    uint8_t _mode0_pin = UNDEFINED;
+    uint8_t _mode1_pin = UNDEFINED;
+    uint8_t _mode2_pin = UNDEFINED;
+    uint8_t _index = UNDEFINED;
+    uint16_t _steps = UNDEFINED;
+
+    static std::string tail(std::string const& source, size_t const length) {
+        if (length >= source.size()) {
+            return source;
+        }
+        return source.substr(source.size() - length);
+    }
+
+   public:
+    Doser(Mediator<Doser> mediator, std::string name, DoserType doserType) : Sensor(std::move(name), SensorType::doser) {
         mMediator = mediator;
         _doserType = doserType;
     };
@@ -22,7 +49,6 @@ class Doser : public Sensor {
         mMediator = mediator;
     }
 
-   public:
     void setEnable(bool value) {
         this->setEnabled(value);
         mMediator.Send("1", *this);
@@ -112,19 +138,24 @@ class Doser : public Sensor {
         return _mode2_pin;
     };
 
-   private:
-    Mediator<Doser> mMediator;
-    uint8_t _dirPin;
-    uint8_t _stepPin;
-    uint8_t _enablePin;
-    uint8_t _sleepPin;
-    DoserType _doserType;
-    uint8_t _volume;
-    uint8_t _mode0_pin;
-    uint8_t _mode1_pin;
-    uint8_t _mode2_pin;
-    uint8_t _index;
-    uint16_t _steps;
+    std::string DoserInfo() {
+        const uint8_t sz = 10;
+        char bufferOn[sz];
+        time_t time1 = this->getOn();
+        const tm* tmOn = localtime(&time1);
+        strftime(bufferOn, sz, "%T", tmOn);
+
+        std::string buffer;
+        buffer = "[Название] " + this->getName() + " [Тип] Дозатор" + " [ON] " + bufferOn + " [dir] " +
+                 std::to_string(this->getDirPin()) + " [enable] " + std::to_string(this->getEnablePin()) + " [index] " +
+                 std::to_string(this->getIndex()) + " [m0] " + std::to_string(this->getMode0Pin()) + " [m1] " +
+                 std::to_string(this->getMode1Pin()) + " [m2] " + std::to_string(this->getMode2Pin()) + " [sleep] " +
+                 std::to_string(this->getSleepPin()) + " [step] " + std::to_string(this->getStepPin()) + " [steps] " +
+                 std::to_string(this->getSteps()) + " [ENABLED] " + std::to_string(this->getEnabled()) + " [OBJECTID] ..." +
+                 tail(this->getObjectID(), 5);
+        return buffer;
+    }
 };
 
 #endif  // FACTORYMETHOD_DOSER_H
+#pragma clang diagnostic pop

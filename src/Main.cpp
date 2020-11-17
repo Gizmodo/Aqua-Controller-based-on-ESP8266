@@ -20,15 +20,15 @@
 #include <OneWire.h>  // OneWire
 #include <WiFiClientSecure.h>
 #include <WiFiUdp.h>
-#include "DS3231.h"            // Чип RTC
-#include "GBasic.h"            // DRV8825
-#include "RtcDS3231.h"         // Время
-#include "Shiftduino.h"        // Сдвиговый регистр
-#include "TimeAlarms.h"        // Таймеры
-#include "uEEPROMLib.h"        // EEPROM
+#include "DS3231.h"      // Чип RTC
+#include "GBasic.h"      // DRV8825
+#include "RtcDS3231.h"   // Время
+#include "Shiftduino.h"  // Сдвиговый регистр
+#include "TimeAlarms.h"  // Таймеры
+//#include "uEEPROMLib.h"        // EEPROM
 #include "uptime_formatter.h"  // Время работы
 //// EEPROM
-uEEPROMLib eeprom(0x57);
+// uEEPROMLib eeprom(0x57);
 //// Сдвиговый регистр
 #define dataPin 10
 #define clockPin 14
@@ -243,24 +243,6 @@ void getTime() {
     }
 }
 
-std::string string_format(const std::string& fmt_str, ...) {
-    int final_n, n = ((int)fmt_str.size()) * 2;
-    std::unique_ptr<char[]> formatted;
-    va_list ap;
-    while (true) {
-        formatted.reset(new char[n]);
-        strcpy(&formatted[0], fmt_str.c_str());
-        va_start(ap, fmt_str);
-        final_n = vsnprintf(&formatted[0], n, fmt_str.c_str(), ap);
-        va_end(ap);
-        if (final_n < 0 || final_n >= n)
-            n += abs(final_n - n + 1);
-        else
-            break;
-    }
-    return std::string(formatted.get());
-}
-
 void delPtr(const char* p) {
     delete[] p;
 }
@@ -280,7 +262,7 @@ char* getPGMString(PGM_P pgm) {
 }
 
 void callbackCompressor(Sensor device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
+    Serial.printf_P(PSTR("%s %s\n"), "Callback", device.getName().c_str());
     char* url = nullptr;
     char* ct = nullptr;
     char* aj = nullptr;
@@ -310,7 +292,7 @@ void callbackCompressor(Sensor device) {
 }
 
 void callbackFlow(Sensor device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
+    Serial.printf_P(PSTR("%s %s\n"), "Callback", device.getName().c_str());
     char* url = nullptr;
     char* ct = nullptr;
     char* aj = nullptr;
@@ -340,11 +322,11 @@ void callbackFlow(Sensor device) {
 }
 
 void callbackPump(Sensor device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
+    Serial.printf_P(PSTR("%s %s\n"), "Callback", device.getName().c_str());
 }
 
 void callbackLight(Sensor device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
+    Serial.printf_P(PSTR("%s %s\n"), "Callback", device.getName().c_str());
     char* url = nullptr;
     char* ct = nullptr;
     char* aj = nullptr;
@@ -374,11 +356,11 @@ void callbackLight(Sensor device) {
 }
 
 void callbackFeeder(Sensor device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
+    Serial.printf_P(PSTR("%s %s\n"), "Callback", device.getName().c_str());
 }
 
 void callbackCO2(Sensor device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
+    Serial.printf_P(PSTR("%s %s\n"), "Callback", device.getName().c_str());
     char* url = nullptr;
     char* ct = nullptr;
     char* aj = nullptr;
@@ -408,11 +390,11 @@ void callbackCO2(Sensor device) {
 }
 
 void callbackHeater(Sensor device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
+    Serial.printf_P(PSTR("%s %s\n"), "Callback", device.getName().c_str());
 }
 
 void callbackDoser(Doser device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
+    Serial.printf_P(PSTR("%s %s\n"), "Callback", device.getName().c_str());
 }
 
 void initMediators() {
@@ -435,7 +417,8 @@ void createDevicesAndScheduler() {
     heater = new Sensor(medHeater, "Нагреватель", Sensor::heater);
 
     for (int i = 0; i < LIGHTS_COUNT; ++i) {
-        std::string buffer = string_format("%s %d", "Прожектор", i + 1);
+        // std::string buffer1 = string_format("%s %d", "Прожектор", i + 1);
+        std::string buffer = "Прожектор " + std::to_string(i + 1);
         auto item = lights.at(i);
         item.setName(buffer);
         item.setMediator(medLight);
@@ -464,14 +447,19 @@ void createDevicesAndScheduler() {
         auto item = dosers.at(i);
         item.setMediator(medDoser);
         dosers.at(i) = item;
-        auto schedule = schedules.at(i + 9);
-        schedule.setDevice(&(dosers.at(i)));
-        schedules.at(i + 9) = schedule;
+        auto schedule_ = schedules.at(i + 9);
+        schedule_.setDevice(&(dosers.at(i)));
+        schedules.at(i + 9) = schedule_;
     }
 }
 
 void printDevice(Sensor* device) {
-    Serial.printf_P(PSTR("%s\n"), device->sensorInfo().c_str());
+    if (device->isDoser()) {
+        auto doser = static_cast<Doser*>(device);
+        Serial.printf_P(PSTR("%s\n"), doser->DoserInfo().c_str());
+    } else {
+        Serial.printf_P(PSTR("%s\n"), device->sensorInfo().c_str());
+    }
 }
 
 void printAllDevices() {
@@ -479,9 +467,7 @@ void printAllDevices() {
     /*
       printDevice(pump);
       printDevice(feeder);
-      printDevice(co2);
       printDevice(heater);
-      printDevice(doserNew);
 */
     for (auto light : lights) {
         printDevice(&light);
@@ -489,6 +475,10 @@ void printAllDevices() {
     printDevice(compressor);
     printDevice(flow);
     printDevice(co2);
+
+    for (auto doser : dosers) {
+        printDevice(&doser);
+    }
 }
 
 float getSensorTemperature(const uint8_t* sensorAddress) {
@@ -679,14 +669,6 @@ void deviceOffHandler(Sensor* device) {
         Alarm.disable(findAlarmByDevice(device, true));
         Alarm.disable(findAlarmByDevice(device, false));
     }
-}
-
-void splitTime(char* payload, uint8_t& hour, uint8_t& minute) {
-    char* split = strtok(payload, ":");
-    char* pEnd;
-    hour = strtol(split, &pEnd, 10);
-    split = strtok(nullptr, ":");
-    minute = strtol(split, &pEnd, 10);
 }
 
 void parseJSONLights(const String& response) {
@@ -999,7 +981,7 @@ void attachDosersScheduler() {
             continue;
         }
         auto schedule = schedules.at(i);
-        Doser* sensor = static_cast<Doser*>(schedule.getDevice());
+        auto sensor = static_cast<Doser*>(schedule.getDevice());
 
         emptyDoser = std::make_unique<GBasic>(sensor->getSteps(), sensor->getDirPin(), sensor->getStepPin(), sensor->getEnablePin(),
                                               sensor->getMode0Pin(), sensor->getMode1Pin(), sensor->getMode2Pin(), shiftRegister,
@@ -1158,38 +1140,38 @@ void getParamCO2() {
         attachCO2Scheduler();
     }
 }
-
+/*
 void getParamsEEPROM() {
-    Serial.printf_P(PSTR("%s\n"), "Загрузка настроек из EEPROM");
-    uint8_t address = 0;
-    //    uint8_t szLed = sizeof(ledDescription_t);
-    // uint8_t szDoser = sizeof(doser_t);
-    //   ledDescription_t ledFromEEPROM;
-    /*
-        for (auto& led : leds) {
-            eeprom.eeprom_read<ledDescription_t>(address, &led);
-            // led.led.off = Alarm.alarmRepeat(led.led.HOff, led.led.MOff, 0, ledOffHandler, led);
-            // led.led.on = Alarm.alarmRepeat(led.led.HOn, led.led.MOn, 0, ledOnHandler, led);
+   Serial.printf_P(PSTR("%s\n"), "Загрузка настроек из EEPROM");
+   uint8_t address = 0;
+   //    uint8_t szLed = sizeof(ledDescription_t);
+   // uint8_t szDoser = sizeof(doser_t);
+   //   ledDescription_t ledFromEEPROM;
 
-            if (shouldRun(led)) {
-                // ledOnHandler(led);
-            } else {
-                // ledOffHandler(led);
-            }
-            address += szLed + 1;
-        }
-    */
+       for (auto& led : leds) {
+           eeprom.eeprom_read<ledDescription_t>(address, &led);
+           // led.led.off = Alarm.alarmRepeat(led.led.HOff, led.led.MOff, 0, ledOffHandler, led);
+           // led.led.on = Alarm.alarmRepeat(led.led.HOn, led.led.MOn, 0, ledOnHandler, led);
+
+           if (shouldRun(led)) {
+               // ledOnHandler(led);
+           } else {
+               // ledOffHandler(led);
+           }
+           address += szLed + 1;
+       }
+
     //    address -= szLed;
-    /* for (auto& doser : dosersArray) {
+    for (auto& doser : dosersArray) {
          eeprom.eeprom_read<doser_t>(address, &doser);
          doser.alarm = Alarm.alarmRepeat(doser.hour, doser.minute, 0, doserOnHandler, doser);
          // TODO проверить событие не выполнялось ли уже хотя это чтение настроек
          address += szDoser + 1;
      }
- */
+
     // address -= szDoser;
     // eeprom.eeprom_read<ledDescription_t>(address, &compressor);
-    /* compressor.led.on = Alarm.alarmRepeat(compressor.led.HOn, compressor.led.MOn, 0, compressorOnHandler, compressor);
+     compressor.led.on = Alarm.alarmRepeat(compressor.led.HOn, compressor.led.MOn, 0, compressorOnHandler, compressor);
      compressor.led.off = Alarm.alarmRepeat(compressor.led.HOff, compressor.led.MOff, 0, compressorOffHandler, compressor);
 
      if (shouldRun(compressor)) {
@@ -1197,28 +1179,26 @@ void getParamsEEPROM() {
      } else {
          compressorOffHandler(compressor);
      }
-     */
 }
-
 void setParamsEEPROM() {
     Serial.printf_P(PSTR("%s\n"), "Запись настроек в EEPROM");
     uint8_t address = 0;
     //    uint8_t szLed = sizeof(ledDescription_t);
     // uint8_t szDoser = sizeof(doser_t);
 
-    /* for (auto& led : leds) {
+    for (auto& led : leds) {
          eeprom.eeprom_write<ledDescription_t>(address, led);
          address += szLed + 1;
-     }*/
+     }
     //  address -= szLed;
-    /*for (auto& doser : dosersArray) {
+    for (auto& doser : dosersArray) {
         eeprom.eeprom_write<doser_t>(address, doser);
         address += szDoser + 1;
-    }*/
+    }
     // address -= szDoser;
     //    eeprom.eeprom_write<ledDescription_t>(address, compressor);
 }
-
+*/
 void getParamsBackEnd() {
     Serial.printf_P(PSTR("%s\n"), "Чтение параметров из облака");
     getParamLights();
@@ -1558,7 +1538,7 @@ void setup() {
     initMediators();
     createDevicesAndScheduler();
     if (!initWiFi()) {
-        getParamsEEPROM();
+        // getParamsEEPROM();
     } else {
         initHTTPClient();
         initLocalClock();
