@@ -3,6 +3,7 @@
 #include <ctime>
 #include <memory>
 #include <vector>
+#include "Doser.h"
 #include "Mediator.h"
 #include "Sensor.h"
 
@@ -19,15 +20,15 @@
 #include <OneWire.h>  // OneWire
 #include <WiFiClientSecure.h>
 #include <WiFiUdp.h>
-#include "DS3231.h"            // Чип RTC
-#include "GBasic.h"            // DRV8825
-#include "RtcDS3231.h"         // Время
-#include "Shiftduino.h"        // Сдвиговый регистр
-#include "TimeAlarms.h"        // Таймеры
-#include "uEEPROMLib.h"        // EEPROM
+#include "DS3231.h"      // Чип RTC
+#include "GBasic.h"      // DRV8825
+#include "RtcDS3231.h"   // Время
+#include "Shiftduino.h"  // Сдвиговый регистр
+#include "TimeAlarms.h"  // Таймеры
+//#include "uEEPROMLib.h"        // EEPROM
 #include "uptime_formatter.h"  // Время работы
 //// EEPROM
-uEEPROMLib eeprom(0x57);
+// uEEPROMLib eeprom(0x57);
 //// Сдвиговый регистр
 #define dataPin 10
 #define clockPin 14
@@ -48,8 +49,8 @@ const char urlLights[] PROGMEM = {
     "Light?property=enabled&property=name&property=off&property=on&property=pin&property=state"};
 const char urlDosers[] PROGMEM = {
     "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/"
-    "Doser?property=dirPin&property=enablePin&property=index&property=mode0_pin&property=mode1_pin&property=mode2_pin&property="
-    "name&property=sleepPin&property=stepPin&property=steps&property=time&property=volume"};
+    "Dosers?property=dir&property=enable&property=enabled&property=index&property=m0&property=m1&property=m2&property=name&"
+    "property=objectId&property=on&property=sleep&property=state&property=step&property=steps&property=volume"};
 const char urlCompressor[] PROGMEM = {
     "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/"
     "Compressor?property=enabled&property=off&property=on&property=pin&property=state"};
@@ -135,10 +136,11 @@ String responseString = "";
 
 //// DEVICES
 
-#define LIGHTS_COUNT (6)                 // Кол-во прожекторов
-#define DEVICE_COUNT (LIGHTS_COUNT) + 3  // Кол-во всех устройств (нужно для Alarm'ов)
+#define LIGHTS_COUNT (6)                     // Кол-во прожекторов
+#define DEVICE_COUNT (LIGHTS_COUNT) + 3 + 3  // Кол-во всех устройств (нужно для Alarm'ов)
 //// Дозаторы
-doser_t dosersArray[3];
+#define DOSERS_COUNT (3)  // Кол-во дозаторов
+
 std::unique_ptr<GBasic> doserK{};
 std::unique_ptr<GBasic> doserNP{};
 std::unique_ptr<GBasic> doserFe{};
@@ -159,10 +161,6 @@ Mediator<Sensor> medFeeder;
 Mediator<Sensor> medCO2;
 //Нагреватель
 Mediator<Sensor> medHeater;
-//Дозатор
-// TODO сменить класс Sensor на определенный класс данного устройства
-Mediator<Sensor> medDoser;
-
 //-----------------------------------------
 //Устройства
 Sensor* compressor;
@@ -171,7 +169,8 @@ Sensor* pump;
 Sensor* feeder;
 Sensor* co2;
 Sensor* heater;
-Sensor* doserNew;
+
+std::array<Doser, DOSERS_COUNT> dosers{Doser("Fe", Doser::Fe), Doser("K", Doser::K), Doser("NP", Doser::NP)};
 
 std::array<Sensor, LIGHTS_COUNT> lights{Sensor(medLight, "", Sensor::light), Sensor(medLight, "", Sensor::light),
                                         Sensor(medLight, "", Sensor::light), Sensor(medLight, "", Sensor::light),
@@ -179,9 +178,43 @@ std::array<Sensor, LIGHTS_COUNT> lights{Sensor(medLight, "", Sensor::light), Sen
 //// Расписания всех устройств
 std::array<Scheduler, DEVICE_COUNT> schedules;
 //-----------------------------------------
+#ifdef ARDUINO_ARCH_ESP32
+namespace std_esp32 {
+template <class T>
+struct _Unique_if {
+    typedef std::unique_ptr<T> _Single_object;
+};
 
+template <class T>
+struct _Unique_if<T[]> {
+    typedef std::unique_ptr<T[]> _Unknown_bound;
+};
+
+template <class T, size_t N>
+struct _Unique_if<T[N]> {
+    typedef void _Known_bound;
+};
+
+template <class T, class... Args>
+typename _Unique_if<T>::_Single_object make_unique(Args&&... args) {
+    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+}
+
+template <class T>
+typename _Unique_if<T>::_Unknown_bound make_unique(size_t n) {
+    typedef typename std::remove_extent<T>::type U;
+    return std::unique_ptr<T>(new U[n]());
+}
+
+template <class T, class... Args>
+typename _Unique_if<T>::_Known_bound make_unique(Args&&...) = delete;
+}  // namespace std_esp32
+#endif
 //// METHODS
-
+void test() {
+    auto dos = dosers.at(0);
+    // dos.
+}
 void getTime() {
     char* strDateTime = clockRTC.dateFormat("H:i:s", clockRTC.getDateTime());
     Serial.printf_P(PSTR("Время %s\n"), String(strDateTime).c_str());
@@ -207,24 +240,6 @@ void getTime() {
     }
 }
 
-std::string string_format(const std::string& fmt_str, ...) {
-    int final_n, n = ((int)fmt_str.size()) * 2;
-    std::unique_ptr<char[]> formatted;
-    va_list ap;
-    while (true) {
-        formatted.reset(new char[n]);
-        strcpy(&formatted[0], fmt_str.c_str());
-        va_start(ap, fmt_str);
-        final_n = vsnprintf(&formatted[0], n, fmt_str.c_str(), ap);
-        va_end(ap);
-        if (final_n < 0 || final_n >= n)
-            n += abs(final_n - n + 1);
-        else
-            break;
-    }
-    return std::string(formatted.get());
-}
-
 void delPtr(const char* p) {
     delete[] p;
 }
@@ -244,7 +259,7 @@ char* getPGMString(PGM_P pgm) {
 }
 
 void callbackCompressor(Sensor device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
+    Serial.printf_P(PSTR("%s %s\n"), "Callback", device.getName().c_str());
     char* url = nullptr;
     char* ct = nullptr;
     char* aj = nullptr;
@@ -274,7 +289,7 @@ void callbackCompressor(Sensor device) {
 }
 
 void callbackFlow(Sensor device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
+    Serial.printf_P(PSTR("%s %s\n"), "Callback", device.getName().c_str());
     char* url = nullptr;
     char* ct = nullptr;
     char* aj = nullptr;
@@ -304,11 +319,11 @@ void callbackFlow(Sensor device) {
 }
 
 void callbackPump(Sensor device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
+    Serial.printf_P(PSTR("%s %s\n"), "Callback", device.getName().c_str());
 }
 
 void callbackLight(Sensor device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
+    Serial.printf_P(PSTR("%s %s\n"), "Callback", device.getName().c_str());
     char* url = nullptr;
     char* ct = nullptr;
     char* aj = nullptr;
@@ -338,11 +353,11 @@ void callbackLight(Sensor device) {
 }
 
 void callbackFeeder(Sensor device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
+    Serial.printf_P(PSTR("%s %s\n"), "Callback", device.getName().c_str());
 }
 
 void callbackCO2(Sensor device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
+    Serial.printf_P(PSTR("%s %s\n"), "Callback", device.getName().c_str());
     char* url = nullptr;
     char* ct = nullptr;
     char* aj = nullptr;
@@ -372,11 +387,7 @@ void callbackCO2(Sensor device) {
 }
 
 void callbackHeater(Sensor device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
-}
-
-void callbackDoser(Sensor device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Вызван callback для устройства", device.getName().c_str());
+    Serial.printf_P(PSTR("%s %s\n"), "Callback", device.getName().c_str());
 }
 
 void initMediators() {
@@ -387,7 +398,6 @@ void initMediators() {
     medFeeder.Register("1", callbackFeeder);
     medCO2.Register("1", callbackCO2);
     medHeater.Register("1", callbackHeater);
-    medDoser.Register("1", callbackDoser);
 }
 
 void createDevicesAndScheduler() {
@@ -397,9 +407,9 @@ void createDevicesAndScheduler() {
     feeder = new Sensor(medFeeder, "Кормушка", Sensor::feeder);
     co2 = new Sensor(medCO2, "CO2", Sensor::co2);
     heater = new Sensor(medHeater, "Нагреватель", Sensor::heater);
-    doserNew = new Sensor(medDoser, "Дозатор", Sensor::doser);
+
     for (int i = 0; i < LIGHTS_COUNT; ++i) {
-        std::string buffer = string_format("%s %d", "Прожектор", i + 1);
+        std::string buffer = "Прожектор " + std::to_string(i + 1);
         auto item = lights.at(i);
         item.setName(buffer);
         item.setMediator(medLight);
@@ -408,6 +418,7 @@ void createDevicesAndScheduler() {
         schedule.setDevice(&(lights.at(i)));
         schedules.at(i) = schedule;
     }
+
     // Compressor
     auto schedule = schedules.at(6);
     schedule.setDevice(compressor);
@@ -422,10 +433,22 @@ void createDevicesAndScheduler() {
     schedule = schedules.at(8);
     schedule.setDevice(co2);
     schedules.at(8) = schedule;
+
+    // Dosers
+    for (int i = 0; i < DOSERS_COUNT; ++i) {
+        auto schedule_ = schedules.at(i + 9);
+        schedule_.setDevice(&(dosers.at(i)));
+        schedules.at(i + 9) = schedule_;
+    }
 }
 
 void printDevice(Sensor* device) {
-    Serial.printf_P(PSTR("%s\n"), device->sensorInfo().c_str());
+    if (device->isDoser()) {
+        auto doser = static_cast<Doser*>(device);
+        Serial.printf_P(PSTR("%s\n"), doser->DoserInfo().c_str());
+    } else {
+        Serial.printf_P(PSTR("%s\n"), device->sensorInfo().c_str());
+    }
 }
 
 void printAllDevices() {
@@ -433,9 +456,7 @@ void printAllDevices() {
     /*
       printDevice(pump);
       printDevice(feeder);
-      printDevice(co2);
       printDevice(heater);
-      printDevice(doserNew);
 */
     for (auto light : lights) {
         printDevice(&light);
@@ -443,6 +464,10 @@ void printAllDevices() {
     printDevice(compressor);
     printDevice(flow);
     printDevice(co2);
+
+    for (auto doser : dosers) {
+        printDevice(&doser);
+    }
 }
 
 float getSensorTemperature(const uint8_t* sensorAddress) {
@@ -553,6 +578,49 @@ AlarmID_t findAlarmByDevice(Sensor* device, bool isOn) {
     return result;
 }
 
+void doserOnHandler(Sensor* device) {
+    auto sensor = static_cast<Doser*>(device);
+    getTime();
+
+    if (device->getEnabled()) {
+        Serial.printf_P(PSTR("%s: включение\n"), sensor->getName().c_str());
+
+        String message;
+        message = "Включение дозатора " + String(sensor->getName().c_str());
+        sendMessage(message);
+        message.clear();
+        uint16_t steps = sensor->getSteps();
+
+        switch (sensor->getDoserType()) {
+            case Doser::K:
+                doserK->begin();
+                doserK->setEnableActiveState(LOW);
+                doserK->move(steps);
+                doserK->setEnableActiveState(HIGH);
+                break;
+            case Doser::NP:
+                doserNP->begin();
+                doserNP->setEnableActiveState(LOW);
+                doserNP->move(steps);
+                doserNP->setEnableActiveState(HIGH);
+                break;
+            case Doser::Fe:
+                doserFe->begin();
+                doserFe->setEnableActiveState(LOW);
+                doserFe->move(steps);
+                doserFe->setEnableActiveState(HIGH);
+                break;
+            default:
+                break;
+        }
+
+        Alarm.enable(findAlarmByDevice(device, true));
+    } else {
+        Serial.printf_P(PSTR("%s %s\n"), sensor->getName().c_str(), "нельзя изменять.");
+        Alarm.disable(findAlarmByDevice(device, true));
+    }
+}
+
 void deviceOnHandler(Sensor* device) {
     getTime();
     if (device->getEnabled()) {
@@ -583,44 +651,6 @@ void deviceOffHandler(Sensor* device) {
         Alarm.disable(findAlarmByDevice(device, true));
         Alarm.disable(findAlarmByDevice(device, false));
     }
-}
-
-void doserHandler(const doser& dos) {
-    String message;
-    message = "Включение дозатора " + dos.name;
-    sendMessage(message);
-    message.clear();
-
-    switch (dos.type) {
-        case K:
-            doserK->begin();
-            doserK->setEnableActiveState(LOW);
-            doserK->move(dos.steps);
-            doserK->setEnableActiveState(HIGH);
-            break;
-        case NP:
-            doserNP->begin();
-            doserNP->setEnableActiveState(LOW);
-            doserNP->move(dos.steps);
-            doserNP->setEnableActiveState(HIGH);
-            break;
-        case Fe:
-            doserFe->begin();
-            doserFe->setEnableActiveState(LOW);
-            doserFe->move(dos.steps);
-            doserFe->setEnableActiveState(HIGH);
-            break;
-        default:
-            break;
-    }
-}
-
-void splitTime(char* payload, uint8_t& hour, uint8_t& minute) {
-    char* split = strtok(payload, ":");
-    char* pEnd;
-    hour = strtol(split, &pEnd, 10);
-    split = strtok(nullptr, ":");
-    minute = strtol(split, &pEnd, 10);
 }
 
 void parseJSONLights(const String& response) {
@@ -658,92 +688,76 @@ void parseJSONLights(const String& response) {
         doc.clear();
     }
 }
-
-void parseJSONDosers(const String& response) {
-    std::unique_ptr<GBasic> emptyDoser{};
-    uint8_t dosersCount = (sizeof(dosersArray) / sizeof(*dosersArray));
-    uint8_t ind = 0;
-    DynamicJsonDocument doc(1300);
-    DeserializationError err = deserializeJson(doc, response);
-    if (err) {
-        Serial.print(F("parseJSONDosers -> Ошибка разбора: "));
-        Serial.println(err.c_str());
+void parseJSONDosersNew(const String& response) {
+    DynamicJsonDocument document(1300);
+    DeserializationError error = deserializeJson(document, response);
+    if (error) {
+        Serial.printf_P(PSTR("%s: %s"), "Невозможно выполнить парсинг", error.c_str());
         return;
     } else {
-        JsonArray array = doc.as<JsonArray>();
-        for (JsonObject obj : array) {
-            // TODO добавить флаг доступности работы дозатора
-            uint8_t dirPin = obj["dirPin"];
-            uint8_t stepPin = obj["stepPin"];
-            uint8_t enablePin = obj["enablePin"];
-            uint8_t sleepPin = obj["sleepPin"];
-            uint8_t mode0_pin = obj["mode0_pin"];
-            uint8_t mode1_pin = obj["mode1_pin"];
-            uint8_t mode2_pin = obj["mode2_pin"];
+        JsonArray array = document.as<JsonArray>();
+        for (JsonObject object : array) {
+            uint8_t m0 = object["m0"];
+            uint8_t m1 = object["m1"];
+            uint8_t m2 = object["m2"];
+            uint8_t index = object["index"];
+            uint8_t dir = object["dir"];
+            uint16_t steps = object["steps"];
+            bool enabled = object["enabled"];
+            uint8_t sleep = object["sleep"];
+            uint16_t volume = object["volume"];
+            uint8_t enable = object["enable"];
+            std::string name = object["name"];
+            uint8_t step = object["step"];
+            bool state = object["state"];
+            std::string objectId = object["objectId"];
+            std::string on = object["on"];
 
-            uint8_t index = obj["index"];
-            uint16_t steps = obj["steps"];
-            uint16_t volume = obj["volume"];
-            const char* name = obj["name"];
-            const char* time = obj["time"];
+            on = on.substr(0, 10);
+            for (auto&& doserItem : dosers) {
+                if (name == doserItem.getName()) {
+                    doserItem.setState(state);
+                    doserItem.setEnabled(enabled);
+                    doserItem.setObjectID(objectId);
+                    doserItem.setOn(static_cast<time_t>(std::stoul(on)));
 
-            char* dupTime = strdup(time);
-            for (auto& doserItem : dosersArray) {
-                if (strcmp(name, doserItem.name.c_str()) == 0) {
-                    for (size_t k = 0; k < dosersCount; k++) {
-                        if (dosersArray[k].type == doserItem.type) {
-                            ind = k;
-                            k = dosersCount;
-                        }
-                    }
-                    dosersArray[ind].dirPin = dirPin;
-                    dosersArray[ind].stepPin = stepPin;
-                    dosersArray[ind].enablePin = enablePin;
-                    dosersArray[ind].sleepPin = sleepPin;
-                    dosersArray[ind].mode0_pin = mode0_pin;
-                    dosersArray[ind].mode1_pin = mode1_pin;
-                    dosersArray[ind].mode2_pin = mode2_pin;
-
-                    dosersArray[ind].index = index;
-                    dosersArray[ind].steps = steps;
-                    dosersArray[ind].volume = volume;
-
-                    splitTime(dupTime, dosersArray[ind].hour, dosersArray[ind].minute);
-#ifdef ARDUINO_ARCH_ESP32
-                    emptyDoser = std_esp32::make_unique<GBasic>(dosersArray[ind].steps, dosersArray[ind].dirPin,
-                                                                dosersArray[ind].stepPin, dosersArray[ind].enablePin,
-                                                                dosersArray[ind].mode0_pin, dosersArray[ind].mode1_pin,
-                                                                dosersArray[ind].mode2_pin, shiftRegister, dosersArray[ind].index);
-#else
-                    emptyDoser =
-                        std::make_unique<GBasic>(dosersArray[ind].steps, dosersArray[ind].dirPin, dosersArray[ind].stepPin,
-                                                 dosersArray[ind].enablePin, dosersArray[ind].mode0_pin, dosersArray[ind].mode1_pin,
-                                                 dosersArray[ind].mode2_pin, shiftRegister, dosersArray[ind].index);
-#endif
-                    switch (doserItem.type) {
-                        case K:
-                            doserK = std::move(emptyDoser);
-                            break;
-                        case NP:
-                            doserNP = std::move(emptyDoser);
-                            break;
-                        case Fe:
-                            doserFe = std::move(emptyDoser);
-                            break;
-                        default:
-                            Serial.printf_P(PSTR("%s %s"), "Неизвестный тип дозатора", ToString(doserItem.type));
-                            break;
-                    }
-                    dosersArray[ind].alarm =
-                        Alarm.alarmRepeat(dosersArray[ind].hour, dosersArray[ind].minute, 0, doserHandler, dosersArray[ind]);
-                    // TODO Селать проверку на было ли уже событие в текущем дне
-                    break;
+                    doserItem.setMode0Pin(m0);
+                    doserItem.setMode1Pin(m1);
+                    doserItem.setMode2Pin(m2);
+                    doserItem.setIndex(index);
+                    doserItem.setDirPin(dir);
+                    doserItem.setSteps(steps);
+                    doserItem.setSleepPin(sleep);
+                    doserItem.setVolume(volume);
+                    doserItem.setEnablePin(enable);
+                    doserItem.setStepPin(step);
+                    /*
+                    #ifdef ARDUINO_ARCH_ESP32
+                                        emptyDoser = std_esp32::make_unique<GBasic>(dosersArray[ind].steps, dosersArray[ind].dirPin,
+                                                                                    dosersArray[ind].stepPin,
+                    dosersArray[ind].enablePin, dosersArray[ind].mode0_pin, dosersArray[ind].mode1_pin, dosersArray[ind].mode2_pin,
+                    shiftRegister, dosersArray[ind].index); #else emptyDoser = std::make_unique<GBasic>(dosersArray[ind].steps,
+                    dosersArray[ind].dirPin, dosersArray[ind].stepPin, dosersArray[ind].enablePin, dosersArray[ind].mode0_pin,
+                    dosersArray[ind].mode1_pin, dosersArray[ind].mode2_pin, shiftRegister, dosersArray[ind].index); #endif switch
+                    (doserItem.type) { case K: doserK = std::move(emptyDoser); break; case NP: doserNP = std::move(emptyDoser);
+                                                break;
+                                            case Fe:
+                                                doserFe = std::move(emptyDoser);
+                                                break;
+                                            default:
+                                                Serial.printf_P(PSTR("%s %s"), "Неизвестный тип дозатора",
+                    ToString(doserItem.type)); break;
+                                        }
+                                        dosersArray[ind].alarm =
+                                            Alarm.alarmRepeat(dosersArray[ind].hour, dosersArray[ind].minute, 0, doserHandler,
+                    dosersArray[ind]);
+                                        // TODO Селать проверку на было ли уже событие в текущем дне
+                                      */
                 }
             }
-            free(dupTime);
         }
-        doc.shrinkToFit();
-        doc.clear();
+        document.shrinkToFit();
+        document.clear();
     }
 }
 
@@ -942,6 +956,43 @@ void attachCO2Scheduler() {
     }
 }
 
+void attachDosersScheduler() {
+    std::unique_ptr<GBasic> emptyDoser{};
+    for (size_t i = 0; i < DEVICE_COUNT; i++) {
+        if (!schedules.at(i).getDevice()->isDoser()) {
+            continue;
+        }
+        auto schedule = schedules.at(i);
+        auto sensor = static_cast<Doser*>(schedule.getDevice());
+
+        emptyDoser = std::make_unique<GBasic>(sensor->getSteps(), sensor->getDirPin(), sensor->getStepPin(), sensor->getEnablePin(),
+                                              sensor->getMode0Pin(), sensor->getMode1Pin(), sensor->getMode2Pin(), shiftRegister,
+                                              sensor->getIndex());
+        switch (sensor->getDoserType()) {
+            case Doser::K:
+                doserK = std::move(emptyDoser);
+                break;
+            case Doser::NP:
+                doserNP = std::move(emptyDoser);
+                break;
+            case Doser::Fe:
+                doserFe = std::move(emptyDoser);
+                break;
+            default:
+                Serial.printf_P(PSTR("%s"), "Неизвестный тип дозатора");
+                break;
+        }
+
+        auto alarmOn = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), 0, doserOnHandler, sensor);
+
+        schedule.setOn(alarmOn);
+        schedules.at(i) = schedule;
+        // TODO Селать проверку на было ли уже событие в текущем дне
+        // (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? deviceOnHandler(sensor)
+        //                                                                                 : deviceOffHandler(sensor);
+    }
+}
+
 void getParamLights() {
     char* url = getPGMString(urlLights);
     Serial.printf_P(PSTR(" %s\n"), "Прожекторы...");
@@ -967,9 +1018,9 @@ void getParamLights() {
         attachLightScheduler();
     }
 }
-/*
+
 void getParamDosers() {
-    char* url  = getPGMString(urlDosers);
+    char* url = getPGMString(urlDosers);
     Serial.printf_P(PSTR(" %s\n"), "Дозаторы...");
     if (https.begin(*client, String(url))) {
         int httpCode = https.GET();
@@ -978,21 +1029,22 @@ void getParamDosers() {
                 responseString = https.getString();
             }
         } else {
-            Serial.printf_P(PSTR("getParamDosers() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR(" %s %s\n"), "Ошибка:", HTTPClient::errorToString(httpCode).c_str());
         }
         https.end();
     } else {
-        Serial.printf_P(PSTR("%s\n"), "getParamDosers() -> Невозможно подключиться\n");
+        Serial.printf_P(PSTR(" %s\n"), "Невозможно подключиться\n");
     }
     delPtr(url);
     if (responseString.isEmpty()) {
-        Serial.printf_P(PSTR(" %s\n"), "getParamDosers() -> Ответ пустой");
+        Serial.printf_P(PSTR(" %s\n"), "Ответ пустой");
     } else {
-        parseJSONDosers(responseString);
+        parseJSONDosersNew(responseString);
         responseString.clear();
+        attachDosersScheduler();
     }
 }
-*/
+
 void getParamCompressor() {
     char* url = getPGMString(urlCompressor);
     Serial.printf_P(PSTR(" %s\n"), "Компрессор...");
@@ -1070,38 +1122,38 @@ void getParamCO2() {
         attachCO2Scheduler();
     }
 }
-
+/*
 void getParamsEEPROM() {
-    Serial.printf_P(PSTR("%s\n"), "Загрузка настроек из EEPROM");
-    uint8_t address = 0;
-    //    uint8_t szLed = sizeof(ledDescription_t);
-    uint8_t szDoser = sizeof(doser_t);
-    //   ledDescription_t ledFromEEPROM;
-    /*
-        for (auto& led : leds) {
-            eeprom.eeprom_read<ledDescription_t>(address, &led);
-            // led.led.off = Alarm.alarmRepeat(led.led.HOff, led.led.MOff, 0, ledOffHandler, led);
-            // led.led.on = Alarm.alarmRepeat(led.led.HOn, led.led.MOn, 0, ledOnHandler, led);
+   Serial.printf_P(PSTR("%s\n"), "Загрузка настроек из EEPROM");
+   uint8_t address = 0;
+   //    uint8_t szLed = sizeof(ledDescription_t);
+   // uint8_t szDoser = sizeof(doser_t);
+   //   ledDescription_t ledFromEEPROM;
 
-            if (shouldRun(led)) {
-                // ledOnHandler(led);
-            } else {
-                // ledOffHandler(led);
-            }
-            address += szLed + 1;
-        }
-    */
+       for (auto& led : leds) {
+           eeprom.eeprom_read<ledDescription_t>(address, &led);
+           // led.led.off = Alarm.alarmRepeat(led.led.HOff, led.led.MOff, 0, ledOffHandler, led);
+           // led.led.on = Alarm.alarmRepeat(led.led.HOn, led.led.MOn, 0, ledOnHandler, led);
+
+           if (shouldRun(led)) {
+               // ledOnHandler(led);
+           } else {
+               // ledOffHandler(led);
+           }
+           address += szLed + 1;
+       }
+
     //    address -= szLed;
     for (auto& doser : dosersArray) {
-        eeprom.eeprom_read<doser_t>(address, &doser);
-        doser.alarm = Alarm.alarmRepeat(doser.hour, doser.minute, 0, doserHandler, doser);
-        // TODO проверить событие не выполнялось ли уже хотя это чтение настроек
-        address += szDoser + 1;
-    }
+         eeprom.eeprom_read<doser_t>(address, &doser);
+         doser.alarm = Alarm.alarmRepeat(doser.hour, doser.minute, 0, doserOnHandler, doser);
+         // TODO проверить событие не выполнялось ли уже хотя это чтение настроек
+         address += szDoser + 1;
+     }
 
-    address -= szDoser;
+    // address -= szDoser;
     // eeprom.eeprom_read<ledDescription_t>(address, &compressor);
-    /* compressor.led.on = Alarm.alarmRepeat(compressor.led.HOn, compressor.led.MOn, 0, compressorOnHandler, compressor);
+     compressor.led.on = Alarm.alarmRepeat(compressor.led.HOn, compressor.led.MOn, 0, compressorOnHandler, compressor);
      compressor.led.off = Alarm.alarmRepeat(compressor.led.HOff, compressor.led.MOff, 0, compressorOffHandler, compressor);
 
      if (shouldRun(compressor)) {
@@ -1109,38 +1161,38 @@ void getParamsEEPROM() {
      } else {
          compressorOffHandler(compressor);
      }
-     */
 }
-
 void setParamsEEPROM() {
     Serial.printf_P(PSTR("%s\n"), "Запись настроек в EEPROM");
     uint8_t address = 0;
     //    uint8_t szLed = sizeof(ledDescription_t);
-    uint8_t szDoser = sizeof(doser_t);
+    // uint8_t szDoser = sizeof(doser_t);
 
-    /* for (auto& led : leds) {
+    for (auto& led : leds) {
          eeprom.eeprom_write<ledDescription_t>(address, led);
          address += szLed + 1;
-     }*/
+     }
     //  address -= szLed;
     for (auto& doser : dosersArray) {
         eeprom.eeprom_write<doser_t>(address, doser);
         address += szDoser + 1;
     }
-    address -= szDoser;
+    // address -= szDoser;
     //    eeprom.eeprom_write<ledDescription_t>(address, compressor);
 }
-
+*/
 void getParamsBackEnd() {
     Serial.printf_P(PSTR("%s\n"), "Чтение параметров из облака");
     getParamLights();
     getParamCompressor();
     getParamFlow();
     getParamCO2();
-    // TODO отрефакторить блок ниже отсюда
-    /* getParamDosers();
+    getParamDosers();
 
-    setParamsEEPROM(); */
+    /*
+    // TODO сделать сохранение в EEPROM
+    setParamsEEPROM();
+    */
 }
 
 void initLocalClock() {
@@ -1223,15 +1275,6 @@ void initHTTPClient() {
         client->setBufferSizes(1024, 1024);
     }
 #endif
-}
-
-void initDosersArray() {
-    dosersArray[0].name = "K";
-    dosersArray[0].type = K;
-    dosersArray[1].name = "NP";
-    dosersArray[1].type = NP;
-    dosersArray[2].name = "Fe";
-    dosersArray[2].type = Fe;
 }
 
 void putUptime(const String& uptime) {
@@ -1382,20 +1425,11 @@ bool getUpdateSettings() {
     return flag;
 }
 
-void printDosersParam() {
-    Serial.printf_P(PSTR("%s\n"), "Настройки дозаторов");
-    for (auto& doser : dosersArray) {
-        Serial.printf_P(
-            PSTR("%d => %s: Вкл %02d:%02d. Pins: dir=%d step=%d enable=%d sleep=%d.\nОбъём: %d. Modes:%d.%d.%d Steps:%d\n"),
-            doser.index, doser.name.c_str(), doser.hour, doser.minute, doser.dirPin, doser.stepPin, doser.enablePin, doser.sleepPin,
-            doser.volume, doser.mode0_pin, doser.mode1_pin, doser.mode2_pin, doser.steps);
-    }
-}
-
 void timer1() {
     getTime();
     getSensorsTemperature();
-
+    Serial.printf_P(PSTR("%s %d\n"), "AlarmClass size ", sizeof(AlarmClass));
+    Serial.printf_P(PSTR("%s %d\n"), "FreeHeap size ", ESP.getFreeHeap());
     if (getUpdateSettings()) {
         Serial.printf_P(PSTR("%s\n"), "Будет выполнено обновление всех параметров");
         getParamsBackEnd();
@@ -1485,9 +1519,8 @@ void setup() {
     initDS3231();
     initMediators();
     createDevicesAndScheduler();
-    initDosersArray();
     if (!initWiFi()) {
-        getParamsEEPROM();
+        // getParamsEEPROM();
     } else {
         initHTTPClient();
         initLocalClock();

@@ -10,9 +10,8 @@ AlarmClass::AlarmClass() {
     Mode.isEnabled = Mode.isOneShot = false;
     Mode.alarmType = dtNotAllocated;
     value = nextTrigger = 0;
-    onTickHandler = NULL;
-    onTickDoserHandler = NULL;
-    onTickDeviceHandler = nullptr;
+    onTickHandler = nullptr;
+    onTickSensorHandler = nullptr;
 }
 
 //**************************************************************
@@ -62,7 +61,7 @@ void AlarmClass::updateNextTrigger() {
 
 TimeAlarmsClass::TimeAlarmsClass() {
     isServicing = false;
-    for (uint8_t id = 0; id < dtNBR_ALARMS; id++) {
+    for (uint8_t id = 0; id < ALARMS_COUNT; id++) {
         free(id);  // ensure all Alarms are cleared and available for allocation
     }
 }
@@ -70,8 +69,7 @@ TimeAlarmsClass::TimeAlarmsClass() {
 void TimeAlarmsClass::enable(AlarmID_t ID) {
     if (isAllocated(ID)) {
         if ((!(dtUseAbsoluteValue(Alarm[ID].Mode.alarmType) && (Alarm[ID].value == 0))) &&
-            ((Alarm[ID].onTickHandler != nullptr) || (Alarm[ID].onTickDoserHandler != nullptr) ||
-             (Alarm[ID].onTickDeviceHandler != nullptr))) {
+            ((Alarm[ID].onTickHandler != nullptr) || (Alarm[ID].onTickSensorHandler != nullptr))) {
             // only enable if value is non zero and a tick handler has been set
             // (is not NULL, value is non zero ONLY for dtTimer & dtExplicitAlarm
             // (the rest can have 0 to account for midnight))
@@ -103,7 +101,7 @@ time_t TimeAlarmsClass::read(AlarmID_t ID) {
     if (isAllocated(ID)) {
         return Alarm[ID].value;
     } else {
-        return dtINVALID_TIME;
+        return INVALID_TIME;
     }
 }
 
@@ -121,8 +119,7 @@ void TimeAlarmsClass::free(AlarmID_t ID) {
         Alarm[ID].Mode.isEnabled = false;
         Alarm[ID].Mode.alarmType = dtNotAllocated;
         Alarm[ID].onTickHandler = nullptr;
-        Alarm[ID].onTickDoserHandler = nullptr;
-        Alarm[ID].onTickDeviceHandler = nullptr;
+        Alarm[ID].onTickSensorHandler = nullptr;
         Alarm[ID].value = 0;
         Alarm[ID].nextTrigger = 0;
     }
@@ -131,7 +128,7 @@ void TimeAlarmsClass::free(AlarmID_t ID) {
 // returns the number of allocated timers
 uint8_t TimeAlarmsClass::count() {
     uint8_t c = 0;
-    for (uint8_t id = 0; id < dtNBR_ALARMS; id++) {
+    for (uint8_t id = 0; id < ALARMS_COUNT; id++) {
         if (isAllocated(id))
             c++;
     }
@@ -145,16 +142,16 @@ bool TimeAlarmsClass::isAlarm(AlarmID_t ID) {
 
 // returns true if this id is allocated
 bool TimeAlarmsClass::isAllocated(AlarmID_t ID) {
-    return (ID < dtNBR_ALARMS && Alarm[ID].Mode.alarmType != dtNotAllocated);
+    return (ID < ALARMS_COUNT && Alarm[ID].Mode.alarmType != dtNotAllocated);
 }
 
 // returns the currently triggered alarm id
-// returns dtINVALID_ALARM_ID if not invoked from within an alarm handler
+// returns INVALID_ALARM_ID if not invoked from within an alarm handler
 AlarmID_t TimeAlarmsClass::getTriggeredAlarmId() {
     if (isServicing) {
         return servicedAlarmId;  // new private data member used instead of local loop variable i in serviceAlarms();
     } else {
-        return dtINVALID_ALARM_ID;  // valid ids only available when servicing a callback
+        return INVALID_ALARM_ID;  // valid ids only available when servicing a callback
     }
 }
 
@@ -207,11 +204,10 @@ void TimeAlarmsClass::serviceAlarms() {
     if (!isServicing) {
         time_t now = time(nullptr);
         isServicing = true;
-        for (uint8_t i = 0; i < dtNBR_ALARMS; i++) {
+        for (uint8_t i = 0; i < ALARMS_COUNT; i++) {
             if (Alarm[i].Mode.isEnabled && (now >= Alarm[i].nextTrigger)) {
                 OnTick_t TickHandler = Alarm[i].onTickHandler;
-                OnTickDoser_t TickDoserHandler = Alarm[i].onTickDoserHandler;
-                onTickDevice_t TickDeviceHandler = Alarm[i].onTickDeviceHandler;
+                onTickSensor_t TickDeviceHandler = Alarm[i].onTickSensorHandler;
                 if (Alarm[i].Mode.isOneShot) {
                     free(i);
                 } else {
@@ -220,11 +216,8 @@ void TimeAlarmsClass::serviceAlarms() {
                 if (TickHandler != nullptr) {
                     TickHandler();
                 }
-                if (TickDoserHandler != nullptr) {
-                    TickDoserHandler(Alarm[i].param_doser);
-                }
                 if (TickDeviceHandler != nullptr) {
-                    TickDeviceHandler(Alarm[i].param_Device);
+                    TickDeviceHandler(Alarm[i].sensor);
                 }
             }
         }
@@ -234,9 +227,9 @@ void TimeAlarmsClass::serviceAlarms() {
 
 // returns the absolute time of the next scheduled alarm, or 0 if none
 time_t TimeAlarmsClass::getNextTrigger() {
-    time_t nextTrigger = (time_t)0xffffffff;  // the max time value
+    auto nextTrigger = (time_t)0xffffffff;  // the max time value
 
-    for (uint8_t id = 0; id < dtNBR_ALARMS; id++) {
+    for (uint8_t id = 0; id < ALARMS_COUNT; id++) {
         if (isAllocated(id)) {
             if (nextTrigger == 0) {
                 nextTrigger = Alarm[id].nextTrigger;
@@ -259,7 +252,7 @@ AlarmID_t TimeAlarmsClass::create(time_t value, OnTick_t onTickHandler, bool isO
     time_t now = time(nullptr);
     if (!((dtIsAlarm(alarmType) && now < SECS_PER_YEAR) || (dtUseAbsoluteValue(alarmType) && (value == 0)))) {
         // only create alarm ids if the time is at least Jan 1 1971
-        for (uint8_t id = 0; id < dtNBR_ALARMS; id++) {
+        for (uint8_t id = 0; id < ALARMS_COUNT; id++) {
             if (Alarm[id].Mode.alarmType == dtNotAllocated) {
                 // here if there is an Alarm id that is not allocated
                 Alarm[id].onTickHandler = onTickHandler;
@@ -271,45 +264,21 @@ AlarmID_t TimeAlarmsClass::create(time_t value, OnTick_t onTickHandler, bool isO
             }
         }
     }
-    return dtINVALID_ALARM_ID;  // no IDs available or time is invalid
+    return INVALID_ALARM_ID;  // no IDs available or time is invalid
 }
 
-AlarmID_t TimeAlarmsClass::createdoser(time_t value,
-                                       OnTickDoser_t onTickDoserHandler,
-                                       bool isOneShot,
-                                       dtAlarmPeriod_t alarmType,
-                                       doser_t param) {
-    time_t now = time(nullptr);
-    if (!((dtIsAlarm(alarmType) && now < SECS_PER_YEAR) || (dtUseAbsoluteValue(alarmType) && (value == 0)))) {
-        // only create alarm ids if the time is at least Jan 1 1971
-        for (uint8_t id = 0; id < dtNBR_ALARMS; id++) {
-            if (Alarm[id].Mode.alarmType == dtNotAllocated) {
-                // here if there is an Alarm id that is not allocated
-                Alarm[id].onTickDoserHandler = onTickDoserHandler;
-                Alarm[id].param_doser = param;
-                Alarm[id].Mode.isOneShot = isOneShot;
-                Alarm[id].Mode.alarmType = alarmType;
-                Alarm[id].value = value;
-                enable(id);
-                return id;  // alarm created ok
-            }
-        }
-    }
-    return dtINVALID_ALARM_ID;  // no IDs available or time is invalid
-}
-
-AlarmID_t TimeAlarmsClass::createBaseDevice(time_t value,
-                                            onTickDevice_t onTickDeviceHandler,
+AlarmID_t TimeAlarmsClass::createSensorAlarm(time_t value,
+                                            onTickSensor_t onTickDeviceHandler,
                                             bool isOneShot,
                                             dtAlarmPeriod_t alarmType,
                                             Sensor* param) {
     time_t now = time(nullptr);
 
     if (!((dtIsAlarm(alarmType) && now < SECS_PER_YEAR) || (dtUseAbsoluteValue(alarmType) && (value == 0)))) {
-        for (uint8_t id = 0; id < dtNBR_ALARMS; id++) {
+        for (uint8_t id = 0; id < ALARMS_COUNT; id++) {
             if (Alarm[id].Mode.alarmType == dtNotAllocated) {
-                Alarm[id].onTickDeviceHandler = onTickDeviceHandler;
-                Alarm[id].param_Device = param;
+                Alarm[id].onTickSensorHandler = onTickDeviceHandler;
+                Alarm[id].sensor = param;
                 Alarm[id].Mode.isOneShot = isOneShot;
                 Alarm[id].Mode.alarmType = alarmType;
                 Alarm[id].value = value;
@@ -318,7 +287,7 @@ AlarmID_t TimeAlarmsClass::createBaseDevice(time_t value,
             }
         }
     }
-    return dtINVALID_ALARM_ID;
+    return INVALID_ALARM_ID;
 }
 
 // make one instance for the user to use

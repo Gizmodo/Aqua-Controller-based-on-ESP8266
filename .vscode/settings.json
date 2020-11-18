@@ -53,7 +53,16 @@
         "string_view": "cpp",
         "system_error": "cpp",
         "ranges": "cpp",
-        "ctime": "cpp"
+        "ctime": "cpp",
+        "bitset": "cpp",
+        "chrono": "cpp",
+        "condition_variable": "cpp",
+        "cstring": "cpp",
+        "ratio": "cpp",
+        "regex": "cpp",
+        "iostream": "cpp",
+        "shared_mutex": "cpp",
+        "stop_token": "cpp"
     },
     "cmake.configureOnOpen": false
 }
