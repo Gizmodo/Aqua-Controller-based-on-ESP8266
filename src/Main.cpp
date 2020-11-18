@@ -161,8 +161,6 @@ Mediator<Sensor> medFeeder;
 Mediator<Sensor> medCO2;
 //Нагреватель
 Mediator<Sensor> medHeater;
-//Дозатор
-Mediator<Doser> medDoser;
 //-----------------------------------------
 //Устройства
 Sensor* compressor;
@@ -172,8 +170,7 @@ Sensor* feeder;
 Sensor* co2;
 Sensor* heater;
 
-std::array<Doser, DOSERS_COUNT> dosers{Doser(medDoser, "Fe", Doser::Fe), Doser(medDoser, "K", Doser::K),
-                                       Doser(medDoser, "NP", Doser::NP)};
+std::array<Doser, DOSERS_COUNT> dosers{Doser("Fe", Doser::Fe), Doser("K", Doser::K), Doser("NP", Doser::NP)};
 
 std::array<Sensor, LIGHTS_COUNT> lights{Sensor(medLight, "", Sensor::light), Sensor(medLight, "", Sensor::light),
                                         Sensor(medLight, "", Sensor::light), Sensor(medLight, "", Sensor::light),
@@ -393,10 +390,6 @@ void callbackHeater(Sensor device) {
     Serial.printf_P(PSTR("%s %s\n"), "Callback", device.getName().c_str());
 }
 
-void callbackDoser(Doser device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Callback", device.getName().c_str());
-}
-
 void initMediators() {
     medCompressor.Register("1", callbackCompressor);
     medFlow.Register("1", callbackFlow);
@@ -405,7 +398,6 @@ void initMediators() {
     medFeeder.Register("1", callbackFeeder);
     medCO2.Register("1", callbackCO2);
     medHeater.Register("1", callbackHeater);
-    medDoser.Register("1", callbackDoser);
 }
 
 void createDevicesAndScheduler() {
@@ -417,7 +409,6 @@ void createDevicesAndScheduler() {
     heater = new Sensor(medHeater, "Нагреватель", Sensor::heater);
 
     for (int i = 0; i < LIGHTS_COUNT; ++i) {
-        // std::string buffer1 = string_format("%s %d", "Прожектор", i + 1);
         std::string buffer = "Прожектор " + std::to_string(i + 1);
         auto item = lights.at(i);
         item.setName(buffer);
@@ -427,6 +418,7 @@ void createDevicesAndScheduler() {
         schedule.setDevice(&(lights.at(i)));
         schedules.at(i) = schedule;
     }
+
     // Compressor
     auto schedule = schedules.at(6);
     schedule.setDevice(compressor);
@@ -444,9 +436,6 @@ void createDevicesAndScheduler() {
 
     // Dosers
     for (int i = 0; i < DOSERS_COUNT; ++i) {
-        auto item = dosers.at(i);
-        item.setMediator(medDoser);
-        dosers.at(i) = item;
         auto schedule_ = schedules.at(i + 9);
         schedule_.setDevice(&(dosers.at(i)));
         schedules.at(i + 9) = schedule_;
@@ -591,52 +580,45 @@ AlarmID_t findAlarmByDevice(Sensor* device, bool isOn) {
 
 void doserOnHandler(Sensor* device) {
     auto sensor = static_cast<Doser*>(device);
+    getTime();
 
-    /* getTime();
-     String message;
-     message = "Включение дозатора " + device->get.name;
-     sendMessage(message);
-     message.clear();
+    if (device->getEnabled()) {
+        Serial.printf_P(PSTR("%s: включение\n"), sensor->getName().c_str());
 
-     switch (dos.type) {
-         case K:
-             doserK->begin();
-             doserK->setEnableActiveState(LOW);
-             doserK->move(dos.steps);
-             doserK->setEnableActiveState(HIGH);
-             break;
-         case NP:
-             doserNP->begin();
-             doserNP->setEnableActiveState(LOW);
-             doserNP->move(dos.steps);
-             doserNP->setEnableActiveState(HIGH);
-             break;
-         case Fe:
-             doserFe->begin();
-             doserFe->setEnableActiveState(LOW);
-             doserFe->move(dos.steps);
-             doserFe->setEnableActiveState(HIGH);
-             break;
-         default:
-             break;
-     }
+        String message;
+        message = "Включение дозатора " + String(sensor->getName().c_str());
+        sendMessage(message);
+        message.clear();
+        uint16_t steps = sensor->getSteps();
 
+        switch (sensor->getDoserType()) {
+            case Doser::K:
+                doserK->begin();
+                doserK->setEnableActiveState(LOW);
+                doserK->move(steps);
+                doserK->setEnableActiveState(HIGH);
+                break;
+            case Doser::NP:
+                doserNP->begin();
+                doserNP->setEnableActiveState(LOW);
+                doserNP->move(steps);
+                doserNP->setEnableActiveState(HIGH);
+                break;
+            case Doser::Fe:
+                doserFe->begin();
+                doserFe->setEnableActiveState(LOW);
+                doserFe->move(steps);
+                doserFe->setEnableActiveState(HIGH);
+                break;
+            default:
+                break;
+        }
 
-
-
-     if (device->getEnabled()) {
-         Serial.printf_P(PSTR("%s: включение, pin %d\n"), device->getName().c_str(), device->getPin());
-         shiftRegister.setPin(countShiftRegister, device->getPin(), HIGH);
-         sendMessage(device, true);
-         Alarm.enable(findAlarmByDevice(device, true));
-         Alarm.enable(findAlarmByDevice(device, false));
-         device->setStateNotify(true);
-     } else {
-         Serial.printf_P(PSTR("%s %s\n"), device->getName().c_str(), "нельзя изменять.");
-         Alarm.disable(findAlarmByDevice(device, true));
-         Alarm.disable(findAlarmByDevice(device, false));
-     }
-     */
+        Alarm.enable(findAlarmByDevice(device, true));
+    } else {
+        Serial.printf_P(PSTR("%s %s\n"), sensor->getName().c_str(), "нельзя изменять.");
+        Alarm.disable(findAlarmByDevice(device, true));
+    }
 }
 
 void deviceOnHandler(Sensor* device) {

@@ -7,7 +7,6 @@
 #include <ArduinoJson.h>
 #include <string>
 #include <utility>
-#include "Mediator.h"
 #include "Sensor.h"
 #define UNDEFINED (-1)
 
@@ -16,8 +15,6 @@ class Doser : public Sensor {
     enum DoserType { K, NP, Fe };
 
    private:
-    // TODO Mediator unused - doserHandler do the same things!!!
-    Mediator<Doser> mMediator;
     uint8_t _dirPin = UNDEFINED;
     uint8_t _stepPin = UNDEFINED;
     uint8_t _enablePin = UNDEFINED;
@@ -38,20 +35,14 @@ class Doser : public Sensor {
     }
 
    public:
-    Doser(Mediator<Doser> mediator, std::string name, DoserType doserType) : Sensor(std::move(name), SensorType::doser) {
-        mMediator = mediator;
+    Doser(std::string name, DoserType doserType) : Sensor(std::move(name), SensorType::doser) {
         _doserType = doserType;
     };
 
     ~Doser() = default;
 
-    void setMediator(const Mediator<Doser>& mediator) {
-        mMediator = mediator;
-    }
-
     void setEnable(bool value) {
         this->setEnabled(value);
-        mMediator.Send("1", *this);
     }
 
     void setDirPin(uint8_t dirPin) {
