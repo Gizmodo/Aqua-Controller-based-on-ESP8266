@@ -5,7 +5,7 @@
 #include <time.h>
 #include "Sensor.h"
 
-#define ALARMS_COUNT 29         // for esp8266 chip - max is 255
+#define ALARMS_COUNT 27         // for esp8266 chip - max is 255
 
 #define SECS_PER_MIN ((time_t)(60UL))
 #define SECS_PER_HOUR ((time_t)(3600UL))

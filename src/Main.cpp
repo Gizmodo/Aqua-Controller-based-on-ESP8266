@@ -639,8 +639,6 @@ AlarmID_t findAlarmByDevice(Sensor* device, bool isOn) {
 
 void doserOnHandler(Sensor* device) {
     auto sensor = static_cast<Doser*>(device);
-    getTime();
-
     if (device->getEnabled()) {
         Serial.printf_P(PSTR("%s: включение\n"), sensor->getName().c_str());
 
@@ -681,7 +679,6 @@ void doserOnHandler(Sensor* device) {
 }
 
 void deviceOnHandler(Sensor* device) {
-    getTime();
     if (device->getEnabled()) {
         Serial.printf_P(PSTR("%s: включение, pin %d\n"), device->getName().c_str(), device->getPin());
         shiftRegister.setPin(countShiftRegister, device->getPin(), HIGH);
@@ -697,7 +694,6 @@ void deviceOnHandler(Sensor* device) {
 }
 
 void deviceOffHandler(Sensor* device) {
-    getTime();
     if (device->getEnabled()) {
         Serial.printf_P(PSTR("%s: выключение, pin %d\n"), device->getName().c_str(), device->getPin());
         shiftRegister.setPin(countShiftRegister, device->getPin(), LOW);
@@ -747,7 +743,7 @@ void parseJSONLights(const String& response) {
         doc.clear();
     }
 }
-void parseJSONDosersNew(const String& response) {
+void parseJSONDosers(const String& response) {
     DynamicJsonDocument document(1300);
     DeserializationError error = deserializeJson(document, response);
     if (error) {
@@ -1196,7 +1192,7 @@ void getParamDosers() {
     if (responseString.isEmpty()) {
         Serial.printf_P(PSTR(" %s\n"), "Ответ пустой");
     } else {
-        parseJSONDosersNew(responseString);
+        parseJSONDosers(responseString);
         responseString.clear();
         attachDosersScheduler();
     }
