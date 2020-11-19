@@ -63,6 +63,9 @@ const char urlCO2[] PROGMEM = {
 const char urlHeater[] PROGMEM = {
     "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/"
     "Heater?property=enabled&property=off&property=on&property=pin&property=state"};
+const char urlPump[] PROGMEM = {
+    "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/"
+    "Pump?property=enabled&property=off&property=on&property=pin&property=state"};
 const char urlPutUptime[] PROGMEM = {
     "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/Uptime/"
     "66E232A0-EFF0-4A9C-9B6A-785C85B139B7"};
@@ -88,6 +91,9 @@ const char urlPutCO2[] PROGMEM = {
 const char urlPutHeater[] PROGMEM = {
     "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/Heater/"
     "61D70CF3-7187-4B50-BBF5-DE6FD3B2DC47"};
+const char urlPutPump[] PROGMEM = {
+    "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/Pump/"
+    "A81224A3-2A4E-4881-9E8D-18BDF3DF1476"};
 const char urlPostTemperature[] PROGMEM = {
     "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/TemperatureLog"};
 const char urlPutTemperature[] PROGMEM = {
@@ -142,8 +148,8 @@ String responseString = "";
 
 //// DEVICES
 
-#define LIGHTS_COUNT (6)                         // Кол-во прожекторов
-#define DEVICE_COUNT (LIGHTS_COUNT) + 3 + 3 + 1  // Кол-во всех устройств (нужно для Alarm'ов)
+#define LIGHTS_COUNT (6)                             // Кол-во прожекторов
+#define DEVICE_COUNT (LIGHTS_COUNT) + 3 + 3 + 1 + 1  // Кол-во всех устройств (нужно для Alarm'ов)
 //// Дозаторы
 #define DOSERS_COUNT (3)  // Кол-во дозаторов
 
@@ -319,6 +325,32 @@ void callbackFlow(Sensor device) {
 
 void callbackPump(Sensor device) {
     Serial.printf_P(PSTR("%s %s\n"), "Callback", device.getName().c_str());
+    char* url = nullptr;
+    char* ct = nullptr;
+    char* aj = nullptr;
+    String urlString;
+    String payload;
+    url = getPGMString(urlPutPump);
+    urlString = String(url);
+
+    delPtr(url);
+    ct = getPGMString(contentType);
+    aj = getPGMString(applicationJson);
+    payload = String(device.serialize().c_str());
+    if (https.begin(*client, urlString)) {
+        https.addHeader(String(ct), String(aj));
+        int httpCode = https.PUT(payload);
+        if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
+            Serial.printf_P(PSTR("%s состояние %s\n"), device.getName().c_str(), (device.getState() ? "ON" : "OFF"));
+        } else {
+            Serial.printf_P(PSTR("%s: %s\n"), "Ошибка", HTTPClient::errorToString(httpCode).c_str());
+        }
+        https.end();
+    } else {
+        Serial.printf_P(PSTR("%s\n"), "Невозможно подключиться\n");
+    }
+    delPtr(ct);
+    delPtr(aj);
 }
 
 void callbackLight(Sensor device) {
@@ -464,6 +496,11 @@ void createDevicesAndScheduler() {
     schedule = schedules.at(12);
     schedule.setDevice(heater);
     schedules.at(12) = schedule;
+
+    // Pump
+    schedule = schedules.at(13);
+    schedule.setDevice(pump);
+    schedules.at(13) = schedule;
 }
 
 void printDevice(Sensor* device) {
@@ -476,11 +513,7 @@ void printDevice(Sensor* device) {
 }
 
 void printAllDevices() {
-    Serial.printf_P(PSTR("%s\n"), "Вывод информации об устройствах:");
-    /*
-      printDevice(pump);
-
-*/
+    Serial.printf_P(PSTR("\n%s\n"), "Вывод информации об устройствах:");
     for (auto light : lights) {
         printDevice(&light);
     }
@@ -493,6 +526,7 @@ void printAllDevices() {
     }
 
     printDevice(heater);
+    printDevice(pump);
 }
 
 float getSensorTemperature(const uint8_t* sensorAddress) {
@@ -910,6 +944,37 @@ void parseJSONHeater(const String& response) {
     }
 }
 
+void parseJSONPump(const String& response) {
+    DynamicJsonDocument doc(250);
+    DeserializationError err = deserializeJson(doc, response);
+    if (err) {
+        Serial.print(F(" Ошибка разбора: "));
+        Serial.println(err.c_str());
+        return;
+    } else {
+        JsonArray array = doc.as<JsonArray>();
+        for (JsonObject obj : array) {
+            boolean enabled = obj["enabled"];
+            std::string off = obj["off"];
+            std::string on = obj["on"];
+            uint8_t pin = obj["pin"];
+            boolean state = obj["state"];
+            std::string objectId = obj["objectId"];
+            off = off.substr(0, 10);
+            on = on.substr(0, 10);
+
+            pump->setState(state);
+            pump->setEnabled(enabled);
+            pump->setPin(pin);
+            pump->setObjectID(objectId);
+            pump->setOn(static_cast<time_t>(std::stoul(on)));
+            pump->setOff(static_cast<time_t>(std::stoul(off)));
+        }
+        doc.shrinkToFit();
+        doc.clear();
+    }
+}
+
 void setHostName() {
 #ifdef ARDUINO_ARCH_ESP8266
     WiFi.hostname(WiFi_hostname);
@@ -1052,6 +1117,24 @@ void attachDosersScheduler() {
 void attachHeaterScheduler() {
     for (size_t i = 0; i < DEVICE_COUNT; i++) {
         if (!schedules.at(i).getDevice()->isHeater()) {
+            continue;
+        }
+        auto schedule = schedules.at(i);
+        auto sensor = schedule.getDevice();
+        auto alarmOn = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), 0, deviceOnHandler, sensor);
+        auto alarmOff = Alarm.alarmRepeat(sensor->getHourOff(), sensor->getMinuteOff(), 0, deviceOffHandler, sensor);
+
+        schedule.setOn(alarmOn);
+        schedule.setOff(alarmOff);
+        schedules.at(i) = schedule;
+        (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? deviceOnHandler(sensor)
+                                                                                        : deviceOffHandler(sensor);
+    }
+}
+
+void attachPumpScheduler() {
+    for (size_t i = 0; i < DEVICE_COUNT; i++) {
+        if (!schedules.at(i).getDevice()->isPump()) {
             continue;
         }
         auto schedule = schedules.at(i);
@@ -1223,6 +1306,32 @@ void getParamHeater() {
     }
 }
 
+void getParamPump() {
+    char* url = getPGMString(urlPump);
+    Serial.printf_P(PSTR(" %s\n"), "Помпа...");
+    if (https.begin(*client, String(url))) {
+        int httpCode = https.GET();
+        if (httpCode > 0) {
+            if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
+                responseString = https.getString();
+            }
+        } else {
+            Serial.printf_P(PSTR(" %s %s\n"), "Ошибка:", HTTPClient::errorToString(httpCode).c_str());
+        }
+        https.end();
+    } else {
+        Serial.printf_P(PSTR(" %s\n"), "Невозможно подключиться\n");
+    }
+    delPtr(url);
+    if (responseString.isEmpty()) {
+        Serial.printf_P(PSTR(" %s\n"), "Ответ пустой");
+    } else {
+        parseJSONPump(responseString);
+        responseString.clear();
+        attachPumpScheduler();
+    }
+}
+
 /*
 void getParamsEEPROM() {
    Serial.printf_P(PSTR("%s\n"), "Загрузка настроек из EEPROM");
@@ -1290,6 +1399,7 @@ void getParamsBackEnd() {
     getParamCO2();
     getParamDosers();
     getParamHeater();
+    getParamPump();
     /*
     // TODO сделать сохранение в EEPROM
     setParamsEEPROM();
