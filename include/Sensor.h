@@ -51,6 +51,10 @@ class Sensor {
         return (this->_type == SensorType::doser);
     }
 
+    bool isHeater() {
+        return (this->_type == SensorType::heater);
+    }
+
     void setStateNotify(bool state) {
         this->_state = state;
         mMediator.Send("1", *this);
@@ -169,7 +173,7 @@ class Sensor {
             serializeJson(doc, output);
         }
 
-        if ((_type == compressor) || (_type == flow) || (_type == co2)) {
+        if ((_type == compressor) || (_type == flow) || (_type == co2) || (_type == heater)) {
             const int capacity = JSON_OBJECT_SIZE(6);
             StaticJsonDocument<capacity> doc;
             doc["enabled"] = this->_enabled;

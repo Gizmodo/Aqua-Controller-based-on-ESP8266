@@ -60,6 +60,9 @@ const char urlFlow[] PROGMEM = {
 const char urlCO2[] PROGMEM = {
     "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/"
     "CO2?property=enabled&property=off&property=on&property=pin&property=state"};
+const char urlHeater[] PROGMEM = {
+    "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/"
+    "Heater?property=enabled&property=off&property=on&property=pin&property=state"};
 const char urlPutUptime[] PROGMEM = {
     "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/Uptime/"
     "66E232A0-EFF0-4A9C-9B6A-785C85B139B7"};
@@ -82,6 +85,9 @@ const char urlPutFlow[] PROGMEM = {
 const char urlPutCO2[] PROGMEM = {
     "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/CO2/"
     "7F3F2627-D359-4D8E-B18E-5D6527146DEA"};
+const char urlPutHeater[] PROGMEM = {
+    "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/Heater/"
+    "61D70CF3-7187-4B50-BBF5-DE6FD3B2DC47"};
 const char urlPostTemperature[] PROGMEM = {
     "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/TemperatureLog"};
 const char urlPutTemperature[] PROGMEM = {
@@ -136,8 +142,8 @@ String responseString = "";
 
 //// DEVICES
 
-#define LIGHTS_COUNT (6)                     // Кол-во прожекторов
-#define DEVICE_COUNT (LIGHTS_COUNT) + 3 + 3  // Кол-во всех устройств (нужно для Alarm'ов)
+#define LIGHTS_COUNT (6)                         // Кол-во прожекторов
+#define DEVICE_COUNT (LIGHTS_COUNT) + 3 + 3 + 1  // Кол-во всех устройств (нужно для Alarm'ов)
 //// Дозаторы
 #define DOSERS_COUNT (3)  // Кол-во дозаторов
 
@@ -154,9 +160,6 @@ Mediator<Sensor> medFlow;
 Mediator<Sensor> medPump;
 //Прожекторы
 Mediator<Sensor> medLight;
-//Кормушка
-// TODO сменить класс Sensor на определенный класс данного устройства
-Mediator<Sensor> medFeeder;
 // CO2
 Mediator<Sensor> medCO2;
 //Нагреватель
@@ -166,7 +169,6 @@ Mediator<Sensor> medHeater;
 Sensor* compressor;
 Sensor* flow;
 Sensor* pump;
-Sensor* feeder;
 Sensor* co2;
 Sensor* heater;
 
@@ -211,10 +213,7 @@ typename _Unique_if<T>::_Known_bound make_unique(Args&&...) = delete;
 }  // namespace std_esp32
 #endif
 //// METHODS
-void test() {
-    auto dos = dosers.at(0);
-    // dos.
-}
+
 void getTime() {
     char* strDateTime = clockRTC.dateFormat("H:i:s", clockRTC.getDateTime());
     Serial.printf_P(PSTR("Время %s\n"), String(strDateTime).c_str());
@@ -352,10 +351,6 @@ void callbackLight(Sensor device) {
     delPtr(aj);
 }
 
-void callbackFeeder(Sensor device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Callback", device.getName().c_str());
-}
-
 void callbackCO2(Sensor device) {
     Serial.printf_P(PSTR("%s %s\n"), "Callback", device.getName().c_str());
     char* url = nullptr;
@@ -388,6 +383,32 @@ void callbackCO2(Sensor device) {
 
 void callbackHeater(Sensor device) {
     Serial.printf_P(PSTR("%s %s\n"), "Callback", device.getName().c_str());
+    char* url = nullptr;
+    char* ct = nullptr;
+    char* aj = nullptr;
+    String urlString;
+    String payload;
+    url = getPGMString(urlPutHeater);
+    urlString = String(url);
+
+    delPtr(url);
+    ct = getPGMString(contentType);
+    aj = getPGMString(applicationJson);
+    payload = String(device.serialize().c_str());
+    if (https.begin(*client, urlString)) {
+        https.addHeader(String(ct), String(aj));
+        int httpCode = https.PUT(payload);
+        if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
+            Serial.printf_P(PSTR("%s состояние %s\n"), device.getName().c_str(), (device.getState() ? "ON" : "OFF"));
+        } else {
+            Serial.printf_P(PSTR("%s: %s\n"), "Ошибка", HTTPClient::errorToString(httpCode).c_str());
+        }
+        https.end();
+    } else {
+        Serial.printf_P(PSTR("%s\n"), "Невозможно подключиться\n");
+    }
+    delPtr(ct);
+    delPtr(aj);
 }
 
 void initMediators() {
@@ -395,7 +416,6 @@ void initMediators() {
     medFlow.Register("1", callbackFlow);
     medPump.Register("1", callbackPump);
     medLight.Register("1", callbackLight);
-    medFeeder.Register("1", callbackFeeder);
     medCO2.Register("1", callbackCO2);
     medHeater.Register("1", callbackHeater);
 }
@@ -404,7 +424,6 @@ void createDevicesAndScheduler() {
     compressor = new Sensor(medCompressor, "Компрессор", Sensor::compressor);
     flow = new Sensor(medFlow, "Помпа течения", Sensor::flow);
     pump = new Sensor(medPump, "Помпа подъёмная", Sensor::pump);
-    feeder = new Sensor(medFeeder, "Кормушка", Sensor::feeder);
     co2 = new Sensor(medCO2, "CO2", Sensor::co2);
     heater = new Sensor(medHeater, "Нагреватель", Sensor::heater);
 
@@ -440,6 +459,11 @@ void createDevicesAndScheduler() {
         schedule_.setDevice(&(dosers.at(i)));
         schedules.at(i + 9) = schedule_;
     }
+
+    // Heater
+    schedule = schedules.at(12);
+    schedule.setDevice(heater);
+    schedules.at(12) = schedule;
 }
 
 void printDevice(Sensor* device) {
@@ -455,8 +479,7 @@ void printAllDevices() {
     Serial.printf_P(PSTR("%s\n"), "Вывод информации об устройствах:");
     /*
       printDevice(pump);
-      printDevice(feeder);
-      printDevice(heater);
+
 */
     for (auto light : lights) {
         printDevice(&light);
@@ -468,6 +491,8 @@ void printAllDevices() {
     for (auto doser : dosers) {
         printDevice(&doser);
     }
+
+    printDevice(heater);
 }
 
 float getSensorTemperature(const uint8_t* sensorAddress) {
@@ -854,6 +879,37 @@ void parseJSONCO2(const String& response) {
     }
 }
 
+void parseJSONHeater(const String& response) {
+    DynamicJsonDocument doc(250);
+    DeserializationError err = deserializeJson(doc, response);
+    if (err) {
+        Serial.print(F(" Ошибка разбора: "));
+        Serial.println(err.c_str());
+        return;
+    } else {
+        JsonArray array = doc.as<JsonArray>();
+        for (JsonObject obj : array) {
+            boolean enabled = obj["enabled"];
+            std::string off = obj["off"];
+            std::string on = obj["on"];
+            uint8_t pin = obj["pin"];
+            boolean state = obj["state"];
+            std::string objectId = obj["objectId"];
+            off = off.substr(0, 10);
+            on = on.substr(0, 10);
+
+            heater->setState(state);
+            heater->setEnabled(enabled);
+            heater->setPin(pin);
+            heater->setObjectID(objectId);
+            heater->setOn(static_cast<time_t>(std::stoul(on)));
+            heater->setOff(static_cast<time_t>(std::stoul(off)));
+        }
+        doc.shrinkToFit();
+        doc.clear();
+    }
+}
+
 void setHostName() {
 #ifdef ARDUINO_ARCH_ESP8266
     WiFi.hostname(WiFi_hostname);
@@ -993,6 +1049,24 @@ void attachDosersScheduler() {
     }
 }
 
+void attachHeaterScheduler() {
+    for (size_t i = 0; i < DEVICE_COUNT; i++) {
+        if (!schedules.at(i).getDevice()->isHeater()) {
+            continue;
+        }
+        auto schedule = schedules.at(i);
+        auto sensor = schedule.getDevice();
+        auto alarmOn = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), 0, deviceOnHandler, sensor);
+        auto alarmOff = Alarm.alarmRepeat(sensor->getHourOff(), sensor->getMinuteOff(), 0, deviceOffHandler, sensor);
+
+        schedule.setOn(alarmOn);
+        schedule.setOff(alarmOff);
+        schedules.at(i) = schedule;
+        (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? deviceOnHandler(sensor)
+                                                                                        : deviceOffHandler(sensor);
+    }
+}
+
 void getParamLights() {
     char* url = getPGMString(urlLights);
     Serial.printf_P(PSTR(" %s\n"), "Прожекторы...");
@@ -1122,6 +1196,33 @@ void getParamCO2() {
         attachCO2Scheduler();
     }
 }
+
+void getParamHeater() {
+    char* url = getPGMString(urlHeater);
+    Serial.printf_P(PSTR(" %s\n"), "Нагреватель...");
+    if (https.begin(*client, String(url))) {
+        int httpCode = https.GET();
+        if (httpCode > 0) {
+            if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
+                responseString = https.getString();
+            }
+        } else {
+            Serial.printf_P(PSTR(" %s %s\n"), "Ошибка:", HTTPClient::errorToString(httpCode).c_str());
+        }
+        https.end();
+    } else {
+        Serial.printf_P(PSTR(" %s\n"), "Невозможно подключиться\n");
+    }
+    delPtr(url);
+    if (responseString.isEmpty()) {
+        Serial.printf_P(PSTR(" %s\n"), "Ответ пустой");
+    } else {
+        parseJSONHeater(responseString);
+        responseString.clear();
+        attachHeaterScheduler();
+    }
+}
+
 /*
 void getParamsEEPROM() {
    Serial.printf_P(PSTR("%s\n"), "Загрузка настроек из EEPROM");
@@ -1188,7 +1289,7 @@ void getParamsBackEnd() {
     getParamFlow();
     getParamCO2();
     getParamDosers();
-
+    getParamHeater();
     /*
     // TODO сделать сохранение в EEPROM
     setParamsEEPROM();
