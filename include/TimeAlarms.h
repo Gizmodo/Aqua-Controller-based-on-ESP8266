@@ -5,7 +5,7 @@
 #include <time.h>
 #include "Sensor.h"
 
-#define ALARMS_COUNT 27         // for esp8266 chip - max is 255
+#define ALARMS_COUNT 27  // for esp8266 chip - max is 255
 
 #define SECS_PER_MIN ((time_t)(60UL))
 #define SECS_PER_HOUR ((time_t)(3600UL))
@@ -64,6 +64,7 @@ typedef AlarmID_t AlarmId;  // Arduino friendly name
 
 typedef std::function<void()> OnTick_t;
 typedef std::function<void(Sensor*)> onTickSensor_t;
+typedef std::function<void(Sensor*, bool)> onTickSensorNew_t;
 
 // class defining an alarm instance, only used by dtAlarmsClass
 class AlarmClass {
@@ -71,11 +72,15 @@ class AlarmClass {
     AlarmClass();
     OnTick_t onTickHandler;
     onTickSensor_t onTickSensorHandler;
+    onTickSensorNew_t onTickSensorHandlerNew;
     void updateNextTrigger();
     time_t value;
+    time_t value2;
     time_t nextTrigger;
+    time_t nextTrigger2;
     AlarmMode_t Mode;
     Sensor* sensor = nullptr;
+    bool flag = false;
 };
 
 // class containing the collection of alarms
@@ -87,10 +92,17 @@ class TimeAlarmsClass {
     uint8_t servicedAlarmId;  // the alarm currently being serviced
     AlarmID_t create(time_t value, OnTick_t onTickHandler, bool isOneShot, dtAlarmPeriod_t alarmType);
     AlarmID_t createSensorAlarm(time_t value,
-                               onTickSensor_t onTickDeviceHandler,
-                               bool isOneShot,
-                               dtAlarmPeriod_t alarmType,
-                               Sensor* param);
+                                onTickSensor_t onTickDeviceHandler,
+                                bool isOneShot,
+                                dtAlarmPeriod_t alarmType,
+                                Sensor* param);
+    AlarmID_t createSensorAlarmNew(time_t value,
+                                   time_t value2,
+                                   onTickSensorNew_t onTickDeviceHandler,
+                                   bool isOneShot,
+                                   dtAlarmPeriod_t alarmType,
+                                   Sensor* param,
+                                   bool defaultState);
 
    public:
     TimeAlarmsClass();
@@ -123,6 +135,15 @@ class TimeAlarmsClass {
         if ((unsigned)value > SECS_PER_DAY)
             return INVALID_ALARM_ID;
         return createSensorAlarm(value, onTickBaseDeviceHandler, false, dtDailyAlarm, param);
+    }
+    AlarmID_t alarmRepeat(time_t value,
+                          time_t value2,
+                          onTickSensorNew_t onTickBaseDeviceHandler,
+                          Sensor* param,
+                          bool defaultState) {
+        if (((unsigned)value > SECS_PER_DAY) && ((unsigned)value2 > SECS_PER_DAY))
+            return INVALID_ALARM_ID;
+        return createSensorAlarmNew(value, value2, onTickBaseDeviceHandler, false, dtDailyAlarm, param, defaultState);
     }
     AlarmID_t alarmRepeat(const int H, const int M, const int S, OnTick_t onTickHandler) {
         return alarmRepeat(AlarmHMS(H, M, S), onTickHandler);
@@ -170,6 +191,8 @@ class TimeAlarmsClass {
     time_t getNextTrigger(AlarmID_t ID);  // returns the time of scheduled alarm
     bool isAllocated(AlarmID_t ID);       // returns true if this id is allocated
     bool isAlarm(AlarmID_t ID);           // returns true if id is for a time based alarm, false if its a timer or not allocated
+    time_t read2(AlarmID_t ID);
+    void write2(AlarmID_t ID, time_t value);
 };
 
 extern TimeAlarmsClass Alarm;  // make an instance for the user
