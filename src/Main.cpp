@@ -1744,3 +1744,19 @@ void setup() {
 void loop() {
     Alarm.delay(10);
 }
+
+void callbackTest(Sensor sensor) {
+}
+
+Sensor* sensorTest;
+Mediator<Sensor> medTest;
+void testAlarm() {
+    sensorTest = new Sensor(medTest, "test", Sensor::compressor);
+    medTest.Register("1", callbackTest);
+    sensorTest->setState(true);
+    sensorTest->setEnabled(true);
+    sensorTest->setPin(99);
+    sensorTest->setObjectID("asdasdrevrev");
+    sensorTest->setOn(static_cast<time_t>(std::stoul("1606162500")));
+    sensorTest->setOff(static_cast<time_t>(std::stoul("1606163400")));
+}
