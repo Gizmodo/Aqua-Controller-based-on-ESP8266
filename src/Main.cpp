@@ -1720,7 +1720,7 @@ void startTimers() {
     Serial.printf_P(PSTR("%s %d\n"), "Всего таймеров", Alarm.count());
 }
 
-void setup() {
+void setup1() {
     Serial.begin(115200);
     Serial.println();
     initDS3231();
@@ -1741,13 +1741,12 @@ void setup() {
     timer5();
 }
 
-void loop() {
-    Alarm.delay(10);
-}
-
 void callbackTest(Sensor sensor) {
+    Serial.println("callbackTest");
 }
-
+void handler(Sensor* sensor, bool flag) {
+    Serial.printf_P(PSTR("%s %d"), "Flag is", flag);
+}
 Sensor* sensorTest;
 Mediator<Sensor> medTest;
 void testAlarm() {
@@ -1757,6 +1756,25 @@ void testAlarm() {
     sensorTest->setEnabled(true);
     sensorTest->setPin(99);
     sensorTest->setObjectID("asdasdrevrev");
-    sensorTest->setOn(static_cast<time_t>(std::stoul("1606162500")));
-    sensorTest->setOff(static_cast<time_t>(std::stoul("1606163400")));
+    sensorTest->setOn(static_cast<time_t>(std::stoul("1606167300")));
+    sensorTest->setOff(static_cast<time_t>(std::stoul("1606167400")));
+    auto alarmOn = Alarm.alarmRepeat(sensorTest->getHourOn(), sensorTest->getMinuteOn(), sensorTest->getHourOff(),
+                                     sensorTest->getMinuteOff(),  handler, sensorTest, true);
+}
+
+void setup() {
+    Serial.begin(115200);
+    Serial.println();
+    initDS3231();
+    if (!initWiFi()) {
+        // getParamsEEPROM();
+    } else {
+        initHTTPClient();
+        initLocalClock();
+        // syncTime();
+        testAlarm();
+    }
+}
+void loop() {
+    Alarm.delay(10);
 }

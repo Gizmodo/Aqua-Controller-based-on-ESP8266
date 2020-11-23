@@ -145,6 +145,15 @@ class TimeAlarmsClass {
             return INVALID_ALARM_ID;
         return createSensorAlarmNew(value, value2, onTickBaseDeviceHandler, false, dtDailyAlarm, param, defaultState);
     }
+    AlarmID_t alarmRepeat(const int H1,
+                          const int M1,
+                          const int H2,
+                          const int M2,
+                          onTickSensorNew_t onTickBaseDeviceHandler,
+                          Sensor* param,
+                          bool defaultState) {
+        return alarmRepeat(AlarmHMS(H1, M1,0), AlarmHMS(H2, M2, 0), onTickBaseDeviceHandler, param, defaultState);
+    }
     AlarmID_t alarmRepeat(const int H, const int M, const int S, OnTick_t onTickHandler) {
         return alarmRepeat(AlarmHMS(H, M, S), onTickHandler);
     }
