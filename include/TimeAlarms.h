@@ -152,7 +152,7 @@ class TimeAlarmsClass {
                           onTickSensorNew_t onTickBaseDeviceHandler,
                           Sensor* param,
                           bool defaultState) {
-        return alarmRepeat(AlarmHMS(H1, M1,0), AlarmHMS(H2, M2, 0), onTickBaseDeviceHandler, param, defaultState);
+        return alarmRepeat(AlarmHMS(H1, M1, 0), AlarmHMS(H2, M2, 0), onTickBaseDeviceHandler, param, defaultState);
     }
     AlarmID_t alarmRepeat(const int H, const int M, const int S, OnTick_t onTickHandler) {
         return alarmRepeat(AlarmHMS(H, M, S), onTickHandler);

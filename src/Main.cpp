@@ -1745,7 +1745,7 @@ void callbackTest(Sensor sensor) {
     Serial.println("callbackTest");
 }
 void handler(Sensor* sensor, bool flag) {
-    Serial.printf_P(PSTR("%s %d"), "Flag is", flag);
+    Serial.printf_P(PSTR("%s %d\n"), "Flag is", flag);
 }
 Sensor* sensorTest;
 Mediator<Sensor> medTest;
@@ -1756,10 +1756,13 @@ void testAlarm() {
     sensorTest->setEnabled(true);
     sensorTest->setPin(99);
     sensorTest->setObjectID("asdasdrevrev");
-    sensorTest->setOn(static_cast<time_t>(std::stoul("1606167300")));
-    sensorTest->setOff(static_cast<time_t>(std::stoul("1606167400")));
+    auto on = 1606254720;
+    sensorTest->setOn(static_cast<time_t>(on));
+    sensorTest->setOff(static_cast<time_t>(on + 60));
     auto alarmOn = Alarm.alarmRepeat(sensorTest->getHourOn(), sensorTest->getMinuteOn(), sensorTest->getHourOff(),
-                                     sensorTest->getMinuteOff(),  handler, sensorTest, true);
+                                     sensorTest->getMinuteOff(), handler, sensorTest, true);
+    Serial.printf_P(PSTR("%s %d\n"), "AlarmClass size ", sizeof(AlarmClass));
+    Serial.printf_P(PSTR("%s %d\n"), "FreeHeap size ", ESP.getFreeHeap());
 }
 
 void setup() {
@@ -1776,5 +1779,5 @@ void setup() {
     }
 }
 void loop() {
-    Alarm.delay(10);
+    Alarm.delay(1000);
 }
