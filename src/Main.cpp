@@ -1740,7 +1740,46 @@ void setup() {
     startTimers();
     timer5();
 }
+/*
+void callbackTest(Sensor sensor) {
+    Serial.println("callbackTest");
+}
+void handler(Sensor* sensor, bool flag) {
+    Serial.printf_P(PSTR("%s %d\n"), "Flag is", flag);
+}
 
+Sensor* sensorTest;
+Mediator<Sensor> medTest;
+void testAlarm() {
+    sensorTest = new Sensor(medTest, "test", Sensor::compressor);
+    medTest.Register("1", callbackTest);
+    sensorTest->setState(true);
+    sensorTest->setEnabled(true);
+    sensorTest->setPin(99);
+    sensorTest->setObjectID("asdasdrevrev");
+    auto on = 1606254720;
+    sensorTest->setOn(static_cast<time_t>(on));
+    sensorTest->setOff(static_cast<time_t>(on + 60));
+    auto alarmOn = Alarm.alarmRepeat(sensorTest->getHourOn(), sensorTest->getMinuteOn(), sensorTest->getHourOff(),
+                                     sensorTest->getMinuteOff(), handler, sensorTest, true);
+    Serial.printf_P(PSTR("%s %d\n"), "AlarmClass size ", sizeof(AlarmClass));
+    Serial.printf_P(PSTR("%s %d\n"), "FreeHeap size ", ESP.getFreeHeap());
+}
+
+void setup() {
+    Serial.begin(115200);
+    Serial.println();
+    initDS3231();
+    if (!initWiFi()) {
+        // getParamsEEPROM();
+    } else {
+        initHTTPClient();
+        initLocalClock();
+        // syncTime();
+        testAlarm();
+    }
+}
+*/
 void loop() {
-    Alarm.delay(10);
+    Alarm.delay(1000);
 }
