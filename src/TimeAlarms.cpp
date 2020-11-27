@@ -367,8 +367,7 @@ AlarmID_t TimeAlarmsClass::createSensorAlarmNew(time_t value,
                                                 onTickSensorNew_t onTickDeviceHandler,
                                                 bool isOneShot,
                                                 dtAlarmPeriod_t alarmType,
-                                                Sensor* param,
-                                                bool defaultState) {
+                                                Sensor* param) {
     time_t now = time(nullptr);
     if (!((dtIsAlarm(alarmType) && now < SECS_PER_YEAR) || (dtUseAbsoluteValue(alarmType) && (value == 0) && (value2 == 0)))) {
         for (uint8_t id = 0; id < ALARMS_COUNT; id++) {
@@ -379,7 +378,7 @@ AlarmID_t TimeAlarmsClass::createSensorAlarmNew(time_t value,
                 Alarm[id].Mode.alarmType = alarmType;
                 Alarm[id].value = value;
                 Alarm[id].value2 = value2;
-                Alarm[id].flag = defaultState;
+                Alarm[id].flag = true;
                 enable(id);
                 return id;
             }

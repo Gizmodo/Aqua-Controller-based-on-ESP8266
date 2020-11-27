@@ -101,8 +101,7 @@ class TimeAlarmsClass {
                                    onTickSensorNew_t onTickDeviceHandler,
                                    bool isOneShot,
                                    dtAlarmPeriod_t alarmType,
-                                   Sensor* param,
-                                   bool defaultState);
+                                   Sensor* param);
 
    public:
     TimeAlarmsClass();
@@ -136,23 +135,18 @@ class TimeAlarmsClass {
             return INVALID_ALARM_ID;
         return createSensorAlarm(value, onTickBaseDeviceHandler, false, dtDailyAlarm, param);
     }
-    AlarmID_t alarmRepeat(time_t value,
-                          time_t value2,
-                          onTickSensorNew_t onTickBaseDeviceHandler,
-                          Sensor* param,
-                          bool defaultState) {
+    AlarmID_t alarmRepeat(time_t value, time_t value2, onTickSensorNew_t onTickBaseDeviceHandler, Sensor* param) {
         if (((unsigned)value > SECS_PER_DAY) && ((unsigned)value2 > SECS_PER_DAY))
             return INVALID_ALARM_ID;
-        return createSensorAlarmNew(value, value2, onTickBaseDeviceHandler, false, dtDailyAlarm, param, defaultState);
+        return createSensorAlarmNew(value, value2, onTickBaseDeviceHandler, false, dtDailyAlarm, param);
     }
     AlarmID_t alarmRepeat(const int H1,
                           const int M1,
                           const int H2,
                           const int M2,
                           onTickSensorNew_t onTickBaseDeviceHandler,
-                          Sensor* param,
-                          bool defaultState) {
-        return alarmRepeat(AlarmHMS(H1, M1, 0), AlarmHMS(H2, M2, 0), onTickBaseDeviceHandler, param, defaultState);
+                          Sensor* param) {
+        return alarmRepeat(AlarmHMS(H1, M1, 0), AlarmHMS(H2, M2, 0), onTickBaseDeviceHandler, param);
     }
     AlarmID_t alarmRepeat(const int H, const int M, const int S, OnTick_t onTickHandler) {
         return alarmRepeat(AlarmHMS(H, M, S), onTickHandler);
