@@ -36,30 +36,23 @@ void AlarmClass::updateNextTrigger() {
             } else if (Mode.alarmType == dtDailyAlarm) {
                 // if this is a daily alarm
                 if ((value > 0) && (value2 > 0)) {
-                    Serial.println(" updateNextTrigger");
-                    Serial.printf(" timeNow %ld\n", timenow);
                     // this is a two time alarm
                     // new
                     if (value + previousMidnight(time(nullptr)) <= timenow) {
                         // tomorrow
                         nextTrigger = value + nextMidnight(timenow);
-                        Serial.printf(" nextTrigger will fire tomorrow %ld\n", nextTrigger);
                     } else {
                         // today
                         nextTrigger = value + previousMidnight(timenow);
-                        Serial.printf(" nextTrigger fires today %ld\n", nextTrigger);
                     }
                     if (value2 + previousMidnight(time(nullptr)) <= timenow) {
                         // tomorrow
                         nextTrigger2 = value2 + nextMidnight(timenow);
-                        Serial.printf(" nextTrigger2 will fire tomorrow %ld\n", nextTrigger2);
                     } else {
                         // today
                         nextTrigger2 = value2 + previousMidnight(timenow);
-                        Serial.printf(" nextTrigger2 fires today %ld\n", nextTrigger2);
                     }
                 } else {
-                    Serial.println("!!!!!!!!!! ");
                     // old
                     if (value + previousMidnight(time(nullptr)) <= timenow) {
                         // if time has passed then set for tomorrow
@@ -257,36 +250,26 @@ void TimeAlarmsClass::serviceAlarms() {
             if (Alarm[i].Mode.isEnabled) {
                 if ((Alarm[i].value2 > 0) && (Alarm[i].value > 0)) {
                     if (now >= Alarm[i].nextTrigger) {
-                        Serial.println("serviceAlarms nextTrigger fire");
                         auto TickDeviceHandlerNew = Alarm[i].onTickSensorHandlerNew;
                         if (Alarm[i].Mode.isOneShot) {
                             free(i);
                         } else {
-                            Serial.println("call updateTriggers inside 1");
                             Alarm[i].updateNextTrigger();
-                            Serial.println("finish call updateTriggers inside 1");
                         }
                         if (TickDeviceHandlerNew != nullptr) {
-                            Serial.println("call handler 1");
                             TickDeviceHandlerNew(Alarm[i].sensor, Alarm[i].flag);
-                            Serial.println("finish call handler 1");
                             Alarm[i].flag = !Alarm[i].flag;
                         }
                     }
                     if (now >= Alarm[i].nextTrigger2) {
-                        Serial.println("serviceAlarms nextTrigger2 fire");
                         auto TickDeviceHandlerNew = Alarm[i].onTickSensorHandlerNew;
                         if (Alarm[i].Mode.isOneShot) {
                             free(i);
                         } else {
-                            Serial.println("call updateTriggers inside 2");
                             Alarm[i].updateNextTrigger();
-                            Serial.println("finish call updateTriggers inside 2");
                         }
                         if (TickDeviceHandlerNew != nullptr) {
-                            Serial.println("call handler 2");
                             TickDeviceHandlerNew(Alarm[i].sensor, Alarm[i].flag);
-                            Serial.println("finish call handler 2");
                             Alarm[i].flag = !Alarm[i].flag;
                         }
                     }

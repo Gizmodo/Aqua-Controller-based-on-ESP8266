@@ -1720,7 +1720,7 @@ void startTimers() {
     Serial.printf_P(PSTR("%s %d\n"), "Всего таймеров", Alarm.count());
 }
 
-void setup1() {
+void setup() {
     Serial.begin(115200);
     Serial.println();
     initDS3231();
@@ -1740,13 +1740,14 @@ void setup1() {
     startTimers();
     timer5();
 }
-
+/*
 void callbackTest(Sensor sensor) {
     Serial.println("callbackTest");
 }
 void handler(Sensor* sensor, bool flag) {
     Serial.printf_P(PSTR("%s %d\n"), "Flag is", flag);
 }
+
 Sensor* sensorTest;
 Mediator<Sensor> medTest;
 void testAlarm() {
@@ -1778,6 +1779,7 @@ void setup() {
         testAlarm();
     }
 }
+*/
 void loop() {
     Alarm.delay(1000);
 }
