@@ -27,3 +27,11 @@ AlarmID_t Scheduler::getOff() {
 void Scheduler::setOff(AlarmID_t off) {
     this->_off = off;
 }
+
+AlarmID_t Scheduler::getAlarm() {
+    return this->_alarm;
+}
+
+void Scheduler::setAlarm(AlarmID_t alarm) {
+    this->_alarm = alarm;
+}

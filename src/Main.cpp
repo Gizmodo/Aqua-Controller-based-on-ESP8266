@@ -637,6 +637,18 @@ AlarmID_t findAlarmByDevice(Sensor* device, bool isOn) {
     return result;
 }
 
+AlarmID_t findAlarmIDBySensor(Sensor* sensor) {
+    AlarmID_t result = -1;
+    for (auto scheduleItem : schedules) {
+        auto sensorToFind = scheduleItem.getDevice();
+        if (sensor == sensorToFind) {
+            result = scheduleItem.getAlarm();
+            break;
+        }
+    }
+    return result;
+}
+
 void doserOnHandler(Sensor* device) {
     auto sensor = static_cast<Doser*>(device);
     if (device->getEnabled()) {
@@ -690,6 +702,23 @@ void deviceOnHandler(Sensor* device) {
         Serial.printf_P(PSTR("%s %s\n"), device->getName().c_str(), "нельзя изменять.");
         Alarm.disable(findAlarmByDevice(device, true));
         Alarm.disable(findAlarmByDevice(device, false));
+    }
+}
+
+void sensorHandler(Sensor* sensor, bool state) {
+    if (sensor->getEnabled()) {
+        if (state) {
+            Serial.printf_P(PSTR("%s: включение, pin %d\n"), sensor->getName().c_str(), sensor->getPin());
+        } else {
+            Serial.printf_P(PSTR("%s: выключение, pin %d\n"), sensor->getName().c_str(), sensor->getPin());
+        }
+        shiftRegister.setPin(countShiftRegister, sensor->getPin(), state ? HIGH : LOW);
+        sendMessage(sensor, state);
+        Alarm.enable(findAlarmIDBySensor(sensor));
+        sensor->setStateNotify(state);
+    } else {
+        Serial.printf_P(PSTR("%s %s\n"), sensor->getName().c_str(), "нельзя изменять.");
+        Alarm.disable(findAlarmIDBySensor(sensor));
     }
 }
 
@@ -1001,75 +1030,107 @@ boolean initWiFi() {
     }
 }
 
-void attachLightScheduler() {
-    for (size_t i = 0; i < DEVICE_COUNT; i++) {
-        if (!schedules.at(i).getDevice()->isLight()) {
-            continue;
-        }
-        auto schedule = schedules.at(i);
-        auto sensor = schedule.getDevice();
-        auto alarmOn = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), 0, deviceOnHandler, sensor);
-        auto alarmOff = Alarm.alarmRepeat(sensor->getHourOff(), sensor->getMinuteOff(), 0, deviceOffHandler, sensor);
+void attachAlarm(Sensor::SensorType sensorType) {
+    switch (sensorType) {
+        case Sensor::co2:
+            for (size_t i = 0; i < DEVICE_COUNT; i++) {
+                if (!schedules.at(i).getDevice()->isCO2()) {
+                    continue;
+                }
+                auto schedule = schedules.at(i);
 
-        schedule.setOn(alarmOn);
-        schedule.setOff(alarmOff);
-        schedules.at(i) = schedule;
-        (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? deviceOnHandler(sensor)
-                                                                                        : deviceOffHandler(sensor);
-    }
-}
+                auto sensor = schedule.getDevice();
+                auto alarm = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), sensor->getHourOff(),
+                                               sensor->getMinuteOff(), sensorHandler, sensor);
+                schedule.setAlarm(alarm);
 
-void attachCompressorScheduler() {
-    for (size_t i = 0; i < DEVICE_COUNT; i++) {
-        if (!schedules.at(i).getDevice()->isCompressor()) {
-            continue;
-        }
-        auto schedule = schedules.at(i);
-        auto sensor = schedule.getDevice();
-        auto alarmOn = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), 0, deviceOnHandler, sensor);
-        auto alarmOff = Alarm.alarmRepeat(sensor->getHourOff(), sensor->getMinuteOff(), 0, deviceOffHandler, sensor);
+                schedules.at(i) = schedule;
+                (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? sensorHandler(sensor, true)
+                                                                                                : sensorHandler(sensor, false);
+            }
+            break;
+        case Sensor::compressor:
+            for (size_t i = 0; i < DEVICE_COUNT; i++) {
+                if (!schedules.at(i).getDevice()->isCompressor()) {
+                    continue;
+                }
+                auto schedule = schedules.at(i);
+                auto sensor = schedule.getDevice();
+                auto alarm = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), sensor->getHourOff(),
+                                               sensor->getMinuteOff(), sensorHandler, sensor);
+                schedule.setAlarm(alarm);
 
-        schedule.setOn(alarmOn);
-        schedule.setOff(alarmOff);
-        schedules.at(i) = schedule;
-        (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? deviceOnHandler(sensor)
-                                                                                        : deviceOffHandler(sensor);
-    }
-}
+                schedules.at(i) = schedule;
+                (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? sensorHandler(sensor, true)
+                                                                                                : sensorHandler(sensor, false);
+            }
+            break;
+        case Sensor::flow:
+            for (size_t i = 0; i < DEVICE_COUNT; i++) {
+                if (!schedules.at(i).getDevice()->isFlow()) {
+                    continue;
+                }
+                auto schedule = schedules.at(i);
+                auto sensor = schedule.getDevice();
+                auto alarm = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), sensor->getHourOff(),
+                                               sensor->getMinuteOff(), sensorHandler, sensor);
+                schedule.setAlarm(alarm);
 
-void attachFlowScheduler() {
-    for (size_t i = 0; i < DEVICE_COUNT; i++) {
-        if (!schedules.at(i).getDevice()->isFlow()) {
-            continue;
-        }
-        auto schedule = schedules.at(i);
-        auto sensor = schedule.getDevice();
-        auto alarmOn = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), 0, deviceOnHandler, sensor);
-        auto alarmOff = Alarm.alarmRepeat(sensor->getHourOff(), sensor->getMinuteOff(), 0, deviceOffHandler, sensor);
+                schedules.at(i) = schedule;
+                (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? sensorHandler(sensor, true)
+                                                                                                : sensorHandler(sensor, false);
+            }
+            break;
+        case Sensor::heater:
+            for (size_t i = 0; i < DEVICE_COUNT; i++) {
+                if (!schedules.at(i).getDevice()->isHeater()) {
+                    continue;
+                }
+                auto schedule = schedules.at(i);
+                auto sensor = schedule.getDevice();
+                auto alarm = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), sensor->getHourOff(),
+                                               sensor->getMinuteOff(), sensorHandler, sensor);
+                schedule.setAlarm(alarm);
 
-        schedule.setOn(alarmOn);
-        schedule.setOff(alarmOff);
-        schedules.at(i) = schedule;
-        (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? deviceOnHandler(sensor)
-                                                                                        : deviceOffHandler(sensor);
-    }
-}
+                schedules.at(i) = schedule;
+                (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? sensorHandler(sensor, true)
+                                                                                                : sensorHandler(sensor, false);
+            }
+            break;
+        case Sensor::light:
+            for (size_t i = 0; i < DEVICE_COUNT; i++) {
+                if (!schedules.at(i).getDevice()->isLight()) {
+                    continue;
+                }
+                auto schedule = schedules.at(i);
+                auto sensor = schedule.getDevice();
+                auto alarm = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), sensor->getHourOff(),
+                                               sensor->getMinuteOff(), sensorHandler, sensor);
+                schedule.setAlarm(alarm);
 
-void attachCO2Scheduler() {
-    for (size_t i = 0; i < DEVICE_COUNT; i++) {
-        if (!schedules.at(i).getDevice()->isCO2()) {
-            continue;
-        }
-        auto schedule = schedules.at(i);
-        auto sensor = schedule.getDevice();
-        auto alarmOn = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), 0, deviceOnHandler, sensor);
-        auto alarmOff = Alarm.alarmRepeat(sensor->getHourOff(), sensor->getMinuteOff(), 0, deviceOffHandler, sensor);
+                schedules.at(i) = schedule;
+                (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? sensorHandler(sensor, true)
+                                                                                                : sensorHandler(sensor, false);
+            }
+            break;
+        case Sensor::pump:
+            for (size_t i = 0; i < DEVICE_COUNT; i++) {
+                if (!schedules.at(i).getDevice()->isPump()) {
+                    continue;
+                }
+                auto schedule = schedules.at(i);
+                auto sensor = schedule.getDevice();
+                auto alarm = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), sensor->getHourOff(),
+                                               sensor->getMinuteOff(), sensorHandler, sensor);
+                schedule.setAlarm(alarm);
 
-        schedule.setOn(alarmOn);
-        schedule.setOff(alarmOff);
-        schedules.at(i) = schedule;
-        (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? deviceOnHandler(sensor)
-                                                                                        : deviceOffHandler(sensor);
+                schedules.at(i) = schedule;
+                (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? sensorHandler(sensor, true)
+                                                                                                : sensorHandler(sensor, false);
+            }
+            break;
+        default:
+            break;
     }
 }
 
@@ -1110,42 +1171,6 @@ void attachDosersScheduler() {
     }
 }
 
-void attachHeaterScheduler() {
-    for (size_t i = 0; i < DEVICE_COUNT; i++) {
-        if (!schedules.at(i).getDevice()->isHeater()) {
-            continue;
-        }
-        auto schedule = schedules.at(i);
-        auto sensor = schedule.getDevice();
-        auto alarmOn = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), 0, deviceOnHandler, sensor);
-        auto alarmOff = Alarm.alarmRepeat(sensor->getHourOff(), sensor->getMinuteOff(), 0, deviceOffHandler, sensor);
-
-        schedule.setOn(alarmOn);
-        schedule.setOff(alarmOff);
-        schedules.at(i) = schedule;
-        (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? deviceOnHandler(sensor)
-                                                                                        : deviceOffHandler(sensor);
-    }
-}
-
-void attachPumpScheduler() {
-    for (size_t i = 0; i < DEVICE_COUNT; i++) {
-        if (!schedules.at(i).getDevice()->isPump()) {
-            continue;
-        }
-        auto schedule = schedules.at(i);
-        auto sensor = schedule.getDevice();
-        auto alarmOn = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), 0, deviceOnHandler, sensor);
-        auto alarmOff = Alarm.alarmRepeat(sensor->getHourOff(), sensor->getMinuteOff(), 0, deviceOffHandler, sensor);
-
-        schedule.setOn(alarmOn);
-        schedule.setOff(alarmOff);
-        schedules.at(i) = schedule;
-        (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? deviceOnHandler(sensor)
-                                                                                        : deviceOffHandler(sensor);
-    }
-}
-
 void getParamLights() {
     char* url = getPGMString(urlLights);
     Serial.printf_P(PSTR(" %s\n"), "Прожекторы...");
@@ -1168,7 +1193,7 @@ void getParamLights() {
     } else {
         parseJSONLights(responseString);
         responseString.clear();
-        attachLightScheduler();
+        attachAlarm(Sensor::light);
     }
 }
 
@@ -1220,7 +1245,7 @@ void getParamCompressor() {
     } else {
         parseJSONCompressor(responseString);
         responseString.clear();
-        attachCompressorScheduler();
+        attachAlarm(Sensor::compressor);
     }
 }
 
@@ -1246,7 +1271,7 @@ void getParamFlow() {
     } else {
         parseJSONFlow(responseString);
         responseString.clear();
-        attachFlowScheduler();
+        attachAlarm(Sensor::flow));
     }
 }
 
@@ -1272,7 +1297,7 @@ void getParamCO2() {
     } else {
         parseJSONCO2(responseString);
         responseString.clear();
-        attachCO2Scheduler();
+        attachAlarm(Sensor::co2);
     }
 }
 
@@ -1298,7 +1323,7 @@ void getParamHeater() {
     } else {
         parseJSONHeater(responseString);
         responseString.clear();
-        attachHeaterScheduler();
+        attachAlarm(Sensor::heater);
     }
 }
 
@@ -1324,7 +1349,7 @@ void getParamPump() {
     } else {
         parseJSONPump(responseString);
         responseString.clear();
-        attachPumpScheduler();
+        attachAlarm(Sensor::pump)
     }
 }
 
