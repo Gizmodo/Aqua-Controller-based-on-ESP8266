@@ -649,7 +649,7 @@ AlarmID_t findAlarmIDBySensor(Sensor* sensor) {
     return result;
 }
 
-void doserOnHandler(Sensor* device) {
+void doserOnHandler(Sensor* device, bool flag) {
     auto sensor = static_cast<Doser*>(device);
     if (device->getEnabled()) {
         Serial.printf_P(PSTR("%s: включение\n"), sensor->getName().c_str());
@@ -1129,45 +1129,39 @@ void attachAlarm(Sensor::SensorType sensorType) {
                                                                                                 : sensorHandler(sensor, false);
             }
             break;
-        default:
+        case Sensor::doser:
+            std::unique_ptr<GBasic> emptyDoser{};
+            for (size_t i = 0; i < DEVICE_COUNT; i++) {
+                if (!schedules.at(i).getDevice()->isDoser()) {
+                    continue;
+                }
+                auto schedule = schedules.at(i);
+                auto sensor = static_cast<Doser*>(schedule.getDevice());
+
+                emptyDoser = std::make_unique<GBasic>(sensor->getSteps(), sensor->getDirPin(), sensor->getStepPin(),
+                                                      sensor->getEnablePin(), sensor->getMode0Pin(), sensor->getMode1Pin(),
+                                                      sensor->getMode2Pin(), shiftRegister, sensor->getIndex());
+                auto doserType = sensor->getDoserType();
+                if (doserType == Doser::K) {
+                    doserK = std::move(emptyDoser);
+                } else if (doserType == Doser::NP) {
+                    doserNP = std::move(emptyDoser);
+                } else if (doserType == Doser::Fe) {
+                    doserFe = std::move(emptyDoser);
+                } else {
+                    Serial.printf_P(PSTR("%s"), "Неизвестный тип дозатора");
+                }
+                auto alarm = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), 0, 0, doserOnHandler, sensor);
+
+                // auto alarmOn = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), 0, doserOnHandler, sensor);
+
+                schedule.setOn(alarm);
+                schedules.at(i) = schedule;
+                // TODO Селать проверку на было ли уже событие в текущем дне
+                // (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? deviceOnHandler(sensor)
+                //                                                                                 : deviceOffHandler(sensor);
+            }
             break;
-    }
-}
-
-void attachDosersScheduler() {
-    std::unique_ptr<GBasic> emptyDoser{};
-    for (size_t i = 0; i < DEVICE_COUNT; i++) {
-        if (!schedules.at(i).getDevice()->isDoser()) {
-            continue;
-        }
-        auto schedule = schedules.at(i);
-        auto sensor = static_cast<Doser*>(schedule.getDevice());
-
-        emptyDoser = std::make_unique<GBasic>(sensor->getSteps(), sensor->getDirPin(), sensor->getStepPin(), sensor->getEnablePin(),
-                                              sensor->getMode0Pin(), sensor->getMode1Pin(), sensor->getMode2Pin(), shiftRegister,
-                                              sensor->getIndex());
-        switch (sensor->getDoserType()) {
-            case Doser::K:
-                doserK = std::move(emptyDoser);
-                break;
-            case Doser::NP:
-                doserNP = std::move(emptyDoser);
-                break;
-            case Doser::Fe:
-                doserFe = std::move(emptyDoser);
-                break;
-            default:
-                Serial.printf_P(PSTR("%s"), "Неизвестный тип дозатора");
-                break;
-        }
-
-        auto alarmOn = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), 0, doserOnHandler, sensor);
-
-        schedule.setOn(alarmOn);
-        schedules.at(i) = schedule;
-        // TODO Селать проверку на было ли уже событие в текущем дне
-        // (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? deviceOnHandler(sensor)
-        //                                                                                 : deviceOffHandler(sensor);
     }
 }
 
@@ -1219,7 +1213,7 @@ void getParamDosers() {
     } else {
         parseJSONDosers(responseString);
         responseString.clear();
-        attachDosersScheduler();
+        attachAlarm(Sensor::doser);
     }
 }
 
@@ -1271,7 +1265,7 @@ void getParamFlow() {
     } else {
         parseJSONFlow(responseString);
         responseString.clear();
-        attachAlarm(Sensor::flow));
+        attachAlarm(Sensor::flow);
     }
 }
 
@@ -1349,7 +1343,7 @@ void getParamPump() {
     } else {
         parseJSONPump(responseString);
         responseString.clear();
-        attachAlarm(Sensor::pump)
+        attachAlarm(Sensor::pump);
     }
 }
 

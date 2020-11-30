@@ -5,7 +5,7 @@
 #include <time.h>
 #include "Sensor.h"
 
-#define ALARMS_COUNT 27  // for esp8266 chip - max is 255
+#define ALARMS_COUNT 16  // for esp8266 chip - max is 255
 
 #define SECS_PER_MIN ((time_t)(60UL))
 #define SECS_PER_HOUR ((time_t)(3600UL))
@@ -63,7 +63,6 @@ typedef AlarmID_t AlarmId;  // Arduino friendly name
 #include "Scheduler.h"
 
 typedef std::function<void()> OnTick_t;
-typedef std::function<void(Sensor*)> onTickSensor_t;
 typedef std::function<void(Sensor*, bool)> onTickSensorNew_t;
 
 // class defining an alarm instance, only used by dtAlarmsClass
@@ -71,7 +70,6 @@ class AlarmClass {
    public:
     AlarmClass();
     OnTick_t onTickHandler;
-    onTickSensor_t onTickSensorHandler;
     onTickSensorNew_t onTickSensorHandlerNew;
     void updateNextTrigger();
     time_t value;
@@ -91,11 +89,6 @@ class TimeAlarmsClass {
     bool isServicing;
     uint8_t servicedAlarmId;  // the alarm currently being serviced
     AlarmID_t create(time_t value, OnTick_t onTickHandler, bool isOneShot, dtAlarmPeriod_t alarmType);
-    AlarmID_t createSensorAlarm(time_t value,
-                                onTickSensor_t onTickDeviceHandler,
-                                bool isOneShot,
-                                dtAlarmPeriod_t alarmType,
-                                Sensor* param);
     AlarmID_t createSensorAlarmNew(time_t value,
                                    time_t value2,
                                    onTickSensorNew_t onTickDeviceHandler,
@@ -130,11 +123,6 @@ class TimeAlarmsClass {
             return INVALID_ALARM_ID;
         return create(value, onTickHandler, false, dtDailyAlarm);
     }
-    AlarmID_t alarmRepeat(time_t value, onTickSensor_t onTickBaseDeviceHandler, Sensor* param) {
-        if ((unsigned)value > SECS_PER_DAY)
-            return INVALID_ALARM_ID;
-        return createSensorAlarm(value, onTickBaseDeviceHandler, false, dtDailyAlarm, param);
-    }
     AlarmID_t alarmRepeat(time_t value, time_t value2, onTickSensorNew_t onTickBaseDeviceHandler, Sensor* param) {
         if (((unsigned)value > SECS_PER_DAY) && ((unsigned)value2 > SECS_PER_DAY))
             return INVALID_ALARM_ID;
@@ -151,9 +139,6 @@ class TimeAlarmsClass {
     AlarmID_t alarmRepeat(const int H, const int M, const int S, OnTick_t onTickHandler) {
         return alarmRepeat(AlarmHMS(H, M, S), onTickHandler);
     }
-    AlarmID_t alarmRepeat(const int H, const int M, const int S, onTickSensor_t onTickBaseDeviceHandler, Sensor* param) {
-        return alarmRepeat(AlarmHMS(H, M, S), onTickBaseDeviceHandler, param);
-    }
     // trigger at a regular interval
     AlarmID_t timerRepeat(time_t value, OnTick_t onTickHandler) {
         if (value <= 0)
@@ -162,14 +147,6 @@ class TimeAlarmsClass {
     }
     AlarmID_t timerRepeat(const int H, const int M, const int S, OnTick_t onTickHandler) {
         return timerRepeat(AlarmHMS(H, M, S), onTickHandler);
-    }
-    AlarmID_t timerRepeat(time_t value, onTickSensor_t onTickBaseDeviceHandler, Sensor* param) {
-        if (value <= 0)
-            return INVALID_ALARM_ID;
-        return createSensorAlarm(value, onTickBaseDeviceHandler, false, dtTimer, param);
-    }
-    AlarmID_t timerRepeat(const int H, const int M, const int S, onTickSensor_t onTickBaseDeviceHandler, Sensor* param) {
-        return timerRepeat(AlarmHMS(H, M, S), onTickBaseDeviceHandler, param);
     }
     void delay(unsigned long ms);
 
