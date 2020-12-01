@@ -264,7 +264,7 @@ char* getPGMString(PGM_P pgm) {
 }
 
 void callbackCompressor(Sensor device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Callback", device.getName().c_str());
+    Serial.printf_P(PSTR("   %s %s\n"), "Callback", device.getName().c_str());
     char* url = nullptr;
     char* ct = nullptr;
     char* aj = nullptr;
@@ -281,20 +281,20 @@ void callbackCompressor(Sensor device) {
         https.addHeader(String(ct), String(aj));
         int httpCode = https.PUT(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
-            Serial.printf_P(PSTR("%s состояние %s\n"), device.getName().c_str(), (device.getState() ? "ON" : "OFF"));
+            Serial.printf_P(PSTR("   %s состояние %s\n"), device.getName().c_str(), (device.getState() ? "ON" : "OFF"));
         } else {
-            Serial.printf_P(PSTR("%s: %s\n"), "Ошибка", HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR("   %s: %s\n"), "Ошибка", HTTPClient::errorToString(httpCode).c_str());
         }
         https.end();
     } else {
-        Serial.printf_P(PSTR("%s\n"), "Невозможно подключиться\n");
+        Serial.printf_P(PSTR("   %s\n"), "Невозможно подключиться\n");
     }
     delPtr(ct);
     delPtr(aj);
 }
 
 void callbackFlow(Sensor device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Callback", device.getName().c_str());
+    Serial.printf_P(PSTR("   %s %s\n"), "Callback", device.getName().c_str());
     char* url = nullptr;
     char* ct = nullptr;
     char* aj = nullptr;
@@ -311,20 +311,20 @@ void callbackFlow(Sensor device) {
         https.addHeader(String(ct), String(aj));
         int httpCode = https.PUT(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
-            Serial.printf_P(PSTR("%s состояние %s\n"), device.getName().c_str(), (device.getState() ? "ON" : "OFF"));
+            Serial.printf_P(PSTR("   %s состояние %s\n"), device.getName().c_str(), (device.getState() ? "ON" : "OFF"));
         } else {
-            Serial.printf_P(PSTR("%s: %s\n"), "Ошибка", HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR("   %s: %s\n"), "Ошибка", HTTPClient::errorToString(httpCode).c_str());
         }
         https.end();
     } else {
-        Serial.printf_P(PSTR("%s\n"), "Невозможно подключиться\n");
+        Serial.printf_P(PSTR("   %s\n"), "Невозможно подключиться\n");
     }
     delPtr(ct);
     delPtr(aj);
 }
 
 void callbackPump(Sensor device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Callback", device.getName().c_str());
+    Serial.printf_P(PSTR("   %s %s\n"), "Callback", device.getName().c_str());
     char* url = nullptr;
     char* ct = nullptr;
     char* aj = nullptr;
@@ -341,20 +341,20 @@ void callbackPump(Sensor device) {
         https.addHeader(String(ct), String(aj));
         int httpCode = https.PUT(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
-            Serial.printf_P(PSTR("%s состояние %s\n"), device.getName().c_str(), (device.getState() ? "ON" : "OFF"));
+            Serial.printf_P(PSTR("   %s состояние %s\n"), device.getName().c_str(), (device.getState() ? "ON" : "OFF"));
         } else {
-            Serial.printf_P(PSTR("%s: %s\n"), "Ошибка", HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR("   %s: %s\n"), "Ошибка", HTTPClient::errorToString(httpCode).c_str());
         }
         https.end();
     } else {
-        Serial.printf_P(PSTR("%s\n"), "Невозможно подключиться\n");
+        Serial.printf_P(PSTR("   %s\n"), "Невозможно подключиться\n");
     }
     delPtr(ct);
     delPtr(aj);
 }
 
 void callbackLight(Sensor device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Callback", device.getName().c_str());
+    Serial.printf_P(PSTR("   %s %s\n"), "Callback", device.getName().c_str());
     char* url = nullptr;
     char* ct = nullptr;
     char* aj = nullptr;
@@ -371,20 +371,20 @@ void callbackLight(Sensor device) {
         https.addHeader(String(ct), String(aj));
         int httpCode = https.PUT(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
-            Serial.printf_P(PSTR("%s состояние %s\n"), device.getName().c_str(), (device.getState() ? "ON" : "OFF"));
+            Serial.printf_P(PSTR("   %s состояние %s\n"), device.getName().c_str(), (device.getState() ? "ON" : "OFF"));
         } else {
-            Serial.printf_P(PSTR("%s: %s\n"), "Ошибка", HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR("   %s: %s\n"), "Ошибка", HTTPClient::errorToString(httpCode).c_str());
         }
         https.end();
     } else {
-        Serial.printf_P(PSTR("%s\n"), "Невозможно подключиться\n");
+        Serial.printf_P(PSTR("   %s\n"), "Невозможно подключиться\n");
     }
     delPtr(ct);
     delPtr(aj);
 }
 
 void callbackCO2(Sensor device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Callback", device.getName().c_str());
+    Serial.printf_P(PSTR("   %s %s\n"), "Callback", device.getName().c_str());
     char* url = nullptr;
     char* ct = nullptr;
     char* aj = nullptr;
@@ -401,20 +401,20 @@ void callbackCO2(Sensor device) {
         https.addHeader(String(ct), String(aj));
         int httpCode = https.PUT(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
-            Serial.printf_P(PSTR("%s состояние %s\n"), device.getName().c_str(), (device.getState() ? "ON" : "OFF"));
+            Serial.printf_P(PSTR("   %s состояние %s\n"), device.getName().c_str(), (device.getState() ? "ON" : "OFF"));
         } else {
-            Serial.printf_P(PSTR("%s: %s\n"), "Ошибка", HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR("   %s: %s\n"), "Ошибка", HTTPClient::errorToString(httpCode).c_str());
         }
         https.end();
     } else {
-        Serial.printf_P(PSTR("%s\n"), "Невозможно подключиться\n");
+        Serial.printf_P(PSTR("   %s\n"), "Невозможно подключиться\n");
     }
     delPtr(ct);
     delPtr(aj);
 }
 
 void callbackHeater(Sensor device) {
-    Serial.printf_P(PSTR("%s %s\n"), "Callback", device.getName().c_str());
+    Serial.printf_P(PSTR("   %s %s\n"), "Callback", device.getName().c_str());
     char* url = nullptr;
     char* ct = nullptr;
     char* aj = nullptr;
@@ -431,9 +431,9 @@ void callbackHeater(Sensor device) {
         https.addHeader(String(ct), String(aj));
         int httpCode = https.PUT(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
-            Serial.printf_P(PSTR("%s состояние %s\n"), device.getName().c_str(), (device.getState() ? "ON" : "OFF"));
+            Serial.printf_P(PSTR("   %s состояние %s\n"), device.getName().c_str(), (device.getState() ? "ON" : "OFF"));
         } else {
-            Serial.printf_P(PSTR("%s: %s\n"), "Ошибка", HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR("   %s: %s\n"), "Ошибка", HTTPClient::errorToString(httpCode).c_str());
         }
         https.end();
     } else {
@@ -569,13 +569,13 @@ void sendMessage(const String& message) {
 
         int httpCode = https.POST(data);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
-            Serial.println(F("Сообщение отправлено"));
+            Serial.println(F("   PUSH уведомление отправлено"));
         } else {
-            Serial.printf_P(PSTR("sendMessage() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR("   sendMessage() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
         }
         https.end();
     } else {
-        Serial.printf_P(PSTR("%s\n"), "sendMessage() -> Невозможно подключиться\n");
+        Serial.printf_P(PSTR("%s\n"), "   sendMessage() -> Невозможно подключиться\n");
     }
     delPtr(url);
     delPtr(ct);
@@ -608,13 +608,13 @@ void sendMessage(Sensor* device, bool state) {
         https.addHeader(String(actext), String(dataMsg));
         int httpCode = https.POST(data);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
-            Serial.println(F("  Сообщение отправлено"));
+            Serial.println(F("   PUSH уведомление отправлено"));
         } else {
-            Serial.printf_P(PSTR("sendMessage() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR("   sendMessage() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
         }
         https.end();
     } else {
-        Serial.printf_P(PSTR("%s\n"), "sendMessage() -> Невозможно подключиться\n");
+        Serial.printf_P(PSTR("%s\n"), "   sendMessage() -> Невозможно подключиться\n");
     }
     delPtr(url);
     delPtr(ct);
@@ -690,27 +690,12 @@ void doserOnHandler(Sensor* device, bool flag) {
     }
 }
 
-void deviceOnHandler(Sensor* device) {
-    if (device->getEnabled()) {
-        Serial.printf_P(PSTR("%s: включение, pin %d\n"), device->getName().c_str(), device->getPin());
-        shiftRegister.setPin(countShiftRegister, device->getPin(), HIGH);
-        sendMessage(device, true);
-        Alarm.enable(findAlarmByDevice(device, true));
-        Alarm.enable(findAlarmByDevice(device, false));
-        device->setStateNotify(true);
-    } else {
-        Serial.printf_P(PSTR("%s %s\n"), device->getName().c_str(), "нельзя изменять.");
-        Alarm.disable(findAlarmByDevice(device, true));
-        Alarm.disable(findAlarmByDevice(device, false));
-    }
-}
-
 void sensorHandler(Sensor* sensor, bool state) {
     if (sensor->getEnabled()) {
         if (state) {
-            Serial.printf_P(PSTR("%s: включение, pin %d\n"), sensor->getName().c_str(), sensor->getPin());
+            Serial.printf_P(PSTR("  %s: включение, pin %d\n"), sensor->getName().c_str(), sensor->getPin());
         } else {
-            Serial.printf_P(PSTR("%s: выключение, pin %d\n"), sensor->getName().c_str(), sensor->getPin());
+            Serial.printf_P(PSTR("  %s: выключение, pin %d\n"), sensor->getName().c_str(), sensor->getPin());
         }
         shiftRegister.setPin(countShiftRegister, sensor->getPin(), state ? HIGH : LOW);
         sendMessage(sensor, state);
@@ -719,21 +704,6 @@ void sensorHandler(Sensor* sensor, bool state) {
     } else {
         Serial.printf_P(PSTR("%s %s\n"), sensor->getName().c_str(), "нельзя изменять.");
         Alarm.disable(findAlarmIDBySensor(sensor));
-    }
-}
-
-void deviceOffHandler(Sensor* device) {
-    if (device->getEnabled()) {
-        Serial.printf_P(PSTR("%s: выключение, pin %d\n"), device->getName().c_str(), device->getPin());
-        shiftRegister.setPin(countShiftRegister, device->getPin(), LOW);
-        sendMessage(device, false);
-        Alarm.enable(findAlarmByDevice(device, true));
-        Alarm.enable(findAlarmByDevice(device, false));
-        device->setStateNotify(false);
-    } else {
-        Serial.printf_P(PSTR("%s %s\n"), device->getName().c_str(), "нельзя изменять.");
-        Alarm.disable(findAlarmByDevice(device, true));
-        Alarm.disable(findAlarmByDevice(device, false));
     }
 }
 
@@ -1167,7 +1137,7 @@ void attachAlarm(Sensor::SensorType sensorType) {
 
 void getParamLights() {
     char* url = getPGMString(urlLights);
-    Serial.printf_P(PSTR(" %s\n"), "Прожекторы...");
+    Serial.printf_P(PSTR("\n %s\n"), "Прожекторы...");
     if (https.begin(*client, String(url))) {
         int httpCode = https.GET();
         if (httpCode > 0) {
@@ -1193,7 +1163,7 @@ void getParamLights() {
 
 void getParamDosers() {
     char* url = getPGMString(urlDosers);
-    Serial.printf_P(PSTR(" %s\n"), "Дозаторы...");
+    Serial.printf_P(PSTR("\n %s\n"), "Дозаторы...");
     if (https.begin(*client, String(url))) {
         int httpCode = https.GET();
         if (httpCode > 0) {
@@ -1219,7 +1189,7 @@ void getParamDosers() {
 
 void getParamCompressor() {
     char* url = getPGMString(urlCompressor);
-    Serial.printf_P(PSTR(" %s\n"), "Компрессор...");
+    Serial.printf_P(PSTR("\n %s\n"), "Компрессор...");
     if (https.begin(*client, String(url))) {
         int httpCode = https.GET();
         if (httpCode > 0) {
@@ -1245,7 +1215,7 @@ void getParamCompressor() {
 
 void getParamFlow() {
     char* url = getPGMString(urlFlow);
-    Serial.printf_P(PSTR(" %s\n"), "Помпа течения...");
+    Serial.printf_P(PSTR("\n %s\n"), "Помпа течения...");
     if (https.begin(*client, String(url))) {
         int httpCode = https.GET();
         if (httpCode > 0) {
@@ -1271,7 +1241,7 @@ void getParamFlow() {
 
 void getParamCO2() {
     char* url = getPGMString(urlCO2);
-    Serial.printf_P(PSTR(" %s\n"), "CO2...");
+    Serial.printf_P(PSTR("\n %s\n"), "CO2...");
     if (https.begin(*client, String(url))) {
         int httpCode = https.GET();
         if (httpCode > 0) {
@@ -1297,7 +1267,7 @@ void getParamCO2() {
 
 void getParamHeater() {
     char* url = getPGMString(urlHeater);
-    Serial.printf_P(PSTR(" %s\n"), "Нагреватель...");
+    Serial.printf_P(PSTR("\n %s\n"), "Нагреватель...");
     if (https.begin(*client, String(url))) {
         int httpCode = https.GET();
         if (httpCode > 0) {
@@ -1323,7 +1293,7 @@ void getParamHeater() {
 
 void getParamPump() {
     char* url = getPGMString(urlPump);
-    Serial.printf_P(PSTR(" %s\n"), "Помпа...");
+    Serial.printf_P(PSTR("\n %s\n"), "Помпа...");
     if (https.begin(*client, String(url))) {
         int httpCode = https.GET();
         if (httpCode > 0) {
@@ -1654,8 +1624,7 @@ bool getUpdateSettings() {
 void timer1() {
     getTime();
     getSensorsTemperature();
-    Serial.printf_P(PSTR("%s %d\n"), "AlarmClass size ", sizeof(AlarmClass));
-    Serial.printf_P(PSTR("%s %d\n"), "FreeHeap size ", ESP.getFreeHeap());
+    Serial.printf_P(PSTR("%s %d\n"), "FreeHeap", ESP.getFreeHeap());
     if (getUpdateSettings()) {
         Serial.printf_P(PSTR("%s\n"), "Будет выполнено обновление всех параметров");
         getParamsBackEnd();
