@@ -219,6 +219,10 @@ class Sensor {
         this->_off = off;
     }
 
+    SensorType getSensorType() {
+        return this->_type;
+    }
+
    private:
     std::string _name;
     std::string _objectID;
