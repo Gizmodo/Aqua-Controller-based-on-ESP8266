@@ -44,6 +44,10 @@ const char androidTickerText[] PROGMEM = {"android-ticker-text"};
 const char androidContentTitle[] PROGMEM = {"android-content-title"};
 const char androidContentText[] PROGMEM = {"android-content-text"};
 
+const char Application_ID[] PROGMEM ={"2B9D61E8-C989-5520-FFEB-A720A49C0C00"};
+const char REST_API_Key[] PROGMEM ={"078C7D14-D7FF-42E1-95FA-A012EB826621"};
+const char BACKENDLESS_URL[] PROGMEM ={"https://api.backendless.com"};
+
 const char urlLights[] PROGMEM = {
     "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/"
     "Light?property=enabled&property=name&property=off&property=on&property=pin&property=state"};
@@ -1405,6 +1409,30 @@ void lastOnline() {
     free(currentTime);
 }
 
+void postLog(std::string message) {
+    time_t timenow = time(nullptr);
+
+    char* url = getPGMString(urlPostBoot);
+    char* ct = getPGMString(contentType);
+    char* aj = getPGMString(applicationJson);
+    if (https.begin(*client, String(url))) {
+        String payload;
+        payload = "{\"datetime\": " + String(timenow) + "000,\"message\": \"" + message.c_str() + "\"}";
+        https.addHeader(String(ct), String(aj));
+        int httpCode = https.POST(payload);
+        if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
+        } else {
+            Serial.printf_P(PSTR("postLog() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
+        }
+        https.end();
+    } else {
+        Serial.printf_P(PSTR("%s\n"), "postLog() -> Невозможно подключиться\n");
+    }
+    delPtr(url);
+    delPtr(ct);
+    delPtr(aj);
+}
+
 void postBoot() {
     char* currentTime = clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime());
     char* url = getPGMString(urlPostBoot);
@@ -1500,6 +1528,7 @@ void timer1() {
     getTime();
     getSensorsTemperature();
     Serial.printf_P(PSTR("%s %d\n"), "FreeHeap", ESP.getFreeHeap());
+    postLog(std::to_string(ESP.getFreeHeap()));
     if (getUpdateSettings()) {
         Serial.printf_P(PSTR("%s\n"), "Будет выполнено обновление всех параметров");
         getParamsBackEnd();
