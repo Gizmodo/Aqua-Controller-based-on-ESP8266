@@ -44,10 +44,6 @@ const char androidTickerText[] PROGMEM = {"android-ticker-text"};
 const char androidContentTitle[] PROGMEM = {"android-content-title"};
 const char androidContentText[] PROGMEM = {"android-content-text"};
 
-const char Application_ID[] PROGMEM = {"2B9D61E8-C989-5520-FFEB-A720A49C0C00"};
-const char REST_API_Key[] PROGMEM = {"078C7D14-D7FF-42E1-95FA-A012EB826621"};
-const char BACKENDLESS_URL[] PROGMEM = {"https://api.backendless.com"};
-
 const char urlLights[] PROGMEM = {
     "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/"
     "Light?property=enabled&property=name&property=off&property=on&property=pin&property=state"};
