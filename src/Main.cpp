@@ -44,9 +44,9 @@ const char androidTickerText[] PROGMEM = {"android-ticker-text"};
 const char androidContentTitle[] PROGMEM = {"android-content-title"};
 const char androidContentText[] PROGMEM = {"android-content-text"};
 
-const char Application_ID[] PROGMEM ={"2B9D61E8-C989-5520-FFEB-A720A49C0C00"};
-const char REST_API_Key[] PROGMEM ={"078C7D14-D7FF-42E1-95FA-A012EB826621"};
-const char BACKENDLESS_URL[] PROGMEM ={"https://api.backendless.com"};
+const char Application_ID[] PROGMEM = {"2B9D61E8-C989-5520-FFEB-A720A49C0C00"};
+const char REST_API_Key[] PROGMEM = {"078C7D14-D7FF-42E1-95FA-A012EB826621"};
+const char BACKENDLESS_URL[] PROGMEM = {"https://api.backendless.com"};
 
 const char urlLights[] PROGMEM = {
     "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/"
@@ -108,7 +108,8 @@ const char urlPutUpdateSettings[] PROGMEM = {
     "60A7BF1D-355E-4796-9A17-EFCC8E12B41E"};
 const char urlGetUpdateSettings[] PROGMEM = {
     "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/UpdateSettings"};
-
+const char urlPostLog[] PROGMEM = {
+    "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/Log"};
 //// RTC
 DS3231 clockRTC;
 RtcDS3231 rtc;
@@ -1412,7 +1413,7 @@ void lastOnline() {
 void postLog(std::string message) {
     time_t timenow = time(nullptr);
 
-    char* url = getPGMString(urlPostBoot);
+    char* url = getPGMString(urlPostLog);
     char* ct = getPGMString(contentType);
     char* aj = getPGMString(applicationJson);
     if (https.begin(*client, String(url))) {
