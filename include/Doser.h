@@ -8,7 +8,7 @@
 #include <string>
 #include <utility>
 #include "Sensor.h"
-#define UNDEFINED (-1)
+#define UNDEFINED -1
 
 class Doser : public Sensor {
    public:

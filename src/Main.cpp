@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <umm_malloc/umm_heap_select.h>
 #include <ArduinoJson.h>
 #include <ctime>
 #include <memory>
@@ -30,9 +31,9 @@
 //// EEPROM
 // uEEPROMLib eeprom(0x57);
 //// Сдвиговый регистр
-#define dataPin 10
-#define clockPin 14
-#define latchPin 16
+#define dataPin D6
+#define clockPin D7
+#define latchPin D8
 #define countShiftRegister 4  // Кол-во сдвиговых регистров
 
 Shiftduino shiftRegister(dataPin, clockPin, latchPin, countShiftRegister);
@@ -112,7 +113,7 @@ RtcDS3231 rtc;
 IPAddress timeServerIP;
 
 //// Time Synchronization
-const char* ntpServerName = "pool.ntp.org";
+const char* ntpServerName = "ru.pool.ntp.org";
 const int NTP_PACKET_SIZE = 48;
 byte packetBuffer[NTP_PACKET_SIZE];
 byte count_sync = 0;
@@ -1316,7 +1317,7 @@ void syncTime() {
         const unsigned long seventyYears = 2208988800UL;
         unsigned long epoch = secsSince1900 - seventyYears;
         // 2 секунды разница с большим братом
-        epoch = epoch + 2 + 10800;
+        epoch = epoch + 0 + 10800;
 
         char str[20];
         rtc.dateTimeToStr(str);
@@ -1442,7 +1443,7 @@ void postBoot() {
         int httpCode = https.POST(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
         } else {
-            Serial.printf_P(PSTR("postBoot() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR("postBoot() -> Ошибка: %s %d\n"), HTTPClient::errorToString(httpCode).c_str(),httpCode);
         }
         https.end();
     } else {

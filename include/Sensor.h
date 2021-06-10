@@ -8,7 +8,6 @@
 #include <string>
 #include <utility>
 #include "Mediator.h"
-#define UNDEFINED (-1)
 
 class Sensor {
    public:
@@ -227,11 +226,11 @@ class Sensor {
     std::string _name;
     std::string _objectID;
     SensorType _type = unknown;
-    uint8_t _pin = UNDEFINED;
+    uint8_t _pin = -1;
     //Время в UTC на включение сенсора
-    time_t _on = UNDEFINED;
+    time_t _on = -1;
     //Время в UTC на выключение сенсора
-    time_t _off = UNDEFINED;
+    time_t _off = -1;
     bool _state = false;
     bool _enabled = false;
     Mediator<Sensor> mMediator;
