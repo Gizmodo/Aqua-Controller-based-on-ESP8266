@@ -1,5 +1,7 @@
 #include <Arduino.h>
+#if defined(ARDUINO_ARCH_ESP8266)
 #include <umm_malloc/umm_heap_select.h>
+#endif
 #include <ArduinoJson.h>
 #include <ctime>
 #include <memory>
@@ -1443,7 +1445,7 @@ void postBoot() {
         int httpCode = https.POST(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
         } else {
-            Serial.printf_P(PSTR("postBoot() -> Ошибка: %s %d\n"), HTTPClient::errorToString(httpCode).c_str(),httpCode);
+            Serial.printf_P(PSTR("postBoot() -> Ошибка: %s %d\n"), HTTPClient::errorToString(httpCode).c_str(), httpCode);
         }
         https.end();
     } else {
