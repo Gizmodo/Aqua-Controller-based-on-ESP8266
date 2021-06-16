@@ -11,7 +11,7 @@
 
 class Sensor {
    public:
-    enum SensorType { unknown, light, compressor, co2, doser, feeder, flow, pump, heater };
+    enum SensorType { unknown, light, compressor, co2, doser, feeder, flow, pump, heater, sonic };
 
     ~Sensor() = default;
 
@@ -58,6 +58,10 @@ class Sensor {
         return (this->_type == SensorType::pump);
     }
 
+    bool isSonic() {
+        return (this->_type == SensorType::sonic);
+    }
+    
     void setStateNotify(bool state) {
         this->_state = state;
         mMediator.Send("1", *this);

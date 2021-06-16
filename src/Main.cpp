@@ -21,6 +21,7 @@
 #else
 #endif
 #include <OneWire.h>  // OneWire
+#include <StreamUtils.h>
 #include <WiFiClientSecure.h>
 #include <WiFiUdp.h>
 #include "DS3231.h"      // Чип RTC
@@ -69,6 +70,9 @@ const char urlHeater[] PROGMEM = {
 const char urlPump[] PROGMEM = {
     "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/"
     "Pump?property=enabled&property=off&property=on&property=pin&property=state"};
+const char urlSonic[] PROGMEM = {
+    "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/"
+    "Sonic?property=datetime&property=distance&property=enabled&property=id&property=name&property=critical"};
 const char urlPutUptime[] PROGMEM = {
     "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/Uptime/"
     "66E232A0-EFF0-4A9C-9B6A-785C85B139B7"};
@@ -153,6 +157,7 @@ String responseString = "";
 //// DEVICES
 
 #define LIGHTS_COUNT (6)                             // Кол-во прожекторов
+#define SONIC_COUNT (5)                              // Кол-во датчиков расстояния
 #define DEVICE_COUNT (LIGHTS_COUNT) + 3 + 3 + 1 + 1  // Кол-во всех устройств (нужно для Alarm'ов)
 //// Дозаторы
 #define DOSERS_COUNT (3)  // Кол-во дозаторов
@@ -190,6 +195,7 @@ std::array<Sensor, LIGHTS_COUNT> lights{Sensor(medLight, "", Sensor::light), Sen
 //// Расписания всех устройств
 std::array<Scheduler, DEVICE_COUNT> schedules;
 //-----------------------------------------
+void parseSonics(const WiFiClient& stream);
 #ifdef ARDUINO_ARCH_ESP32
 namespace std_esp32 {
 template <class T>
@@ -1014,6 +1020,38 @@ void attachAlarm(Sensor::SensorType sensorType) {
     }
 }
 
+void getParamSonics() {
+    char* url = getPGMString(urlSonic);
+    Serial.printf_P(PSTR("\n %s\n"), "Сонары...");
+    https.useHTTP10(true);
+    https.getStream().flush();
+    if (https.begin(*client, String(url))) {
+        int httpCode = https.GET();
+        if (httpCode > 0) {
+            if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
+                responseString = https.getString();
+                auto stream = https.getStream();
+                ReadLoggingStream loggingStream(stream, Serial);
+                DynamicJsonDocument doc(1536);
+                deserializeJson(doc, stream);
+            }
+        } else {
+            Serial.printf_P(PSTR(" %s %s\n"), "Ошибка:", HTTPClient::errorToString(httpCode).c_str());
+        }
+        https.end();
+    } else {
+        Serial.printf_P(PSTR(" %s\n"), "Невозможно подключиться\n");
+    }
+    delPtr(url);
+    if (responseString.isEmpty()) {
+        Serial.printf_P(PSTR(" %s\n"), "Ответ пустой");
+    } else {
+        // parseJSONLights(responseString);
+        // responseString.clear();
+        // attachAlarm(Sensor::light);
+    }
+}
+
 void getParamLights() {
     char* url = getPGMString(urlLights);
     Serial.printf_P(PSTR("\n %s\n"), "Прожекторы...");
@@ -1257,6 +1295,7 @@ void setParamsEEPROM() {
 */
 void getParamsBackEnd() {
     Serial.printf_P(PSTR("%s\n"), "Чтение параметров из облака");
+    getParamSonics();
     getParamLights();
     getParamCompressor();
     getParamFlow();
@@ -1544,6 +1583,7 @@ String serializeTemperature() {
     char* currentTime = clockRTC.dateFormat("d.m.Y H:i:s", clockRTC.getDateTime());
     String time = String(currentTime);
 
+    // todo: исправить Sensor на sensor2
     doc["sensor1"] = static_cast<double>(sensorTemperatureValue1);
     doc["Sensor"] = static_cast<double>(sensorTemperatureValue2);
     doc["time"] = time;
