@@ -141,7 +141,7 @@ float sensorTemperatureValue1, sensorTemperatureValue2;
 #define WIFI_SSID "MikroTik"
 #define WIFI_PASSWORD "11111111"
 #endif
-uint8_t wifiMaxTry = 10;  //Попытки подключения к сети
+uint8_t wifiMaxTry = 20;  //Попытки подключения к сети
 uint8_t wifiConnectCount = 0;
 const char* WiFi_hostname = HOSTNAME;
 
@@ -1029,11 +1029,18 @@ void getParamSonics() {
         int httpCode = https.GET();
         if (httpCode > 0) {
             if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
-                responseString = https.getString();
-                auto stream = https.getStream();
-                ReadLoggingStream loggingStream(stream, Serial);
-                DynamicJsonDocument doc(1536);
-                deserializeJson(doc, stream);
+                Serial.printf_P(PSTR("\n %s\n"), "deserializeJson...");
+                DynamicJsonDocument doc(2000);
+                deserializeJson(doc, https.getStream());
+                JsonArray array = doc.as<JsonArray>();
+                for (JsonObject obj : array) {
+                    boolean enabled = obj["enabled"];
+                    std::string name = obj["name"];
+                    std::string objectId = obj["objectId"];
+                    Serial.println(name.c_str());
+                    Serial.println(objectId.c_str());
+                }
+                Serial.printf_P(PSTR("\n %s\n"), "deserializeJson...");
             }
         } else {
             Serial.printf_P(PSTR(" %s %s\n"), "Ошибка:", HTTPClient::errorToString(httpCode).c_str());
@@ -1663,14 +1670,16 @@ void setup() {
     } else {
         initHTTPClient();
         initLocalClock();
+        getParamSonics();
         // syncTime();
-        postBoot();
-        getParamsBackEnd();
-        printAllDevices();
+        /*  postBoot();
+          getParamsBackEnd();
+          printAllDevices();
+          */
     }
 
-    startTimers();
-    timer5();
+    //   startTimers();
+    // timer5();
 }
 
 void loop() {
