@@ -1021,38 +1021,28 @@ void attachAlarm(Sensor::SensorType sensorType) {
 }
 
 void getParamSonics() {
-    Serial.printf_P(PSTR("%s %d\n"), "FreeHeap at the begining method", ESP.getFreeHeap());
+    Serial.printf_P(PSTR("\n%s %d\n"), "Start", ESP.getFreeHeap());
     char* url = getPGMString(urlSonic);
-    Serial.printf_P(PSTR("\n %s\n"), "Сонары...");
+    Serial.printf_P(PSTR("\n %s\n"), "Дальномеры...");
     https.useHTTP10(true);
     https.getStream().flush();
     if (https.begin(*client, String(url))) {
         int httpCode = https.GET();
         if (httpCode > 0) {
             if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
-                Serial.printf_P(PSTR("%s %d\n"), "FreeHeap before create doc", ESP.getFreeHeap());
                 DynamicJsonDocument doc(2000);
-                Serial.printf_P(PSTR("%s %d\n"), "doc size before serialize", doc.memoryUsage());
-                Serial.printf_P(PSTR("%s %d\n"), "FreeHeap", ESP.getFreeHeap());
+                Serial.printf_P(PSTR("%s %d %d\n"), "doc created", doc.memoryUsage(), ESP.getFreeHeap());
                 deserializeJson(doc, https.getStream());
-                Serial.printf_P(PSTR("%s %d\n"), "doc size after serialize", doc.memoryUsage());
-                Serial.printf_P(PSTR("%s %d\n"), "FreeHeap", ESP.getFreeHeap());
+                Serial.printf_P(PSTR("%s %d %d\n"), "deserialized done", doc.memoryUsage(), ESP.getFreeHeap());
                 JsonArray array = doc.as<JsonArray>();
                 for (JsonObject obj : array) {
                     boolean enabled = obj["enabled"];
                     std::string name = obj["name"];
                     std::string objectId = obj["objectId"];
-                    Serial.println(name.c_str());
-                    Serial.println(objectId.c_str());
                 }
-                Serial.printf_P(PSTR("%s %d\n"), "doc size after iterate", doc.memoryUsage());
-                Serial.printf_P(PSTR("%s %d\n"), "FreeHeap", ESP.getFreeHeap());
-                doc.shrinkToFit();
-                Serial.printf_P(PSTR("%s %d\n"), "doc size after shrinkToFit", doc.memoryUsage());
-                Serial.printf_P(PSTR("%s %d\n"), "FreeHeap", ESP.getFreeHeap());
+                Serial.printf_P(PSTR("%s %d %d\n"), "iterate done", doc.memoryUsage(), ESP.getFreeHeap());
                 doc.clear();
-                Serial.printf_P(PSTR("%s %d\n"), "doc size after clear", doc.memoryUsage());
-                Serial.printf_P(PSTR("%s %d\n"), "FreeHeap", ESP.getFreeHeap());
+                Serial.printf_P(PSTR("%s %d %d\n"), "doc clear", doc.memoryUsage(), ESP.getFreeHeap());
             }
         } else {
             Serial.printf_P(PSTR(" %s %s\n"), "Ошибка:", HTTPClient::errorToString(httpCode).c_str());
@@ -1069,9 +1059,49 @@ void getParamSonics() {
         // responseString.clear();
         // attachAlarm(Sensor::light);
     }
-    Serial.printf_P(PSTR("%s %d\n"), "FreeHeap after end method", ESP.getFreeHeap());
+    Serial.printf_P(PSTR("%s %d\n"), "Finish", ESP.getFreeHeap());
 }
-
+void getParamSonicsString() {
+    Serial.printf_P(PSTR("\n%s %d\n"), "Start", ESP.getFreeHeap());
+    char* url = getPGMString(urlSonic);
+    Serial.printf_P(PSTR("\n %s\n"), "Дальномеры...");
+    https.useHTTP10(true);
+    https.getStream().flush();
+    if (https.begin(*client, String(url))) {
+        int httpCode = https.GET();
+        if (httpCode > 0) {
+            if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
+                DynamicJsonDocument doc(2000);
+                Serial.printf_P(PSTR("%s %d %d\n"), "doc created", doc.memoryUsage(), ESP.getFreeHeap());
+                deserializeJson(doc, https.getString());
+                Serial.printf_P(PSTR("%s %d %d\n"), "deserialized done", doc.memoryUsage(), ESP.getFreeHeap());
+                JsonArray array = doc.as<JsonArray>();
+                for (JsonObject obj : array) {
+                    boolean enabled = obj["enabled"];
+                    std::string name = obj["name"];
+                    std::string objectId = obj["objectId"];
+                }
+                Serial.printf_P(PSTR("%s %d %d\n"), "iterate done", doc.memoryUsage(), ESP.getFreeHeap());
+                doc.clear();
+                Serial.printf_P(PSTR("%s %d %d\n"), "doc clear", doc.memoryUsage(), ESP.getFreeHeap());
+            }
+        } else {
+            Serial.printf_P(PSTR(" %s %s\n"), "Ошибка:", HTTPClient::errorToString(httpCode).c_str());
+        }
+        https.end();
+    } else {
+        Serial.printf_P(PSTR(" %s\n"), "Невозможно подключиться\n");
+    }
+    delPtr(url);
+    if (responseString.isEmpty()) {
+        Serial.printf_P(PSTR(" %s\n"), "Ответ пустой");
+    } else {
+        // parseJSONLights(responseString);
+        // responseString.clear();
+        // attachAlarm(Sensor::light);
+    }
+    Serial.printf_P(PSTR("%s %d\n"), "Finish", ESP.getFreeHeap());
+}
 void getParamLights() {
     char* url = getPGMString(urlLights);
     Serial.printf_P(PSTR("\n %s\n"), "Прожекторы...");
@@ -1685,6 +1715,7 @@ void setup() {
         initLocalClock();
         Serial.printf_P(PSTR("%s %d\n"), "FreeHeap", ESP.getFreeHeap());
         getParamSonics();
+        getParamSonicsString();
         Serial.printf_P(PSTR("%s %d\n"), "FreeHeap", ESP.getFreeHeap());
         // syncTime();
         /*  postBoot();
