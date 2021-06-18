@@ -1021,6 +1021,7 @@ void attachAlarm(Sensor::SensorType sensorType) {
 }
 
 void getParamSonics() {
+    Serial.printf_P(PSTR("%s %d\n"), "FreeHeap at the begining method", ESP.getFreeHeap());
     char* url = getPGMString(urlSonic);
     Serial.printf_P(PSTR("\n %s\n"), "Сонары...");
     https.useHTTP10(true);
@@ -1029,9 +1030,13 @@ void getParamSonics() {
         int httpCode = https.GET();
         if (httpCode > 0) {
             if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
-                Serial.printf_P(PSTR("\n %s\n"), "deserializeJson...");
+                Serial.printf_P(PSTR("%s %d\n"), "FreeHeap before create doc", ESP.getFreeHeap());
                 DynamicJsonDocument doc(2000);
+                Serial.printf_P(PSTR("%s %d\n"), "doc size before serialize", doc.memoryUsage());
+                Serial.printf_P(PSTR("%s %d\n"), "FreeHeap", ESP.getFreeHeap());
                 deserializeJson(doc, https.getStream());
+                Serial.printf_P(PSTR("%s %d\n"), "doc size after serialize", doc.memoryUsage());
+                Serial.printf_P(PSTR("%s %d\n"), "FreeHeap", ESP.getFreeHeap());
                 JsonArray array = doc.as<JsonArray>();
                 for (JsonObject obj : array) {
                     boolean enabled = obj["enabled"];
@@ -1040,7 +1045,14 @@ void getParamSonics() {
                     Serial.println(name.c_str());
                     Serial.println(objectId.c_str());
                 }
-                Serial.printf_P(PSTR("\n %s\n"), "deserializeJson...");
+                Serial.printf_P(PSTR("%s %d\n"), "doc size after iterate", doc.memoryUsage());
+                Serial.printf_P(PSTR("%s %d\n"), "FreeHeap", ESP.getFreeHeap());
+                doc.shrinkToFit();
+                Serial.printf_P(PSTR("%s %d\n"), "doc size after shrinkToFit", doc.memoryUsage());
+                Serial.printf_P(PSTR("%s %d\n"), "FreeHeap", ESP.getFreeHeap());
+                doc.clear();
+                Serial.printf_P(PSTR("%s %d\n"), "doc size after clear", doc.memoryUsage());
+                Serial.printf_P(PSTR("%s %d\n"), "FreeHeap", ESP.getFreeHeap());
             }
         } else {
             Serial.printf_P(PSTR(" %s %s\n"), "Ошибка:", HTTPClient::errorToString(httpCode).c_str());
@@ -1057,6 +1069,7 @@ void getParamSonics() {
         // responseString.clear();
         // attachAlarm(Sensor::light);
     }
+    Serial.printf_P(PSTR("%s %d\n"), "FreeHeap after end method", ESP.getFreeHeap());
 }
 
 void getParamLights() {
@@ -1670,7 +1683,9 @@ void setup() {
     } else {
         initHTTPClient();
         initLocalClock();
+        Serial.printf_P(PSTR("%s %d\n"), "FreeHeap", ESP.getFreeHeap());
         getParamSonics();
+        Serial.printf_P(PSTR("%s %d\n"), "FreeHeap", ESP.getFreeHeap());
         // syncTime();
         /*  postBoot();
           getParamsBackEnd();
