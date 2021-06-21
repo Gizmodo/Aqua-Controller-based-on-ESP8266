@@ -95,6 +95,11 @@ class TimeAlarmsClass {
                                    bool isOneShot,
                                    dtAlarmPeriod_t alarmType,
                                    Sensor* param);
+    AlarmID_t createSensorTimerNew(time_t value,
+                                   onTickSensorNew_t onTickDeviceHandler,
+                                   bool isOneShot,
+                                   dtAlarmPeriod_t alarmType,
+                                   Sensor* param);
 
    public:
     TimeAlarmsClass();
@@ -147,6 +152,18 @@ class TimeAlarmsClass {
     }
     AlarmID_t timerRepeat(const int H, const int M, const int S, OnTick_t onTickHandler) {
         return timerRepeat(AlarmHMS(H, M, S), onTickHandler);
+    }
+    AlarmID_t timerRepeat(time_t value, onTickSensorNew_t onTickHandler, Sensor* param) {
+        if (value <= 0)
+            return INVALID_ALARM_ID;
+        return createSensorTimerNew(value, onTickHandler, false, dtTimer, param);
+    }
+    AlarmID_t timerRepeat(const uint8_t H,
+                          const uint8_t M,
+                          const uint8_t S,
+                          onTickSensorNew_t onTickBaseDeviceHandler,
+                          Sensor* param) {
+        return timerRepeat(AlarmHMS(H, M, S), onTickBaseDeviceHandler, param);
     }
     void delay(unsigned long ms);
 

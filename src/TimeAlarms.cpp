@@ -336,7 +336,28 @@ AlarmID_t TimeAlarmsClass::create(time_t value, OnTick_t onTickHandler, bool isO
     }
     return INVALID_ALARM_ID;  // no IDs available or time is invalid
 }
-
+AlarmID_t TimeAlarmsClass::createSensorTimerNew(time_t value,
+                                                onTickSensorNew_t onTickDeviceHandler,
+                                                bool isOneShot,
+                                                dtAlarmPeriod_t alarmType, Sensor* param) {
+    time_t now = time(nullptr);
+    if (!((dtIsAlarm(alarmType) && now < SECS_PER_YEAR) || (dtUseAbsoluteValue(alarmType) && (value == 0)))) {
+        for (uint8_t id = 0; id < ALARMS_COUNT; id++) {
+            if (Alarm[id].Mode.alarmType == dtNotAllocated) {
+                Alarm[id].onTickSensorHandlerNew = onTickDeviceHandler;
+                Alarm[id].sensor = param;
+                Alarm[id].Mode.isOneShot = isOneShot;
+                Alarm[id].Mode.alarmType = alarmType;
+                Alarm[id].value = value;
+                Alarm[id].value2 = -1;
+                Alarm[id].flag = true;
+                enable(id);
+                return id;
+            }
+        }
+    }
+    return INVALID_ALARM_ID;
+}
 AlarmID_t TimeAlarmsClass::createSensorAlarmNew(time_t value,
                                                 time_t value2,
                                                 onTickSensorNew_t onTickDeviceHandler,
