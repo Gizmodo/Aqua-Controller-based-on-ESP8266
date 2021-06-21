@@ -575,6 +575,25 @@ void doserOnHandler(Sensor* device, bool flag) {
     }
 }
 
+void sonicHandler(Sensor* sensor, bool state) {
+    //TODO: continue 
+   /* if (sensor->getEnabled()) {
+        if (state) {
+            Serial.printf_P(PSTR("  %s: включение, pin %d\n"), sensor->getName().c_str(), sensor->getPin());
+        } else {
+            Serial.printf_P(PSTR("  %s: выключение, pin %d\n"), sensor->getName().c_str(), sensor->getPin());
+        }
+        shiftRegister.setPin(countShiftRegister, sensor->getPin(), state ? HIGH : LOW);
+        sendMessage(sensor, state);
+        Alarm.enable(findAlarmIDBySensor(sensor));
+        sensor->setStateNotify(state);
+    } else {
+        Serial.printf_P(PSTR("%s %s\n"), sensor->getName().c_str(), "нельзя изменять.");
+        Alarm.disable(findAlarmIDBySensor(sensor));
+    }
+    */
+}
+
 void sensorHandler(Sensor* sensor, bool state) {
     if (sensor->getEnabled()) {
         if (state) {
@@ -896,10 +915,7 @@ void attachAlarm(Sensor::SensorType sensorType) {
                 auto schedule = schedules.at(i);
 
                 auto sensor = schedule.getDevice();
-                auto alarm=Alarm.timerRepeat(0,10,0,sonicHnadler,sensor);
-                auto alarm = Alarm.alarmRepeat(sensor->getHourOn(),
-                 sensor->getMinuteOn(), sensor->getHourOff(),
-sensor->getMinuteOff(), sensorHandler, sensor);
+                auto alarm = Alarm.timerRepeat(0, 10, 0, sonicHandler, sensor);
                 schedule.setAlarm(alarm);
                 schedules.at(i) = schedule;
                 (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? sensorHandler(sensor, true)
@@ -1078,7 +1094,7 @@ void getParamSonics() {
                             }
                         }
                     }
-                  //  Alarm.timerRepeat()
+                    //  Alarm.timerRepeat()
                     // attachAlarm(Sensor::light);
                 }
                 doc.clear();

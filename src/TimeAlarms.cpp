@@ -156,6 +156,7 @@ void TimeAlarmsClass::free(AlarmID_t ID) {
         Alarm[ID].Mode.isEnabled = false;
         Alarm[ID].Mode.alarmType = dtNotAllocated;
         Alarm[ID].onTickHandler = nullptr;
+        Alarm[ID].onTickSensorHandlerNew = nullptr;
         Alarm[ID].value = 0;
         Alarm[ID].value2 = 0;
         Alarm[ID].nextTrigger = 0;
