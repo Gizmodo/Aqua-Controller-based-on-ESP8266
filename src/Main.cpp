@@ -72,7 +72,7 @@ const char urlPump[] PROGMEM = {
     "Pump?property=enabled&property=off&property=on&property=pin&property=state"};
 const char urlSonic[] PROGMEM = {
     "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/"
-    "Sonic?property=datetime&property=distance&property=enabled&property=id&property=name&property=critical"};
+    "Sonic?property=critical&property=enabled&property=name"};
 const char urlPutUptime[] PROGMEM = {
     "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/Uptime/"
     "66E232A0-EFF0-4A9C-9B6A-785C85B139B7"};
@@ -156,9 +156,9 @@ String responseString = "";
 
 //// DEVICES
 
-#define LIGHTS_COUNT (6)                             // Кол-во прожекторов
-#define SONIC_COUNT (5)                              // Кол-во датчиков расстояния
-#define DEVICE_COUNT (LIGHTS_COUNT) + 3 + 3 + 1 + 1  // Кол-во всех устройств (нужно для Alarm'ов)
+#define LIGHTS_COUNT (6)                                 // Кол-во прожекторов
+#define SONIC_COUNT (5)                                  // Кол-во датчиков расстояния
+#define DEVICE_COUNT (LIGHTS_COUNT) + 3 + 3 + 1 + 1 + 5  // Кол-во всех устройств (нужно для Alarm'ов)
 //// Дозаторы
 #define DOSERS_COUNT (3)  // Кол-во дозаторов
 
@@ -179,6 +179,8 @@ Mediator<Sensor> medLight;
 Mediator<Sensor> medCO2;
 //Нагреватель
 Mediator<Sensor> medHeater;
+//Дальномеры
+Mediator<Sensor> medSonic;
 //-----------------------------------------
 //Устройства
 Sensor* compressor;
@@ -192,6 +194,11 @@ std::array<Doser, DOSERS_COUNT> dosers{Doser("Fe", Doser::Fe), Doser("K", Doser:
 std::array<Sensor, LIGHTS_COUNT> lights{Sensor(medLight, "", Sensor::light), Sensor(medLight, "", Sensor::light),
                                         Sensor(medLight, "", Sensor::light), Sensor(medLight, "", Sensor::light),
                                         Sensor(medLight, "", Sensor::light), Sensor(medLight, "", Sensor::light)};
+
+std::array<Sensor, SONIC_COUNT> sonics{Sensor(medSonic, "", Sensor::sonic), Sensor(medSonic, "", Sensor::sonic),
+                                       Sensor(medSonic, "", Sensor::sonic), Sensor(medSonic, "", Sensor::sonic),
+                                       Sensor(medSonic, "", Sensor::sonic)};
+
 //// Расписания всех устройств
 std::array<Scheduler, DEVICE_COUNT> schedules;
 //-----------------------------------------
@@ -335,6 +342,7 @@ void initMediators() {
     medLight.Register("1", callBack);
     medCO2.Register("1", callBack);
     medHeater.Register("1", callBack);
+    medSonic.Register("1", callBack);
 }
 
 void createDevicesAndScheduler() {
@@ -386,12 +394,25 @@ void createDevicesAndScheduler() {
     schedule = schedules.at(13);
     schedule.setDevice(pump);
     schedules.at(13) = schedule;
+
+    for (int i = 0; i < SONIC_COUNT; ++i) {
+        std::string buffer = "Дальномер " + std::to_string(i + 14);
+        auto item = sonics.at(i);
+        item.setName(buffer);
+        item.setMediator(medSonic);
+        sonics.at(i) = item;
+        auto schedule = schedules.at(i);
+        schedule.setDevice(&(sonics.at(i)));
+        schedules.at(i) = schedule;
+    }
 }
 
 void printDevice(Sensor* device) {
     if (device->isDoser()) {
         auto doser = static_cast<Doser*>(device);
         Serial.printf_P(PSTR("%s\n"), doser->DoserInfo().c_str());
+    } else if (device->isSonic()) {
+        Serial.printf_P(PSTR("%s\n"), device->sonicInfo().c_str());
     } else {
         Serial.printf_P(PSTR("%s\n"), device->sensorInfo().c_str());
     }
@@ -412,6 +433,10 @@ void printAllDevices() {
 
     printDevice(heater);
     printDevice(pump);
+
+    for (auto sonic : sonics) {
+        printDevice((&sonic));
+    }
 }
 
 float getSensorTemperature(const uint8_t* sensorAddress) {
@@ -576,22 +601,23 @@ void doserOnHandler(Sensor* device, bool flag) {
 }
 
 void sonicHandler(Sensor* sensor, bool state) {
-    //TODO: continue 
-   /* if (sensor->getEnabled()) {
-        if (state) {
-            Serial.printf_P(PSTR("  %s: включение, pin %d\n"), sensor->getName().c_str(), sensor->getPin());
-        } else {
-            Serial.printf_P(PSTR("  %s: выключение, pin %d\n"), sensor->getName().c_str(), sensor->getPin());
-        }
-        shiftRegister.setPin(countShiftRegister, sensor->getPin(), state ? HIGH : LOW);
-        sendMessage(sensor, state);
-        Alarm.enable(findAlarmIDBySensor(sensor));
-        sensor->setStateNotify(state);
-    } else {
-        Serial.printf_P(PSTR("%s %s\n"), sensor->getName().c_str(), "нельзя изменять.");
-        Alarm.disable(findAlarmIDBySensor(sensor));
-    }
-    */
+    // TODO: continue
+    Serial.printf_P(PSTR("  Sonic: %s\n"), sensor->getName().c_str());
+    /* if (sensor->getEnabled()) {
+         if (state) {
+             Serial.printf_P(PSTR("  %s: включение, pin %d\n"), sensor->getName().c_str(), sensor->getPin());
+         } else {
+             Serial.printf_P(PSTR("  %s: выключение, pin %d\n"), sensor->getName().c_str(), sensor->getPin());
+         }
+         shiftRegister.setPin(countShiftRegister, sensor->getPin(), state ? HIGH : LOW);
+         sendMessage(sensor, state);
+         Alarm.enable(findAlarmIDBySensor(sensor));
+         sensor->setStateNotify(state);
+     } else {
+         Serial.printf_P(PSTR("%s %s\n"), sensor->getName().c_str(), "нельзя изменять.");
+         Alarm.disable(findAlarmIDBySensor(sensor));
+     }
+     */
 }
 
 void sensorHandler(Sensor* sensor, bool state) {
@@ -909,19 +935,20 @@ void attachAlarm(Sensor::SensorType sensorType) {
     switch (sensorType) {
         case Sensor::sonic:
             for (size_t i = 0; i < DEVICE_COUNT; i++) {
-                if (!schedules.at(i).getDevice()->isCO2()) {
+                if (!schedules.at(i).getDevice()->isSonic()) {
                     continue;
                 }
                 auto schedule = schedules.at(i);
 
                 auto sensor = schedule.getDevice();
-                auto alarm = Alarm.timerRepeat(0, 10, 0, sonicHandler, sensor);
+                auto alarm = Alarm.timerRepeat(0, 30, 0, sonicHandler, sensor);
                 schedule.setAlarm(alarm);
                 schedules.at(i) = schedule;
-                (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? sensorHandler(sensor, true)
-                                                                                                : sensorHandler(sensor, false);
+                /*
+                 (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? sonicHandler(sensor, true)
+                                                                                                 : sonicHandler(sensor, false);
+                 */
             }
-            break;
             break;
         case Sensor::co2:
             for (size_t i = 0; i < DEVICE_COUNT; i++) {
@@ -1069,28 +1096,21 @@ void getParamSonics() {
                 DeserializationError err = deserializeJson(doc, https.getStream());
 
                 if (err) {
-                    Serial.printf_P(PSTR(" %s %s\n"), "Ошибка разбора:", err.c_str());
+                    Serial.printf_P(PSTR(" %s %s\n"), "Ошибка разбора JSON объекта:", err.c_str());
                 } else {
                     JsonArray array = doc.as<JsonArray>();
                     for (JsonObject obj : array) {
-                        boolean enabled = obj["enabled"];
-                        std::string name = obj["name"];
-                        std::string objectId = obj["objectId"];
-                        std::string off = obj["off"];
-                        std::string on = obj["on"];
-                        uint8_t pin = obj["pin"];
-                        boolean state = obj["state"];
-                        off = off.substr(0, 10);
-                        on = on.substr(0, 10);
+                        std::string name = obj["name"];  // "аквариум", "второй отсек", "последний отсек", "приемный отсек", ...
+                        double critical = obj["critical"];       // 15.4, 17.2, 18.7, 16.9, 14.2
+                        bool enabled = obj["enabled"];           // true, true, true, true, true
+                        std::string objectId = obj["objectId"];  // "0E4C72F4-AA1D-435A-AF2D-156F2BE2E5C0", ...
 
-                        for (auto&& light : lights) {
-                            if (name == light.getName()) {
-                                light.setState(state);
-                                light.setEnabled(enabled);
-                                light.setPin(pin);
-                                light.setObjectID(objectId);
-                                light.setOn(static_cast<time_t>(std::stoul(on)));
-                                light.setOff(static_cast<time_t>(std::stoul(off)));
+                        for (auto&& sonic : sonics) {
+                            if (name == sonic.getName()) {
+                                sonic.setEnabled(enabled);
+                                sonic.setSonicCritical(critical);
+                                sonic.setObjectID(objectId);
+                                sonic.setName(name);
                             }
                         }
                     }
@@ -1721,6 +1741,7 @@ void setup() {
         initHTTPClient();
         initLocalClock();
         getParamSonics();
+        printAllDevices();
         // syncTime();
         /*  postBoot();
           getParamsBackEnd();
