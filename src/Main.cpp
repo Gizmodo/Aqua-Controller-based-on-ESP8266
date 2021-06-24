@@ -307,6 +307,8 @@ void callBack(Sensor sensor) {
         case Sensor::light:
             url = getPGMString(urlPutLight);
             break;
+        default:
+            break;
     }
 
     if (sensor.isLight()) {
@@ -396,12 +398,12 @@ void createDevicesAndScheduler() {
     schedules.at(13) = schedule;
 
     for (int i = 0; i < SONIC_COUNT; ++i) {
-        std::string buffer = "Дальномер " + std::to_string(i + 14);
+        std::string buffer = "Дальномер " + std::to_string(i + 1);
         auto item = sonics.at(i);
         item.setName(buffer);
         item.setMediator(medSonic);
         sonics.at(i) = item;
-        auto schedule = schedules.at(i);
+        auto schedule = schedules.at(i + 14);
         schedule.setDevice(&(sonics.at(i)));
         schedules.at(i) = schedule;
     }
@@ -933,6 +935,8 @@ boolean initWiFi() {
 
 void attachAlarm(Sensor::SensorType sensorType) {
     switch (sensorType) {
+        default:
+            break;
         case Sensor::sonic:
             for (size_t i = 0; i < DEVICE_COUNT; i++) {
                 if (!schedules.at(i).getDevice()->isSonic()) {
@@ -944,10 +948,6 @@ void attachAlarm(Sensor::SensorType sensorType) {
                 auto alarm = Alarm.timerRepeat(0, 30, 0, sonicHandler, sensor);
                 schedule.setAlarm(alarm);
                 schedules.at(i) = schedule;
-                /*
-                 (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? sonicHandler(sensor, true)
-                                                                                                 : sonicHandler(sensor, false);
-                 */
             }
             break;
         case Sensor::co2:
