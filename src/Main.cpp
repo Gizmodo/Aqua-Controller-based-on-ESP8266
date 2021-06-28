@@ -1,3 +1,16 @@
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunknown-pragmas"
+#pragma ide diagnostic ignored "readability-static-accessed-through-instance"
+#pragma ide diagnostic ignored "clion-misra-cpp2008-5-0-13"
+#pragma ide diagnostic ignored "cppcoreguidelines-pro-type-static-cast-downcast"
+#pragma ide diagnostic ignored "clion-misra-cpp2008-5-8-1"
+#pragma ide diagnostic ignored "clion-misra-cpp2008-18-4-1"
+#pragma ide diagnostic ignored "clion-misra-cpp2008-18-0-4"
+#pragma ide diagnostic ignored "clion-misra-cpp2008-5-2-12"
+#pragma ide diagnostic ignored "clion-misra-cpp2008-5-0-6"
+#pragma ide diagnostic ignored "clion-misra-cpp2008-2-13-3"
+#pragma ide diagnostic ignored "clion-misra-cpp2008-5-0-4"
+#pragma ide diagnostic ignored "clion-misra-cpp2008-0-1-7"
 #include <Arduino.h>
 #if defined(ARDUINO_ARCH_ESP8266)
 #include <umm_malloc/umm_heap_select.h>
@@ -69,6 +82,9 @@ const char urlHeater[] PROGMEM = {
 const char urlPump[] PROGMEM = {
     "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/"
     "Pump?property=enabled&property=off&property=on&property=pin&property=state"};
+const char urlSonic[] PROGMEM = {
+    "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/"
+    "Sonic?property=critical&property=enabled&property=name"};
 const char urlPutUptime[] PROGMEM = {
     "https://api.backendless.com/2B9D61E8-C989-5520-FFEB-A720A49C0C00/078C7D14-D7FF-42E1-95FA-A012EB826621/data/Uptime/"
     "66E232A0-EFF0-4A9C-9B6A-785C85B139B7"};
@@ -129,7 +145,7 @@ OneWire onewire(ONE_WIRE_BUS);
 uint8_t sensorData[12];
 float sensorTemperatureValue1, sensorTemperatureValue2;
 
-//// WIFI
+//// WI-FI
 #ifdef WORK_DEF
 #define WIFI_SSID "Wi-Fi"
 #define WIFI_PASSWORD "1357924680"
@@ -137,7 +153,7 @@ float sensorTemperatureValue1, sensorTemperatureValue2;
 #define WIFI_SSID "MikroTik"
 #define WIFI_PASSWORD "11111111"
 #endif
-uint8_t wifiMaxTry = 10;  //Попытки подключения к сети
+uint8_t wifiMaxTry = 20;  //Попытки подключения к сети
 uint8_t wifiConnectCount = 0;
 const char* WiFi_hostname = HOSTNAME;
 
@@ -152,10 +168,19 @@ String responseString = "";
 
 //// DEVICES
 
-#define LIGHTS_COUNT (6)                             // Кол-во прожекторов
-#define DEVICE_COUNT (LIGHTS_COUNT) + 3 + 3 + 1 + 1  // Кол-во всех устройств (нужно для Alarm'ов)
-//// Дозаторы
+#define LIGHTS_COUNT (6)  // Кол-во прожекторов
+#define SONIC_COUNT (5)   // Кол-во датчиков расстояния
 #define DOSERS_COUNT (3)  // Кол-во дозаторов
+#define COMPRESSOR_COUNT (1)
+#define FLOW_COUNT (1)
+#define CO2_COUNT (1)
+#define HEATER_COUNT (1)
+#define PUMP_COUNT (1)
+
+#define DEVICE_COUNT                                                                                                      \
+    ((LIGHTS_COUNT) + ((HEATER_COUNT) + (PUMP_COUNT) + (DOSERS_COUNT) + (COMPRESSOR_COUNT) + (FLOW_COUNT) + (CO2_COUNT) + \
+                       (SONIC_COUNT)))  // Кол-во всех устройств (нужно для Alarm'ов)
+//// Дозаторы
 
 std::unique_ptr<GBasic> doserK{};
 std::unique_ptr<GBasic> doserNP{};
@@ -174,6 +199,8 @@ Mediator<Sensor> medLight;
 Mediator<Sensor> medCO2;
 //Нагреватель
 Mediator<Sensor> medHeater;
+//Дальномеры
+Mediator<Sensor> medSonic;
 //-----------------------------------------
 //Устройства
 Sensor* compressor;
@@ -187,6 +214,11 @@ std::array<Doser, DOSERS_COUNT> dosers{Doser("Fe", Doser::Fe), Doser("K", Doser:
 std::array<Sensor, LIGHTS_COUNT> lights{Sensor(medLight, "", Sensor::light), Sensor(medLight, "", Sensor::light),
                                         Sensor(medLight, "", Sensor::light), Sensor(medLight, "", Sensor::light),
                                         Sensor(medLight, "", Sensor::light), Sensor(medLight, "", Sensor::light)};
+
+std::array<Sensor, SONIC_COUNT> sonics{Sensor(medSonic, "", Sensor::sonic), Sensor(medSonic, "", Sensor::sonic),
+                                       Sensor(medSonic, "", Sensor::sonic), Sensor(medSonic, "", Sensor::sonic),
+                                       Sensor(medSonic, "", Sensor::sonic)};
+
 //// Расписания всех устройств
 std::array<Scheduler, DEVICE_COUNT> schedules;
 //-----------------------------------------
@@ -230,7 +262,7 @@ void getTime() {
     free(strDateTime);
 }
 
-[[maybe_unused]] void printSheduler() {
+[[maybe_unused]] void printScheduler() {
     auto startDayUTC = 1604966400;
     Serial.printf_P(PSTR("%s\n"), "Информация о расписаниях:");
     for (auto item : schedules) {
@@ -294,6 +326,8 @@ void callBack(Sensor sensor) {
         case Sensor::light:
             url = getPGMString(urlPutLight);
             break;
+        default:
+            break;
     }
 
     if (sensor.isLight()) {
@@ -329,6 +363,7 @@ void initMediators() {
     medLight.Register("1", callBack);
     medCO2.Register("1", callBack);
     medHeater.Register("1", callBack);
+    medSonic.Register("1", callBack);
 }
 
 void createDevicesAndScheduler() {
@@ -337,6 +372,7 @@ void createDevicesAndScheduler() {
     pump = new Sensor(medPump, "Помпа подъёмная", Sensor::pump);
     co2 = new Sensor(medCO2, "CO2", Sensor::co2);
     heater = new Sensor(medHeater, "Нагреватель", Sensor::heater);
+    uint8_t index = 0;
 
     for (int i = 0; i < LIGHTS_COUNT; ++i) {
         std::string buffer = "Прожектор " + std::to_string(i + 1);
@@ -344,48 +380,64 @@ void createDevicesAndScheduler() {
         item.setName(buffer);
         item.setMediator(medLight);
         lights.at(i) = item;
-        auto schedule = schedules.at(i);
+        auto schedule = schedules.at(index);
         schedule.setDevice(&(lights.at(i)));
-        schedules.at(i) = schedule;
+        schedules.at(index) = schedule;
+        index++;
     }
 
     // Compressor
-    auto schedule = schedules.at(6);
+    auto schedule = schedules.at(index);
     schedule.setDevice(compressor);
-    schedules.at(6) = schedule;
-
+    schedules.at(index) = schedule;
+    index++;
     // Flow
-    schedule = schedules.at(7);
+    schedule = schedules.at(index);
     schedule.setDevice(flow);
-    schedules.at(7) = schedule;
-
+    schedules.at(index) = schedule;
+    index++;
     // CO2
-    schedule = schedules.at(8);
+    schedule = schedules.at(index);
     schedule.setDevice(co2);
-    schedules.at(8) = schedule;
-
+    schedules.at(index) = schedule;
+    index++;
     // Dosers
     for (int i = 0; i < DOSERS_COUNT; ++i) {
-        auto schedule_ = schedules.at(i + 9);
+        auto schedule_ = schedules.at(index);
         schedule_.setDevice(&(dosers.at(i)));
-        schedules.at(i + 9) = schedule_;
+        schedules.at(index) = schedule_;
+        index++;
     }
 
     // Heater
-    schedule = schedules.at(12);
+    schedule = schedules.at(index);
     schedule.setDevice(heater);
-    schedules.at(12) = schedule;
-
+    schedules.at(index) = schedule;
+    index++;
     // Pump
-    schedule = schedules.at(13);
+    schedule = schedules.at(index);
     schedule.setDevice(pump);
-    schedules.at(13) = schedule;
+    schedules.at(index) = schedule;
+    index++;
+    for (int i = 0; i < SONIC_COUNT; ++i) {
+        std::string buffer = "Дальномер " + std::to_string(i + 1);
+        auto item = sonics.at(i);
+        item.setName(buffer);
+        item.setMediator(medSonic);
+        sonics.at(i) = item;
+        auto scheduleSonic = schedules.at(index);
+        scheduleSonic.setDevice(&(sonics.at(i)));
+        schedules.at(index) = scheduleSonic;
+        index++;
+    }
 }
 
 void printDevice(Sensor* device) {
     if (device->isDoser()) {
         auto doser = static_cast<Doser*>(device);
         Serial.printf_P(PSTR("%s\n"), doser->DoserInfo().c_str());
+    } else if (device->isSonic()) {
+        Serial.printf_P(PSTR("%s\n"), device->sonicInfo().c_str());
     } else {
         Serial.printf_P(PSTR("%s\n"), device->sensorInfo().c_str());
     }
@@ -406,6 +458,10 @@ void printAllDevices() {
 
     printDevice(heater);
     printDevice(pump);
+
+    for (auto sonic : sonics) {
+        printDevice((&sonic));
+    }
 }
 
 float getSensorTemperature(const uint8_t* sensorAddress) {
@@ -569,6 +625,10 @@ void doserOnHandler(Sensor* device, bool flag) {
     }
 }
 
+void sonicHandler(Sensor* sensor, bool state) {
+    Serial.printf_P(PSTR("  Sonic: %s\n"), sensor->getName().c_str());
+}
+
 void sensorHandler(Sensor* sensor, bool state) {
     if (sensor->getEnabled()) {
         if (state) {
@@ -594,7 +654,7 @@ void parseJSONLights(const String& response) {
         Serial.println(err.c_str());
         return;
     } else {
-        JsonArray array = doc.as<JsonArray>();
+        auto array = doc.as<JsonArray>();
         for (JsonObject obj : array) {
             boolean enabled = obj["enabled"];
             std::string name = obj["name"];
@@ -621,6 +681,7 @@ void parseJSONLights(const String& response) {
         doc.clear();
     }
 }
+
 void parseJSONDosers(const String& response) {
     DynamicJsonDocument document(1300);
     DeserializationError error = deserializeJson(document, response);
@@ -628,7 +689,7 @@ void parseJSONDosers(const String& response) {
         Serial.printf_P(PSTR("%s: %s"), "Невозможно выполнить парсинг", error.c_str());
         return;
     } else {
-        JsonArray array = document.as<JsonArray>();
+        auto array = document.as<JsonArray>();
         for (JsonObject object : array) {
             uint8_t m0 = object["m0"];
             uint8_t m1 = object["m1"];
@@ -702,7 +763,7 @@ void parseJSONCompressor(const String& response) {
         Serial.println(err.c_str());
         return;
     } else {
-        JsonArray array = doc.as<JsonArray>();
+        auto array = doc.as<JsonArray>();
         for (JsonObject obj : array) {
             boolean enabled = obj["enabled"];
             std::string off = obj["off"];
@@ -733,7 +794,7 @@ void parseJSONFlow(const String& response) {
         Serial.println(err.c_str());
         return;
     } else {
-        JsonArray array = doc.as<JsonArray>();
+        auto array = doc.as<JsonArray>();
         for (JsonObject obj : array) {
             boolean enabled = obj["enabled"];
             std::string off = obj["off"];
@@ -764,7 +825,7 @@ void parseJSONCO2(const String& response) {
         Serial.println(err.c_str());
         return;
     } else {
-        JsonArray array = doc.as<JsonArray>();
+        auto array = doc.as<JsonArray>();
         for (JsonObject obj : array) {
             boolean enabled = obj["enabled"];
             std::string off = obj["off"];
@@ -795,7 +856,7 @@ void parseJSONHeater(const String& response) {
         Serial.println(err.c_str());
         return;
     } else {
-        JsonArray array = doc.as<JsonArray>();
+        auto array = doc.as<JsonArray>();
         for (JsonObject obj : array) {
             boolean enabled = obj["enabled"];
             std::string off = obj["off"];
@@ -826,7 +887,7 @@ void parseJSONPump(const String& response) {
         Serial.println(err.c_str());
         return;
     } else {
-        JsonArray array = doc.as<JsonArray>();
+        auto array = doc.as<JsonArray>();
         for (JsonObject obj : array) {
             boolean enabled = obj["enabled"];
             std::string off = obj["off"];
@@ -878,140 +939,224 @@ boolean initWiFi() {
         return true;
     }
 }
+void alarmSonic() {
+    for (size_t i = 0; i < DEVICE_COUNT; i++) {
+        if (!schedules.at(i).getDevice()->isSonic()) {
+            continue;
+        }
+        auto schedule = schedules.at(i);
 
-void attachAlarm(Sensor::SensorType sensorType) {
+        auto sensor = schedule.getDevice();
+        auto alarm = Alarm.timerRepeat(0, 2, 0, sonicHandler, sensor);
+        schedule.setAlarm(alarm);
+        schedules.at(i) = schedule;
+    }
+}
+void alarmPump() {
+    for (size_t i = 0; i < DEVICE_COUNT; i++) {
+        if (!schedules.at(i).getDevice()->isPump()) {
+            continue;
+        }
+        auto schedule = schedules.at(i);
+        auto sensor = schedule.getDevice();
+        auto alarm = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), sensor->getHourOff(), sensor->getMinuteOff(),
+                                       sensorHandler, sensor);
+        schedule.setAlarm(alarm);
+
+        schedules.at(i) = schedule;
+        (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? sensorHandler(sensor, true)
+                                                                                        : sensorHandler(sensor, false);
+    }
+}
+void alarmLight() {
+    for (size_t i = 0; i < DEVICE_COUNT; i++) {
+        if (!schedules.at(i).getDevice()->isLight()) {
+            continue;
+        }
+        auto schedule = schedules.at(i);
+        auto sensor = schedule.getDevice();
+        auto alarm = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), sensor->getHourOff(), sensor->getMinuteOff(),
+                                       sensorHandler, sensor);
+        schedule.setAlarm(alarm);
+
+        schedules.at(i) = schedule;
+        (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? sensorHandler(sensor, true)
+                                                                                        : sensorHandler(sensor, false);
+    }
+}
+void alarmHeater() {
+    for (size_t i = 0; i < DEVICE_COUNT; i++) {
+        if (!schedules.at(i).getDevice()->isHeater()) {
+            continue;
+        }
+        auto schedule = schedules.at(i);
+        auto sensor = schedule.getDevice();
+        auto alarm = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), sensor->getHourOff(), sensor->getMinuteOff(),
+                                       sensorHandler, sensor);
+        schedule.setAlarm(alarm);
+
+        schedules.at(i) = schedule;
+        (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? sensorHandler(sensor, true)
+                                                                                        : sensorHandler(sensor, false);
+    }
+}
+void alarmFlow() {
+    for (size_t i = 0; i < DEVICE_COUNT; i++) {
+        if (!schedules.at(i).getDevice()->isFlow()) {
+            continue;
+        }
+        auto schedule = schedules.at(i);
+        auto sensor = schedule.getDevice();
+        auto alarm = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), sensor->getHourOff(), sensor->getMinuteOff(),
+                                       sensorHandler, sensor);
+        schedule.setAlarm(alarm);
+
+        schedules.at(i) = schedule;
+        (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? sensorHandler(sensor, true)
+                                                                                        : sensorHandler(sensor, false);
+    }
+}
+void alarmCompressor() {
+    for (size_t i = 0; i < DEVICE_COUNT; i++) {
+        if (!schedules.at(i).getDevice()->isCompressor()) {
+            continue;
+        }
+        auto schedule = schedules.at(i);
+        auto sensor = schedule.getDevice();
+        auto alarm = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), sensor->getHourOff(), sensor->getMinuteOff(),
+                                       sensorHandler, sensor);
+        schedule.setAlarm(alarm);
+
+        schedules.at(i) = schedule;
+        (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? sensorHandler(sensor, true)
+                                                                                        : sensorHandler(sensor, false);
+    }
+}
+void alarmCO2() {
+    for (size_t i = 0; i < DEVICE_COUNT; i++) {
+        if (!schedules.at(i).getDevice()->isCO2()) {
+            continue;
+        }
+        auto schedule = schedules.at(i);
+
+        auto sensor = schedule.getDevice();
+        auto alarm = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), sensor->getHourOff(), sensor->getMinuteOff(),
+                                       sensorHandler, sensor);
+        schedule.setAlarm(alarm);
+
+        schedules.at(i) = schedule;
+        (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? sensorHandler(sensor, true)
+                                                                                        : sensorHandler(sensor, false);
+    }
+}
+void alarmDoser() {
+    std::unique_ptr<GBasic> emptyDoser{};
+    for (size_t i = 0; i < DEVICE_COUNT; i++) {
+        if (!schedules.at(i).getDevice()->isDoser()) {
+            continue;
+        }
+        auto schedule = schedules.at(i);
+        auto sensor = static_cast<Doser*>(schedule.getDevice());
+
+        emptyDoser = std::make_unique<GBasic>(sensor->getSteps(), sensor->getDirPin(), sensor->getStepPin(), sensor->getEnablePin(),
+                                              sensor->getMode0Pin(), sensor->getMode1Pin(), sensor->getMode2Pin(), shiftRegister,
+                                              sensor->getIndex());
+        auto doserType = sensor->getDoserType();
+        if (doserType == Doser::K) {
+            doserK = std::move(emptyDoser);
+        } else if (doserType == Doser::NP) {
+            doserNP = std::move(emptyDoser);
+        } else if (doserType == Doser::Fe) {
+            doserFe = std::move(emptyDoser);
+        } else {
+            Serial.printf_P(PSTR("%s"), "Неизвестный тип дозатора");
+        }
+        auto alarm = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), 0, 0, doserOnHandler, sensor);
+
+        // auto alarmOn = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), 0, doserOnHandler, sensor);
+
+        schedule.setOn(alarm);
+        schedules.at(i) = schedule;
+        // TODO Селать проверку на было ли уже событие в текущем дне
+        // (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? deviceOnHandler(sensor)
+        //                                                                                 : deviceOffHandler(sensor);
+    }
+}
+void attachAlarms(Sensor::SensorType sensorType) {
     switch (sensorType) {
         case Sensor::co2:
-            for (size_t i = 0; i < DEVICE_COUNT; i++) {
-                if (!schedules.at(i).getDevice()->isCO2()) {
-                    continue;
-                }
-                auto schedule = schedules.at(i);
-
-                auto sensor = schedule.getDevice();
-                auto alarm = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), sensor->getHourOff(),
-                                               sensor->getMinuteOff(), sensorHandler, sensor);
-                schedule.setAlarm(alarm);
-
-                schedules.at(i) = schedule;
-                (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? sensorHandler(sensor, true)
-                                                                                                : sensorHandler(sensor, false);
-            }
+            alarmCO2();
             break;
         case Sensor::compressor:
-            for (size_t i = 0; i < DEVICE_COUNT; i++) {
-                if (!schedules.at(i).getDevice()->isCompressor()) {
-                    continue;
-                }
-                auto schedule = schedules.at(i);
-                auto sensor = schedule.getDevice();
-                auto alarm = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), sensor->getHourOff(),
-                                               sensor->getMinuteOff(), sensorHandler, sensor);
-                schedule.setAlarm(alarm);
-
-                schedules.at(i) = schedule;
-                (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? sensorHandler(sensor, true)
-                                                                                                : sensorHandler(sensor, false);
-            }
+            alarmCompressor();
             break;
         case Sensor::flow:
-            for (size_t i = 0; i < DEVICE_COUNT; i++) {
-                if (!schedules.at(i).getDevice()->isFlow()) {
-                    continue;
-                }
-                auto schedule = schedules.at(i);
-                auto sensor = schedule.getDevice();
-                auto alarm = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), sensor->getHourOff(),
-                                               sensor->getMinuteOff(), sensorHandler, sensor);
-                schedule.setAlarm(alarm);
-
-                schedules.at(i) = schedule;
-                (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? sensorHandler(sensor, true)
-                                                                                                : sensorHandler(sensor, false);
-            }
+            alarmFlow();
             break;
         case Sensor::heater:
-            for (size_t i = 0; i < DEVICE_COUNT; i++) {
-                if (!schedules.at(i).getDevice()->isHeater()) {
-                    continue;
-                }
-                auto schedule = schedules.at(i);
-                auto sensor = schedule.getDevice();
-                auto alarm = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), sensor->getHourOff(),
-                                               sensor->getMinuteOff(), sensorHandler, sensor);
-                schedule.setAlarm(alarm);
-
-                schedules.at(i) = schedule;
-                (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? sensorHandler(sensor, true)
-                                                                                                : sensorHandler(sensor, false);
-            }
+            alarmHeater();
             break;
         case Sensor::light:
-            for (size_t i = 0; i < DEVICE_COUNT; i++) {
-                if (!schedules.at(i).getDevice()->isLight()) {
-                    continue;
-                }
-                auto schedule = schedules.at(i);
-                auto sensor = schedule.getDevice();
-                auto alarm = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), sensor->getHourOff(),
-                                               sensor->getMinuteOff(), sensorHandler, sensor);
-                schedule.setAlarm(alarm);
-
-                schedules.at(i) = schedule;
-                (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? sensorHandler(sensor, true)
-                                                                                                : sensorHandler(sensor, false);
-            }
+            alarmLight();
             break;
         case Sensor::pump:
-            for (size_t i = 0; i < DEVICE_COUNT; i++) {
-                if (!schedules.at(i).getDevice()->isPump()) {
-                    continue;
-                }
-                auto schedule = schedules.at(i);
-                auto sensor = schedule.getDevice();
-                auto alarm = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), sensor->getHourOff(),
-                                               sensor->getMinuteOff(), sensorHandler, sensor);
-                schedule.setAlarm(alarm);
-
-                schedules.at(i) = schedule;
-                (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? sensorHandler(sensor, true)
-                                                                                                : sensorHandler(sensor, false);
-            }
+            alarmPump();
             break;
         case Sensor::doser:
-            std::unique_ptr<GBasic> emptyDoser{};
-            for (size_t i = 0; i < DEVICE_COUNT; i++) {
-                if (!schedules.at(i).getDevice()->isDoser()) {
-                    continue;
-                }
-                auto schedule = schedules.at(i);
-                auto sensor = static_cast<Doser*>(schedule.getDevice());
-
-                emptyDoser = std::make_unique<GBasic>(sensor->getSteps(), sensor->getDirPin(), sensor->getStepPin(),
-                                                      sensor->getEnablePin(), sensor->getMode0Pin(), sensor->getMode1Pin(),
-                                                      sensor->getMode2Pin(), shiftRegister, sensor->getIndex());
-                auto doserType = sensor->getDoserType();
-                if (doserType == Doser::K) {
-                    doserK = std::move(emptyDoser);
-                } else if (doserType == Doser::NP) {
-                    doserNP = std::move(emptyDoser);
-                } else if (doserType == Doser::Fe) {
-                    doserFe = std::move(emptyDoser);
-                } else {
-                    Serial.printf_P(PSTR("%s"), "Неизвестный тип дозатора");
-                }
-                auto alarm = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), 0, 0, doserOnHandler, sensor);
-
-                // auto alarmOn = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), 0, doserOnHandler, sensor);
-
-                schedule.setOn(alarm);
-                schedules.at(i) = schedule;
-                // TODO Селать проверку на было ли уже событие в текущем дне
-                // (sensor->shouldRun(clockRTC.getDateTime().hour, clockRTC.getDateTime().minute)) ? deviceOnHandler(sensor)
-                //                                                                                 : deviceOffHandler(sensor);
-            }
+            alarmDoser();
+            break;
+        case Sensor::sonic:
+            alarmSonic();
+            break;
+        default:
             break;
     }
+}
+
+void getParamSonics() {
+    char* url = getPGMString(urlSonic);
+    Serial.printf_P(PSTR("\n %s\n"), "Дальномеры...");
+    https.useHTTP10(true);
+    https.getStream().flush();
+    if (https.begin(*client, String(url))) {
+        int httpCode = https.GET();
+        if (httpCode > 0) {
+            if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
+                DynamicJsonDocument doc(2000);
+                DeserializationError err = deserializeJson(doc, https.getStream());
+
+                if (err) {
+                    Serial.printf_P(PSTR(" %s %s\n"), "Ошибка разбора JSON объекта:", err.c_str());
+                } else {
+                    auto array = doc.as<JsonArray>();
+                    for (JsonObject obj : array) {
+                        std::string name = obj["name"];  // "аквариум", "второй отсек", "последний отсек", "приемный отсек", ...
+                        double critical = obj["critical"];       // 15.4, 17.2, 18.7, 16.9, 14.2
+                        bool enabled = obj["enabled"];           // true, true, true, true, true
+                        std::string objectId = obj["objectId"];  // "0E4C72F4-AA1D-435A-AF2D-156F2BE2E5C0", ...
+
+                        for (auto&& sonic : sonics) {
+                            if (name == sonic.getName()) {
+                                sonic.setEnabled(enabled);
+                                sonic.setSonicCritical(critical);
+                                sonic.setObjectID(objectId);
+                                sonic.setName(name);
+                            }
+                        }
+                    }
+                    doc.clear();
+                    attachAlarms(Sensor::sonic);
+                }
+                doc.clear();
+            }
+        } else {
+            Serial.printf_P(PSTR(" %s %s\n"), "Ошибка:", HTTPClient::errorToString(httpCode).c_str());
+        }
+        https.end();
+    } else {
+        Serial.printf_P(PSTR(" %s\n"), "Невозможно подключиться\n");
+    }
+    delPtr(url);
 }
 
 void getParamLights() {
@@ -1036,7 +1181,7 @@ void getParamLights() {
     } else {
         parseJSONLights(responseString);
         responseString.clear();
-        attachAlarm(Sensor::light);
+        attachAlarms(Sensor::light);
     }
 }
 
@@ -1062,7 +1207,7 @@ void getParamDosers() {
     } else {
         parseJSONDosers(responseString);
         responseString.clear();
-        attachAlarm(Sensor::doser);
+        attachAlarms(Sensor::doser);
     }
 }
 
@@ -1088,7 +1233,7 @@ void getParamCompressor() {
     } else {
         parseJSONCompressor(responseString);
         responseString.clear();
-        attachAlarm(Sensor::compressor);
+        attachAlarms(Sensor::compressor);
     }
 }
 
@@ -1114,7 +1259,7 @@ void getParamFlow() {
     } else {
         parseJSONFlow(responseString);
         responseString.clear();
-        attachAlarm(Sensor::flow);
+        attachAlarms(Sensor::flow);
     }
 }
 
@@ -1140,7 +1285,7 @@ void getParamCO2() {
     } else {
         parseJSONCO2(responseString);
         responseString.clear();
-        attachAlarm(Sensor::co2);
+        attachAlarms(Sensor::co2);
     }
 }
 
@@ -1166,7 +1311,7 @@ void getParamHeater() {
     } else {
         parseJSONHeater(responseString);
         responseString.clear();
-        attachAlarm(Sensor::heater);
+        attachAlarms(Sensor::heater);
     }
 }
 
@@ -1192,7 +1337,7 @@ void getParamPump() {
     } else {
         parseJSONPump(responseString);
         responseString.clear();
-        attachAlarm(Sensor::pump);
+        attachAlarms(Sensor::pump);
     }
 }
 
@@ -1264,6 +1409,7 @@ void getParamsBackEnd() {
     getParamDosers();
     getParamHeater();
     getParamPump();
+    getParamSonics();
     /*
     // TODO сделать сохранение в EEPROM
     setParamsEEPROM();
@@ -1306,7 +1452,7 @@ void syncTime() {
     sendNTPpacket(timeServerIP);
     delay(100);
     int cb = udp.parsePacket();
-    if (!cb) {
+    if (cb == 0) {
         Serial.printf_P(PSTR(" Нет ответа от сервера времени %s\n"), ntpServerName);
         count_sync++;
     } else {
@@ -1409,7 +1555,7 @@ void lastOnline() {
     free(currentTime);
 }
 
-void postLog(std::string message) {
+void postLog(const std::string& message) {
     time_t timenow = time(nullptr);
 
     char* url = getPGMString(urlPostLog);
@@ -1417,7 +1563,7 @@ void postLog(std::string message) {
     char* aj = getPGMString(applicationJson);
     if (https.begin(*client, String(url))) {
         String payload;
-        payload = "{\"datetime\": " + String(timenow) + "000,\"message\": \"" + message.c_str() + "\"}";
+        payload = "{\"datetime\": " + String(timenow) + R"(000,"message": ")" + message.c_str() + "\"}";
         https.addHeader(String(ct), String(aj));
         int httpCode = https.POST(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
@@ -1469,7 +1615,7 @@ void parseJSONUpdateSettings(const String& response, bool& result) {
         Serial.println(err.c_str());
         result = false;
     } else {
-        JsonArray array = doc.as<JsonArray>();
+        auto array = doc.as<JsonArray>();
         for (JsonObject obj : array) {
             result = obj["flag"];
         }
@@ -1544,6 +1690,7 @@ String serializeTemperature() {
     char* currentTime = clockRTC.dateFormat("d.m.Y H:i:s", clockRTC.getDateTime());
     String time = String(currentTime);
 
+    // todo: исправить Sensor на sensor2
     doc["sensor1"] = static_cast<double>(sensorTemperatureValue1);
     doc["Sensor"] = static_cast<double>(sensorTemperatureValue2);
     doc["time"] = time;
@@ -1636,3 +1783,5 @@ void setup() {
 void loop() {
     Alarm.delay(10);
 }
+
+#pragma clang diagnostic pop

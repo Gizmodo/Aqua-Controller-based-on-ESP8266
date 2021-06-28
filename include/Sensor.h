@@ -11,7 +11,7 @@
 
 class Sensor {
    public:
-    enum SensorType { unknown, light, compressor, co2, doser, feeder, flow, pump, heater };
+    enum SensorType { unknown, light, compressor, co2, doser, feeder, flow, pump, heater, sonic };
 
     ~Sensor() = default;
 
@@ -56,6 +56,10 @@ class Sensor {
 
     bool isPump() {
         return (this->_type == SensorType::pump);
+    }
+
+    bool isSonic() {
+        return (this->_type == SensorType::sonic);
     }
 
     void setStateNotify(bool state) {
@@ -143,6 +147,16 @@ class Sensor {
         return this->_objectID;
     }
 
+    std::string sonicInfo() {
+        std::string typeName;
+        typeName = sensorTypeToString(this->_type);
+
+        std::string buffer;
+        buffer = "[Название] " + this->_name + " [Тип] " + typeName + " [Крит-ое значение] " + std::to_string(_sonicCritical) +
+                 " [ENABLED] " + std::to_string(this->_enabled) + " [OBJECTID] ..." + tail(this->_objectID, 5);
+        return buffer;
+    }
+
     std::string sensorInfo() {
         char bufferOn[32];
         char bufferOff[32];
@@ -222,6 +236,14 @@ class Sensor {
         return this->_type;
     }
 
+    double getSonicCritical() {
+        return this->_sonicCritical;
+    }
+
+    void setSonicCritical(double value) {
+        this->_sonicCritical = value;
+    }
+
    private:
     std::string _name;
     std::string _objectID;
@@ -234,6 +256,7 @@ class Sensor {
     bool _state = false;
     bool _enabled = false;
     Mediator<Sensor> mMediator;
+    double _sonicCritical = 0;
 
     tm* gmOn() const {
         return gmtime(&_on);
@@ -260,6 +283,8 @@ class Sensor {
 
     static std::string sensorTypeToString(SensorType type) {
         switch (type) {
+            case sonic:
+                return "Дальномер";
             case light:
                 return "Прожектор";
             case compressor:

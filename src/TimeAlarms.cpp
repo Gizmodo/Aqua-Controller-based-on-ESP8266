@@ -156,6 +156,7 @@ void TimeAlarmsClass::free(AlarmID_t ID) {
         Alarm[ID].Mode.isEnabled = false;
         Alarm[ID].Mode.alarmType = dtNotAllocated;
         Alarm[ID].onTickHandler = nullptr;
+        Alarm[ID].onTickSensorHandlerNew = nullptr;
         Alarm[ID].value = 0;
         Alarm[ID].value2 = 0;
         Alarm[ID].nextTrigger = 0;
@@ -219,7 +220,7 @@ void TimeAlarmsClass::waitForRollover(dtUnits_t Units) {
 
 uint8_t TimeAlarmsClass::getDigitsNow(dtUnits_t Units) {
     time_t timenow = time(nullptr);
-
+//TODO: change to switch
     if (Units == dtSecond)
         return numberOfSeconds(timenow);
     if (Units == dtMinute)
@@ -336,7 +337,28 @@ AlarmID_t TimeAlarmsClass::create(time_t value, OnTick_t onTickHandler, bool isO
     }
     return INVALID_ALARM_ID;  // no IDs available or time is invalid
 }
-
+AlarmID_t TimeAlarmsClass::createSensorTimerNew(time_t value,
+                                                onTickSensorNew_t onTickDeviceHandler,
+                                                bool isOneShot,
+                                                dtAlarmPeriod_t alarmType, Sensor* param) {
+    time_t now = time(nullptr);
+    if (!((dtIsAlarm(alarmType) && now < SECS_PER_YEAR) || (dtUseAbsoluteValue(alarmType) && (value == 0)))) {
+        for (uint8_t id = 0; id < ALARMS_COUNT; id++) {
+            if (Alarm[id].Mode.alarmType == dtNotAllocated) {
+                Alarm[id].onTickSensorHandlerNew = onTickDeviceHandler;
+                Alarm[id].sensor = param;
+                Alarm[id].Mode.isOneShot = isOneShot;
+                Alarm[id].Mode.alarmType = alarmType;
+                Alarm[id].value = value;
+                Alarm[id].value2 = -1;
+                Alarm[id].flag = true;
+                enable(id);
+                return id;
+            }
+        }
+    }
+    return INVALID_ALARM_ID;
+}
 AlarmID_t TimeAlarmsClass::createSensorAlarmNew(time_t value,
                                                 time_t value2,
                                                 onTickSensorNew_t onTickDeviceHandler,

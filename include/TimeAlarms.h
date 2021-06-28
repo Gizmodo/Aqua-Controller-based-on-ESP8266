@@ -5,7 +5,7 @@
 #include <time.h>
 #include "Sensor.h"
 
-#define ALARMS_COUNT 16  // for esp8266 chip - max is 255
+#define ALARMS_COUNT 25  // for esp8266 chip - max is 255
 
 #define SECS_PER_MIN ((time_t)(60UL))
 #define SECS_PER_HOUR ((time_t)(3600UL))
@@ -22,7 +22,7 @@
 #define dayOfWeek(_time_) ((((_time_) / SECS_PER_DAY + 4) % DAYS_PER_WEEK) + 1)  // 1 = Sunday
 #define elapsedSecsToday(_time_) ((_time_) % SECS_PER_DAY)                       // the number of seconds since last midnight
 // The following macros are used in calculating alarms and assume the clock is set to a date later than Jan 1 1971
-// Always set the correct time before settting alarms
+// Always set the correct time before setting alarms
 #define previousMidnight(_time_) (((_time_) / SECS_PER_DAY) * SECS_PER_DAY)  // time at the start of the given day
 #define nextMidnight(_time_) (previousMidnight(_time_) + SECS_PER_DAY)       // time at the end of the given day
 #define elapsedSecsThisWeek(_time_) \
@@ -30,7 +30,7 @@
 #define previousSunday(_time_) ((_time_)-elapsedSecsThisWeek(_time_))      // time at the start of the week for the given time
 #define nextSunday(_time_) (previousSunday(_time_) + SECS_PER_WEEK)        // time at the end of the week for the given time
 
-typedef enum { dtMillisecond, dtSecond, dtMinute, dtHour, dtDay } dtUnits_t;
+typedef enum { dtSecond, dtMinute, dtHour, dtDay } dtUnits_t;
 
 typedef struct {
     uint8_t alarmType : 4;
@@ -46,7 +46,7 @@ typedef enum {
     dtDailyAlarm,
     dtWeeklyAlarm,
     dtLastAlarmType
-} dtAlarmPeriod_t;  // in future: dtBiweekly, dtMonthly, dtAnnual
+} dtAlarmPeriod_t;  // in the future: dtBiweekly, dtMonthly, dtAnnual
 
 // macro to return true if the given type is a time based alarm, false if timer or not allocated
 #define dtIsAlarm(_type_) ((_type_) >= dtExplicitAlarm && (_type_) < dtLastAlarmType)
@@ -95,6 +95,11 @@ class TimeAlarmsClass {
                                    bool isOneShot,
                                    dtAlarmPeriod_t alarmType,
                                    Sensor* param);
+    AlarmID_t createSensorTimerNew(time_t value,
+                                   onTickSensorNew_t onTickDeviceHandler,
+                                   bool isOneShot,
+                                   dtAlarmPeriod_t alarmType,
+                                   Sensor* param);
 
    public:
     TimeAlarmsClass();
@@ -113,7 +118,7 @@ class TimeAlarmsClass {
             return INVALID_ALARM_ID;
         return create(value, onTickHandler, true, dtDailyAlarm);
     }
-    AlarmID_t alarmOnce(const int H, const int M, const int S, OnTick_t onTickHandler) {
+    AlarmID_t alarmOnce(const uint8_t H, const uint8_t M, const uint8_t S, OnTick_t onTickHandler) {
         return alarmOnce(AlarmHMS(H, M, S), onTickHandler);
     }
 
@@ -128,15 +133,15 @@ class TimeAlarmsClass {
             return INVALID_ALARM_ID;
         return createSensorAlarmNew(value, value2, onTickBaseDeviceHandler, false, dtDailyAlarm, param);
     }
-    AlarmID_t alarmRepeat(const int H1,
-                          const int M1,
-                          const int H2,
-                          const int M2,
+    AlarmID_t alarmRepeat(const uint8_t H1,
+                          const uint8_t M1,
+                          const uint8_t H2,
+                          const uint8_t M2,
                           onTickSensorNew_t onTickBaseDeviceHandler,
                           Sensor* param) {
         return alarmRepeat(AlarmHMS(H1, M1, 0), AlarmHMS(H2, M2, 0), onTickBaseDeviceHandler, param);
     }
-    AlarmID_t alarmRepeat(const int H, const int M, const int S, OnTick_t onTickHandler) {
+    AlarmID_t alarmRepeat(const uint8_t H, const uint8_t M, const uint8_t S, OnTick_t onTickHandler) {
         return alarmRepeat(AlarmHMS(H, M, S), onTickHandler);
     }
     // trigger at a regular interval
@@ -145,8 +150,20 @@ class TimeAlarmsClass {
             return INVALID_ALARM_ID;
         return create(value, onTickHandler, false, dtTimer);
     }
-    AlarmID_t timerRepeat(const int H, const int M, const int S, OnTick_t onTickHandler) {
+    AlarmID_t timerRepeat(const uint8_t H, const uint8_t M, const uint8_t S, OnTick_t onTickHandler) {
         return timerRepeat(AlarmHMS(H, M, S), onTickHandler);
+    }
+    AlarmID_t timerRepeat(time_t value, onTickSensorNew_t onTickHandler, Sensor* param) {
+        if (value <= 0)
+            return INVALID_ALARM_ID;
+        return createSensorTimerNew(value, onTickHandler, false, dtTimer, param);
+    }
+    AlarmID_t timerRepeat(const uint8_t H,
+                          const uint8_t M,
+                          const uint8_t S,
+                          onTickSensorNew_t onTickBaseDeviceHandler,
+                          Sensor* param) {
+        return timerRepeat(AlarmHMS(H, M, S), onTickBaseDeviceHandler, param);
     }
     void delay(unsigned long ms);
 
@@ -170,7 +187,7 @@ class TimeAlarmsClass {
     time_t getNextTrigger();              // returns the time of the next scheduled alarm
     time_t getNextTrigger(AlarmID_t ID);  // returns the time of scheduled alarm
     bool isAllocated(AlarmID_t ID);       // returns true if this id is allocated
-    bool isAlarm(AlarmID_t ID);           // returns true if id is for a time based alarm, false if its a timer or not allocated
+    bool isAlarm(AlarmID_t ID);           // returns true if id is for a time based alarm, false if it's a timer or not allocated
     time_t read2(AlarmID_t ID);
     void write2(AlarmID_t ID, time_t value);
 };
