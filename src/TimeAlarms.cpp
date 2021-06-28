@@ -220,7 +220,7 @@ void TimeAlarmsClass::waitForRollover(dtUnits_t Units) {
 
 uint8_t TimeAlarmsClass::getDigitsNow(dtUnits_t Units) {
     time_t timenow = time(nullptr);
-
+//TODO: change to switch
     if (Units == dtSecond)
         return numberOfSeconds(timenow);
     if (Units == dtMinute)
