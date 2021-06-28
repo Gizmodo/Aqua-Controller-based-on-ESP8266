@@ -8,11 +8,10 @@
 #include <string>
 #include <utility>
 #include "Mediator.h"
-#define UNDEFINED (-1)
 
 class Sensor {
    public:
-    enum SensorType { unknown, light, compressor, co2, doser, feeder, flow, pump, heater };
+    enum SensorType { unknown, light, compressor, co2, doser, feeder, flow, pump, heater, sonic };
 
     ~Sensor() = default;
 
@@ -22,12 +21,45 @@ class Sensor {
         _name = std::move(name);
     }
 
-    void setMediator(const Mediator<Sensor>& mMediator) {
-        Sensor::mMediator = mMediator;
+    Sensor(std::string name, SensorType type) {
+        _name = std::move(name);
+        _type = type;
+    }
+
+    void setMediator(const Mediator<Sensor>& mediator) {
+        mMediator = mediator;
     }
 
     bool isLight() {
         return (this->_type == SensorType::light);
+    }
+
+    bool isCompressor() {
+        return (this->_type == SensorType::compressor);
+    }
+
+    bool isFlow() {
+        return (this->_type == SensorType::flow);
+    }
+
+    bool isCO2() {
+        return (this->_type == SensorType::co2);
+    }
+
+    bool isDoser() {
+        return (this->_type == SensorType::doser);
+    }
+
+    bool isHeater() {
+        return (this->_type == SensorType::heater);
+    }
+
+    bool isPump() {
+        return (this->_type == SensorType::pump);
+    }
+
+    bool isSonic() {
+        return (this->_type == SensorType::sonic);
     }
 
     void setStateNotify(bool state) {
@@ -47,7 +79,6 @@ class Sensor {
     void setPin(uint8_t pin) {
         _pin = pin;
     }
-
     void setState(bool b) {
         _state = b;
     }
@@ -81,7 +112,7 @@ class Sensor {
     }
 
     uint8_t getMinuteOff() const {
-        return localOff()->tm_min;
+        return gmOff()->tm_min;
     }
 
     uint8_t getHourOnLocal() const {
@@ -116,6 +147,16 @@ class Sensor {
         return this->_objectID;
     }
 
+    std::string sonicInfo() {
+        std::string typeName;
+        typeName = sensorTypeToString(this->_type);
+
+        std::string buffer;
+        buffer = "[Название] " + this->_name + " [Тип] " + typeName + " [Крит-ое значение] " + std::to_string(_sonicCritical) +
+                 " [ENABLED] " + std::to_string(this->_enabled) + " [OBJECTID] ..." + tail(this->_objectID, 5);
+        return buffer;
+    }
+
     std::string sensorInfo() {
         char bufferOn[32];
         char bufferOff[32];
@@ -136,6 +177,7 @@ class Sensor {
 
     std::string serialize() {
         std::string output;
+
         if (_type == light) {
             const int capacity = JSON_OBJECT_SIZE(7);
             StaticJsonDocument<capacity> doc;
@@ -147,10 +189,21 @@ class Sensor {
             doc["name"] = this->_name.c_str();
             serializeJson(doc, output);
         }
+
+        if ((_type == compressor) || (_type == flow) || (_type == co2) || (_type == heater) || (_type == pump)) {
+            const int capacity = JSON_OBJECT_SIZE(6);
+            StaticJsonDocument<capacity> doc;
+            doc["enabled"] = this->_enabled;
+            doc["on"] = std::stoull(std::to_string(_on) + "000");
+            doc["off"] = std::stoull(std::to_string(_off) + "000");
+            doc["pin"] = this->_pin;
+            doc["state"] = this->_state;
+            serializeJson(doc, output);
+        }
         return output;
     }
 
-    bool shouldRun(uint8 hour, uint8_t minute) const {
+    bool shouldRun(uint8_t hour, uint8_t minute) const {
         uint16_t minutes = hour * 60 + minute;
         uint16_t minutesOn = getHourOnLocal() * 60 + getMinuteOnLocal();
         uint16_t minutesOff = getHourOffLocal() * 60 + getMinuteOffLocal();
@@ -179,18 +232,31 @@ class Sensor {
         this->_off = off;
     }
 
+    SensorType getSensorType() {
+        return this->_type;
+    }
+
+    double getSonicCritical() {
+        return this->_sonicCritical;
+    }
+
+    void setSonicCritical(double value) {
+        this->_sonicCritical = value;
+    }
+
    private:
     std::string _name;
     std::string _objectID;
     SensorType _type = unknown;
-    uint8_t _pin = UNDEFINED;
+    uint8_t _pin = -1;
     //Время в UTC на включение сенсора
-    time_t _on = UNDEFINED;
+    time_t _on = -1;
     //Время в UTC на выключение сенсора
-    time_t _off = UNDEFINED;
+    time_t _off = -1;
     bool _state = false;
     bool _enabled = false;
     Mediator<Sensor> mMediator;
+    double _sonicCritical = 0;
 
     tm* gmOn() const {
         return gmtime(&_on);
@@ -217,6 +283,8 @@ class Sensor {
 
     static std::string sensorTypeToString(SensorType type) {
         switch (type) {
+            case sonic:
+                return "Дальномер";
             case light:
                 return "Прожектор";
             case compressor:

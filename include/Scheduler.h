@@ -13,7 +13,7 @@ class Scheduler {
     Sensor* _device = nullptr;
     AlarmID_t _on = 255;
     AlarmID_t _off = 255;
-
+    AlarmID_t _alarm = 255;
    public:
     ~Scheduler();
     Scheduler();
@@ -23,5 +23,7 @@ class Scheduler {
     void setOn(AlarmID_t on);
     AlarmID_t getOff();
     void setOff(AlarmID_t off);
+    AlarmID_t getAlarm();
+    void setAlarm(AlarmID_t alarm);
 };
 #endif  // AQUACONTROLLER_ESP8266_SCHEDULER_H
