@@ -255,11 +255,28 @@ typename _Unique_if<T>::_Known_bound make_unique(Args&&...) = delete;
 }  // namespace std_esp32
 #endif
 //// METHODS
+void delPtr(const char* p) {
+    delete[] p;
+}
+
+char* newPtr(size_t len) {
+    char* p = new char[len];
+    memset(p, 0, len);
+    return p;
+}
+
+char* getPGMString(PGM_P pgm) {
+    size_t len = strlen_P(pgm) + 1;
+    char* buf = newPtr(len);
+    strcpy_P(buf, pgm);
+    buf[len - 1] = 0;
+    return buf;
+}
 
 void getTime() {
     char* strDateTime = clockRTC.dateFormat("H:i:s", clockRTC.getDateTime());
-    Serial.printf_P(PSTR("Время %s\n"), String(strDateTime).c_str());
-    free(strDateTime);
+    Serial.printf_P(PSTR("%s %s\n"), F("Время"), String(strDateTime).c_str());
+    delPtr(strDateTime);
 }
 
 [[maybe_unused]] void printScheduler() {
@@ -279,24 +296,6 @@ void getTime() {
         strftime(bufferOff, 32, "%H:%M:%S", tmOff);
         Serial.printf_P(PSTR("%s %s\n\n"), "Выключение", bufferOff);
     }
-}
-
-void delPtr(const char* p) {
-    delete[] p;
-}
-
-char* newPtr(size_t len) {
-    char* p = new char[len];
-    memset(p, 0, len);
-    return p;
-}
-
-char* getPGMString(PGM_P pgm) {
-    size_t len = strlen_P(pgm) + 1;
-    char* buf = newPtr(len);
-    strcpy_P(buf, pgm);
-    buf[len - 1] = 0;
-    return buf;
 }
 
 void callBack(Sensor sensor) {
@@ -375,7 +374,8 @@ void createDevicesAndScheduler() {
     uint8_t index = 0;
 
     for (int i = 0; i < LIGHTS_COUNT; ++i) {
-        std::string buffer = "Прожектор " + std::to_string(i + 1);
+        std::string buffer = "Прожектор ";
+        buffer += std::to_string(i + 1);
         auto item = lights.at(i);
         item.setName(buffer);
         item.setMediator(medLight);
@@ -420,7 +420,8 @@ void createDevicesAndScheduler() {
     schedules.at(index) = schedule;
     index++;
     for (int i = 0; i < SONIC_COUNT; ++i) {
-        std::string buffer = "Дальномер " + std::to_string(i + 1);
+        std::string buffer = "Дальномер ";
+        buffer += std::to_string(i + 1);
         auto item = sonics.at(i);
         item.setName(buffer);
         item.setMediator(medSonic);
@@ -444,7 +445,7 @@ void printDevice(Sensor* device) {
 }
 
 void printAllDevices() {
-    Serial.printf_P(PSTR("\n%s\n"), "Вывод информации об устройствах:");
+    Serial.printf_P(PSTR("\n%s\n"), F("Вывод информации об устройствах:"));
     for (auto light : lights) {
         printDevice(&light);
     }
@@ -483,8 +484,7 @@ float getSensorTemperature(const uint8_t* sensorAddress) {
 void getSensorsTemperature() {
     sensorTemperatureValue1 = getSensorTemperature(sensorTemperatureAddress1);
     sensorTemperatureValue2 = getSensorTemperature(sensorTemperatureAddress2);
-    Serial.printf_P(PSTR(" [T1: %s°]  [T2: %s°]\n"), String(sensorTemperatureValue1).c_str(),
-                    String(sensorTemperatureValue2).c_str());
+    Serial.printf_P(PSTR(" [T1: %4.2f°]  [T2: %4.2f°]\n"), sensorTemperatureValue1, sensorTemperatureValue2);
 }
 
 void sendMessage(const String& message) {
@@ -503,6 +503,7 @@ void sendMessage(const String& message) {
         https.addHeader(String(actext), F("Push Notifications are cool"));
 
         int httpCode = https.POST(data);
+        data.clear();
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
             Serial.println(F("   PUSH уведомление отправлено"));
         } else {
@@ -947,7 +948,7 @@ void alarmSonic() {
         auto schedule = schedules.at(i);
 
         auto sensor = schedule.getDevice();
-        auto alarm = Alarm.timerRepeat(0, 2, 0, sonicHandler, sensor);
+        auto alarm = Alarm.timerRepeat(0, 30, 0, sonicHandler, sensor);
         schedule.setAlarm(alarm);
         schedules.at(i) = schedule;
     }
@@ -1317,7 +1318,7 @@ void getParamHeater() {
 
 void getParamPump() {
     char* url = getPGMString(urlPump);
-    Serial.printf_P(PSTR("\n %s\n"), "Помпа...");
+    Serial.printf_P(PSTR("\n %s\n"), F("Помпа..."));
     if (https.begin(*client, String(url))) {
         int httpCode = https.GET();
         if (httpCode > 0) {
@@ -1325,11 +1326,11 @@ void getParamPump() {
                 responseString = https.getString();
             }
         } else {
-            Serial.printf_P(PSTR(" %s %s\n"), "Ошибка:", HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR(" %s %s\n"), F("Ошибка:"), HTTPClient::errorToString(httpCode).c_str());
         }
         https.end();
     } else {
-        Serial.printf_P(PSTR(" %s\n"), "Невозможно подключиться\n");
+        Serial.printf_P(PSTR(" %s\n"), F("Невозможно подключиться\n"));
     }
     delPtr(url);
     if (responseString.isEmpty()) {
@@ -1401,7 +1402,7 @@ void setParamsEEPROM() {
 }
 */
 void getParamsBackEnd() {
-    Serial.printf_P(PSTR("%s\n"), "Чтение параметров из облака");
+    Serial.printf_P(PSTR("%s\n"), F("Чтение параметров из облака"));
     getParamLights();
     getParamCompressor();
     getParamFlow();
@@ -1426,7 +1427,7 @@ void initDS3231() {
     clockRTC.begin();
     char* df = clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime());
     Serial.printf_P(PSTR("Время DS3231: %s\n"), String(df).c_str());
-    free(df);
+    delPtr(df);
 }
 
 void sendNTPpacket(const IPAddress& address) {
@@ -1475,7 +1476,7 @@ void syncTime() {
         Serial.printf_P(PSTR("    NTP: %lu\n"), epoch);
 
         if ((rtcEpoch - epoch) > 2) {
-            Serial.printf_P(PSTR(" %s"), "Обновляем DS3231 (разница между эпохами = ");
+            Serial.printf_P(PSTR(" %s"), F("Обновляем DS3231 (разница между эпохами = "));
             if ((rtcEpoch - epoch) > 10000) {
                 Serial.printf_P(PSTR(" %s\n"), (epoch - rtcEpoch));
             } else {
@@ -1483,7 +1484,7 @@ void syncTime() {
             }
             rtc.setEpoch(epoch);
         } else {
-            Serial.printf_P(PSTR(" %s\n"), "Дата и время DS3231 не требуют синхронизации");
+            Serial.printf_P(PSTR(" %s\n"), F("Дата и время DS3231 не требуют синхронизации"));
         }
     }
 }
@@ -1504,7 +1505,9 @@ void putUptime(const String& uptime) {
     char* aj = getPGMString(applicationJson);
     if (https.begin(*client, String(url))) {
         String payload;
-        payload = R"({"uptime":")" + uptime + "\"}";
+        payload = R"({"uptime":")";
+        payload += uptime;
+        payload += "\"}";
         https.addHeader(String(ct), String(aj));
         int httpCode = https.PUT(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
@@ -1512,6 +1515,7 @@ void putUptime(const String& uptime) {
             Serial.printf_P(PSTR("putUptime() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
         }
         https.end();
+        payload.clear();
     } else {
         Serial.printf_P(PSTR("%s\n"), "putUptime() -> Невозможно подключиться\n");
     }
@@ -1526,33 +1530,33 @@ void uptime() {
     putUptime(uptime);
 }
 
-void putLastOnline(const String& currentTime) {
+void lastOnline() {
     char* ct = getPGMString(contentType);
     char* aj = getPGMString(applicationJson);
     char* url = getPGMString(urlPutLastOnline);
+    char* currentTime = clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime());
+
     if (https.begin(*client, String(url))) {
         String payload;
-        payload = R"({"lastonline":")" + currentTime + "\"}";
+        payload.reserve(50);
+        payload = R"({"lastonline":")";
+        payload += String(currentTime);
+        payload += "\"}";
         https.addHeader(String(ct), String(aj));
         int httpCode = https.PUT(payload);
+        payload.clear();
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
         } else {
-            Serial.printf_P(PSTR("postLastOnline() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR("%s %s\n"), F("lastOnline -> Ошибка:"), HTTPClient::errorToString(httpCode).c_str());
         }
         https.end();
     } else {
-        Serial.printf_P(PSTR("%s\n"), "postLastOnline() -> Невозможно подключиться\n");
+        Serial.printf_P(PSTR("%s\n"), F("lastOnline() -> Невозможно подключиться"));
     }
+    delPtr(currentTime);
     delPtr(url);
     delPtr(ct);
     delPtr(aj);
-}
-
-void lastOnline() {
-    char* currentTime = clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime());
-    String payload = String(currentTime);
-    putLastOnline(payload);
-    free(currentTime);
 }
 
 void postLog(const std::string& message) {
@@ -1563,9 +1567,14 @@ void postLog(const std::string& message) {
     char* aj = getPGMString(applicationJson);
     if (https.begin(*client, String(url))) {
         String payload;
-        payload = "{\"datetime\": " + String(timenow) + R"(000,"message": ")" + message.c_str() + "\"}";
+        payload = "{\"datetime\": ";
+        payload += String(timenow);
+        payload += R"(000,"message": ")";
+        payload += message.c_str();
+        payload += "\"}";
         https.addHeader(String(ct), String(aj));
         int httpCode = https.POST(payload);
+        payload.clear();
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
         } else {
             Serial.printf_P(PSTR("postLog() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
@@ -1586,7 +1595,9 @@ void postBoot() {
     char* aj = getPGMString(applicationJson);
     if (https.begin(*client, String(url))) {
         String payload;
-        payload = R"({"time":")" + String(currentTime) + "\"}";
+        payload = R"({"time":")";
+        payload += String(currentTime);
+        payload += "\"}";
         https.addHeader(String(ct), String(aj));
         int httpCode = https.POST(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
@@ -1597,11 +1608,13 @@ void postBoot() {
     } else {
         Serial.printf_P(PSTR("%s\n"), "postBoot() -> Невозможно подключиться\n");
     }
+    delPtr(currentTime);
     delPtr(url);
     delPtr(ct);
     delPtr(aj);
     String message;
-    message = "Перезагрузка " + String(currentTime);
+    message = "Перезагрузка ";
+    message += String(currentTime);
     sendMessage(message);
     message.clear();
 }
@@ -1673,7 +1686,7 @@ bool getUpdateSettings() {
 void timer1() {
     getTime();
     getSensorsTemperature();
-    Serial.printf_P(PSTR("%s %d\n"), "FreeHeap", ESP.getFreeHeap());
+    Serial.printf_P(PSTR("\e[1;31m%d\e[1;37m\n"), ESP.getFreeHeap());
     postLog(std::to_string(ESP.getFreeHeap()));
     if (getUpdateSettings()) {
         Serial.printf_P(PSTR("%s\n"), "Будет выполнено обновление всех параметров");
@@ -1683,56 +1696,49 @@ void timer1() {
     }
 }
 
-String serializeTemperature() {
-    String output;
-    const int capacity = JSON_OBJECT_SIZE(5);
-    DynamicJsonDocument doc(capacity);
-    char* currentTime = clockRTC.dateFormat("d.m.Y H:i:s", clockRTC.getDateTime());
-    String time = String(currentTime);
-
-    // todo: исправить Sensor на sensor2
-    doc["sensor1"] = static_cast<double>(sensorTemperatureValue1);
-    doc["Sensor"] = static_cast<double>(sensorTemperatureValue2);
-    doc["time"] = time;
-    serializeJson(doc, output);
-    delPtr(currentTime);
-    return output;
-}
-
 void sendTemperature() {
     char* urlPost = getPGMString(urlPostTemperature);
     char* urlPut = getPGMString(urlPutTemperature);
     char* ct = getPGMString(contentType);
     char* aj = getPGMString(applicationJson);
-    String payload = serializeTemperature();
+    String payload;
     String urlPostString = String(urlPost);
     String urlPutString = String(urlPut);
     String ctString = String(ct);
     String ajString = String(aj);
 
+    const int capacity = JSON_OBJECT_SIZE(5);
+    DynamicJsonDocument doc(capacity);
+    char* currentTime = clockRTC.dateFormat("d.m.Y H:i:s", clockRTC.getDateTime());
+
+    doc["sensor1"] = static_cast<double>(sensorTemperatureValue1);
+    doc["sensor2"] = static_cast<double>(sensorTemperatureValue2);
+    doc["time"] = String(currentTime);
+    serializeJson(doc, payload);
+    doc.clear();
+    delPtr(currentTime);
+
     if (https.begin(*client, urlPostString)) {
         https.addHeader(ctString, ajString);
         int httpCode = https.POST(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
-            Serial.println(F("Значения датчиков температуры отправлены"));
         } else {
-            Serial.printf_P(PSTR("postTemperature() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR("%s %s\n"), F("postTemperature() -> Ошибка:"), HTTPClient::errorToString(httpCode).c_str());
         }
     } else {
-        Serial.printf_P(PSTR("%s\n"), "postTemperature() -> Невозможно подключиться\n");
+        Serial.printf_P(PSTR("%s\n"), F("postTemperature() -> Невозможно подключиться"));
     }
     https.end();
-    urlPostString.clear();
 
     if (https.begin(*client, urlPutString)) {
         https.addHeader(ctString, ajString);
         int httpCode = https.PUT(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
         } else {
-            Serial.printf_P(PSTR("putTemperature() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR("%s %s\n"), F("putTemperature() -> Ошибка:"), HTTPClient::errorToString(httpCode).c_str());
         }
     } else {
-        Serial.printf_P(PSTR("%s\n"), "putTemperature() -> Невозможно подключиться\n");
+        Serial.printf_P(PSTR("%s\n"), F("putTemperature() -> Невозможно подключиться"));
     }
     https.end();
     payload.clear();
@@ -1754,7 +1760,7 @@ void timer5() {
 }
 
 void startTimers() {
-    Alarm.timerRepeat(5 * 60, timer5);
+    Alarm.timerRepeat(300, timer5);
     Alarm.timerRepeat(60, timer1);
     Serial.printf_P(PSTR("%s %d\n"), "Всего таймеров", Alarm.count());
 }
@@ -1773,7 +1779,7 @@ void setup() {
         // syncTime();
         postBoot();
         getParamsBackEnd();
-        printAllDevices();
+        //  printAllDevices();
     }
 
     startTimers();
@@ -1781,7 +1787,7 @@ void setup() {
 }
 
 void loop() {
-    Alarm.delay(10);
+    Alarm.delay(100);
 }
 
 #pragma clang diagnostic pop
