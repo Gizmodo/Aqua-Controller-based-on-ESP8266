@@ -274,7 +274,7 @@ char* getPGMString(PGM_P pgm) {
 }
 
 void getTime() {
-    char* strDateTime = clockRTC.dateFormat("H:i:s", clockRTC.getDateTime());
+    char* strDateTime = clockRTC.dateFormat("H:i:s d:m:Y", clockRTC.getDateTime());
     Serial.printf_P(PSTR("%s %s\n"), F("Время"), String(strDateTime).c_str());
     delPtr(strDateTime);
 }
@@ -1526,7 +1526,7 @@ void putUptime(const String& uptime) {
 
 void uptime() {
     String uptime = uptime_formatter::getUptime();
-    Serial.printf_P(PSTR("Время работы устройства: %s\n"), uptime.c_str());
+    Serial.printf_P(PSTR("%s %s\n"), F("Uptime:"), uptime.c_str());
     putUptime(uptime);
 }
 
@@ -1589,14 +1589,15 @@ void postLog(const std::string& message) {
 }
 
 void postBoot() {
-    char* currentTime = clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime());
+    time_t timenow = time(nullptr);
     char* url = getPGMString(urlPostBoot);
     char* ct = getPGMString(contentType);
     char* aj = getPGMString(applicationJson);
     if (https.begin(*client, String(url))) {
         String payload;
-        payload = R"({"time":")";
-        payload += String(currentTime);
+        payload = R"({"datetime":")";
+        payload += String(timenow);
+        payload += "000";
         payload += "\"}";
         https.addHeader(String(ct), String(aj));
         int httpCode = https.POST(payload);
@@ -1608,15 +1609,9 @@ void postBoot() {
     } else {
         Serial.printf_P(PSTR("%s\n"), "postBoot() -> Невозможно подключиться\n");
     }
-    delPtr(currentTime);
     delPtr(url);
     delPtr(ct);
     delPtr(aj);
-    String message;
-    message = "Перезагрузка ";
-    message += String(currentTime);
-    sendMessage(message);
-    message.clear();
 }
 
 void parseJSONUpdateSettings(const String& response, bool& result) {
