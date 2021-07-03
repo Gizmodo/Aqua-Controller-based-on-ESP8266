@@ -131,7 +131,7 @@ RtcDS3231 rtc;
 IPAddress timeServerIP;
 
 //// Time Synchronization
-const char* ntpServerName = "ru.pool.ntp.org";
+const char* ntpServerName = "pool.ntp.org";
 const int NTP_PACKET_SIZE = 48;
 byte packetBuffer[NTP_PACKET_SIZE];
 byte count_sync = 0;
@@ -1414,7 +1414,7 @@ void getParamsBackEnd() {
 
 void initLocalClock() {
     configTime(0, 0, ntpServerName);
-    setenv("TZ", "MSK-3MSD,M3.5.0/2,M10.5.0/3", 1);
+    setenv("TZ", "MSK-3", 1);
     tzset();
 }
 
@@ -1767,10 +1767,10 @@ void setup() {
     } else {
         initHTTPClient();
         initLocalClock();
-         syncTime();
+        syncTime();
         postBoot();
         getParamsBackEnd();
-        //  printAllDevices();
+        printAllDevices();
     }
 
     startTimers();
