@@ -281,25 +281,25 @@ void getTime() {
 
 [[maybe_unused]] void printScheduler() {
     auto startDayUTC = 1604966400;
-    Serial.printf_P(PSTR("%s\n"), "Информация о расписаниях:");
+    Serial.printf_P(PSTR("%s\n"), F("Информация о расписаниях:"));
     for (auto item : schedules) {
-        Serial.printf_P(PSTR("%s %s\n"), "Устройство:", item.getDevice()->getName().c_str());
+        Serial.printf_P(PSTR("%s %s\n"), F("Устройство:"), item.getDevice()->getName().c_str());
         auto alarmTimeOn = Alarm.read(item.getOn()) + startDayUTC;
         auto tmOn = localtime(&alarmTimeOn);
         char bufferOn[32];
         strftime(bufferOn, 32, "%H:%M:%S", tmOn);
-        Serial.printf_P(PSTR("%s %s\n"), "Включение", bufferOn);
+        Serial.printf_P(PSTR("%s %s\n"), F("Включение"), bufferOn);
 
         auto alarmTimeOff = Alarm.read(item.getOff()) + startDayUTC;
         auto tmOff = localtime(&alarmTimeOff);
         char bufferOff[32];
         strftime(bufferOff, 32, "%H:%M:%S", tmOff);
-        Serial.printf_P(PSTR("%s %s\n\n"), "Выключение", bufferOff);
+        Serial.printf_P(PSTR("%s %s\n\n"), F("Выключение"), bufferOff);
     }
 }
 
 void callBack(Sensor sensor) {
-    Serial.printf_P(PSTR("   %s %s\n"), "Callback", sensor.getName().c_str());
+    Serial.printf_P(PSTR("%s %s\n"), F("   Callback"), sensor.getName().c_str());
     char* url = nullptr;
     char* ct = nullptr;
     char* aj = nullptr;
@@ -343,14 +343,15 @@ void callBack(Sensor sensor) {
         https.addHeader(String(ct), String(aj));
         int httpCode = https.PUT(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
-            Serial.printf_P(PSTR("   %s состояние %s\n"), sensor.getName().c_str(), (sensor.getState() ? "ON" : "OFF"));
+            Serial.printf_P(PSTR("   %s %s %s\n"), sensor.getName().c_str(), F("состояние"), (sensor.getState() ? "ON" : "OFF"));
         } else {
-            Serial.printf_P(PSTR("   %s: %s\n"), "Ошибка", HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR("%s %s\n"), F("   Ошибка:"), HTTPClient::errorToString(httpCode).c_str());
         }
         https.end();
     } else {
-        Serial.printf_P(PSTR("   %s\n"), "Невозможно подключиться\n");
+        Serial.printf_P(PSTR("%s\n\n"), F("   Невозможно подключиться"));
     }
+    payload.clear();
     delPtr(ct);
     delPtr(aj);
 }
@@ -484,7 +485,8 @@ float getSensorTemperature(const uint8_t* sensorAddress) {
 void getSensorsTemperature() {
     sensorTemperatureValue1 = getSensorTemperature(sensorTemperatureAddress1);
     sensorTemperatureValue2 = getSensorTemperature(sensorTemperatureAddress2);
-    Serial.printf_P(PSTR(" [T1: %4.2f°]  [T2: %4.2f°]\n"), sensorTemperatureValue1, sensorTemperatureValue2);
+    Serial.printf_P(PSTR("%s%4.2f%s%4.2f%s\n"), F(" [T1:"), sensorTemperatureValue1, F("°]  [T2:"), sensorTemperatureValue2,
+                    F("°]"));
 }
 
 void sendMessage(const String& message) {
@@ -496,7 +498,9 @@ void sendMessage(const String& message) {
     char* actext = getPGMString(androidContentText);
     if (https.begin(*client, String(url))) {
         String data;
-        data = R"({"message":")" + message + "\"}";
+        data = R"({"message":")";
+        data += message;
+        data += "\"}";
         https.addHeader(String(ct), String(aj));
         https.addHeader(String(att), F("You just got a push notification!"));
         https.addHeader(String(actitle), F("This is a notification title"));
@@ -507,11 +511,11 @@ void sendMessage(const String& message) {
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
             Serial.println(F("   PUSH уведомление отправлено"));
         } else {
-            Serial.printf_P(PSTR("   sendMessage() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR("%s %s\n"), F("   sendMessage() -> Ошибка:"), HTTPClient::errorToString(httpCode).c_str());
         }
         https.end();
     } else {
-        Serial.printf_P(PSTR("%s\n"), "   sendMessage() -> Невозможно подключиться\n");
+        Serial.printf_P(PSTR("%s\n\n"), F("   sendMessage() -> Невозможно подключиться"));
     }
     delPtr(url);
     delPtr(ct);
@@ -546,11 +550,11 @@ void sendMessage(Sensor* device, bool state) {
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
             Serial.println(F("   PUSH уведомление отправлено"));
         } else {
-            Serial.printf_P(PSTR("   sendMessage() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR("%s %s\n"), F("   sendMessage() -> Ошибка:"), HTTPClient::errorToString(httpCode).c_str());
         }
         https.end();
     } else {
-        Serial.printf_P(PSTR("%s\n"), "   sendMessage() -> Невозможно подключиться\n");
+        Serial.printf_P(PSTR("%s\n\n"), F("   sendMessage() -> Невозможно подключиться"));
     }
     delPtr(url);
     delPtr(ct);
@@ -588,61 +592,64 @@ AlarmID_t findAlarmIDBySensor(Sensor* sensor) {
 void doserOnHandler(Sensor* device, bool flag) {
     auto sensor = static_cast<Doser*>(device);
     if (device->getEnabled()) {
-        Serial.printf_P(PSTR("%s: включение\n"), sensor->getName().c_str());
+        Serial.printf_P(PSTR("%s:%s\n"), sensor->getName().c_str(), F(" включение"));
 
         String message;
-        message = "Включение дозатора " + String(sensor->getName().c_str());
+        message = "Включение дозатора ";
+        message += String(sensor->getName().c_str());
         sendMessage(message);
         message.clear();
         uint16_t steps = sensor->getSteps();
-
-        switch (sensor->getDoserType()) {
-            case Doser::K:
-                doserK->begin();
-                doserK->setEnableActiveState(LOW);
-                doserK->move(steps);
-                doserK->setEnableActiveState(HIGH);
-                break;
-            case Doser::NP:
-                doserNP->begin();
-                doserNP->setEnableActiveState(LOW);
-                doserNP->move(steps);
-                doserNP->setEnableActiveState(HIGH);
-                break;
-            case Doser::Fe:
-                doserFe->begin();
-                doserFe->setEnableActiveState(LOW);
-                doserFe->move(steps);
-                doserFe->setEnableActiveState(HIGH);
-                break;
-            default:
-                break;
-        }
-
+        Serial.printf_P(PSTR("%s\n"), F("Начало движения двигателя"));
+        /* TODO: закоментировано для отладки
+                switch (sensor->getDoserType()) {
+                    case Doser::K:
+                        doserK->begin();
+                        doserK->setEnableActiveState(LOW);
+                        doserK->move(steps);
+                        doserK->setEnableActiveState(HIGH);
+                        break;
+                    case Doser::NP:
+                        doserNP->begin();
+                        doserNP->setEnableActiveState(LOW);
+                        doserNP->move(steps);
+                        doserNP->setEnableActiveState(HIGH);
+                        break;
+                    case Doser::Fe:
+                        doserFe->begin();
+                        doserFe->setEnableActiveState(LOW);
+                        doserFe->move(steps);
+                        doserFe->setEnableActiveState(HIGH);
+                        break;
+                    default:
+                        break;
+                }
+        */
+        Serial.printf_P(PSTR("%s\n"), F("Окончание движения двигателя"));
         Alarm.enable(findAlarmByDevice(device, true));
     } else {
-        Serial.printf_P(PSTR("%s %s\n"), sensor->getName().c_str(), "нельзя изменять.");
+        Serial.printf_P(PSTR("%s %s\n"), sensor->getName().c_str(), F("нельзя изменять."));
         Alarm.disable(findAlarmByDevice(device, true));
     }
 }
 
 void sonicHandler(Sensor* sensor, bool state) {
-    Serial.printf_P(PSTR("  Sonic: %s\n"), sensor->getName().c_str());
+    Serial.printf_P(PSTR("%s%s\n"), F("  Sonic: "), sensor->getName().c_str());
 }
 
 void sensorHandler(Sensor* sensor, bool state) {
     if (sensor->getEnabled()) {
         if (state) {
-            Serial.printf_P(PSTR("  %s: включение, pin %d\n"), sensor->getName().c_str(), sensor->getPin());
+            Serial.printf_P(PSTR("  %s%s%d\n"), sensor->getName().c_str(), F(": включение, pin "), sensor->getPin());
         } else {
-            Serial.printf_P(PSTR("  %s: выключение, pin %d\n"), sensor->getName().c_str(), sensor->getPin());
+            Serial.printf_P(PSTR("  %s%s%d\n"), sensor->getName().c_str(), F(": выключение, pin "), sensor->getPin());
         }
         shiftRegister.setPin(countShiftRegister, sensor->getPin(), state ? HIGH : LOW);
         sendMessage(sensor, state);
         Alarm.enable(findAlarmIDBySensor(sensor));
         sensor->setStateNotify(state);
     } else {
-        Serial.printf_P(PSTR("%s %s\n"), sensor->getName().c_str(), "нельзя изменять.");
+        Serial.printf_P(PSTR("%s %s\n"), sensor->getName().c_str(), F("нельзя изменять."));
         Alarm.disable(findAlarmIDBySensor(sensor));
     }
 }
@@ -651,8 +658,7 @@ void parseJSONLights(const String& response) {
     DynamicJsonDocument doc(1300);
     DeserializationError err = deserializeJson(doc, response);
     if (err) {
-        Serial.print(F(" Ошибка разбора: "));
-        Serial.println(err.c_str());
+        Serial.printf_P(PSTR("%s: %s"), F("Невозможно выполнить парсинг"), err.c_str());
         return;
     } else {
         auto array = doc.as<JsonArray>();
@@ -678,7 +684,6 @@ void parseJSONLights(const String& response) {
                 }
             }
         }
-        doc.shrinkToFit();
         doc.clear();
     }
 }
@@ -687,7 +692,7 @@ void parseJSONDosers(const String& response) {
     DynamicJsonDocument document(1300);
     DeserializationError error = deserializeJson(document, response);
     if (error) {
-        Serial.printf_P(PSTR("%s: %s"), "Невозможно выполнить парсинг", error.c_str());
+        Serial.printf_P(PSTR("%s: %s"), F("Невозможно выполнить парсинг"), error.c_str());
         return;
     } else {
         auto array = document.as<JsonArray>();
@@ -751,7 +756,6 @@ void parseJSONDosers(const String& response) {
                 }
             }
         }
-        document.shrinkToFit();
         document.clear();
     }
 }
@@ -760,8 +764,7 @@ void parseJSONCompressor(const String& response) {
     DynamicJsonDocument doc(250);
     DeserializationError err = deserializeJson(doc, response);
     if (err) {
-        Serial.print(F(" Ошибка разбора: "));
-        Serial.println(err.c_str());
+        Serial.printf_P(PSTR("%s: %s"), F("Невозможно выполнить парсинг"), err.c_str());
         return;
     } else {
         auto array = doc.as<JsonArray>();
@@ -782,7 +785,6 @@ void parseJSONCompressor(const String& response) {
             compressor->setOn(static_cast<time_t>(std::stoul(on)));
             compressor->setOff(static_cast<time_t>(std::stoul(off)));
         }
-        doc.shrinkToFit();
         doc.clear();
     }
 }
@@ -791,8 +793,7 @@ void parseJSONFlow(const String& response) {
     DynamicJsonDocument doc(250);
     DeserializationError err = deserializeJson(doc, response);
     if (err) {
-        Serial.print(F(" Ошибка разбора: "));
-        Serial.println(err.c_str());
+        Serial.printf_P(PSTR("%s: %s"), F("Невозможно выполнить парсинг"), err.c_str());
         return;
     } else {
         auto array = doc.as<JsonArray>();
@@ -813,7 +814,6 @@ void parseJSONFlow(const String& response) {
             flow->setOn(static_cast<time_t>(std::stoul(on)));
             flow->setOff(static_cast<time_t>(std::stoul(off)));
         }
-        doc.shrinkToFit();
         doc.clear();
     }
 }
@@ -822,8 +822,7 @@ void parseJSONCO2(const String& response) {
     DynamicJsonDocument doc(250);
     DeserializationError err = deserializeJson(doc, response);
     if (err) {
-        Serial.print(F(" Ошибка разбора: "));
-        Serial.println(err.c_str());
+        Serial.printf_P(PSTR("%s: %s"), F("Невозможно выполнить парсинг"), err.c_str());
         return;
     } else {
         auto array = doc.as<JsonArray>();
@@ -844,7 +843,6 @@ void parseJSONCO2(const String& response) {
             co2->setOn(static_cast<time_t>(std::stoul(on)));
             co2->setOff(static_cast<time_t>(std::stoul(off)));
         }
-        doc.shrinkToFit();
         doc.clear();
     }
 }
@@ -853,8 +851,7 @@ void parseJSONHeater(const String& response) {
     DynamicJsonDocument doc(250);
     DeserializationError err = deserializeJson(doc, response);
     if (err) {
-        Serial.print(F(" Ошибка разбора: "));
-        Serial.println(err.c_str());
+        Serial.printf_P(PSTR("%s: %s"), F("Невозможно выполнить парсинг"), err.c_str());
         return;
     } else {
         auto array = doc.as<JsonArray>();
@@ -875,7 +872,6 @@ void parseJSONHeater(const String& response) {
             heater->setOn(static_cast<time_t>(std::stoul(on)));
             heater->setOff(static_cast<time_t>(std::stoul(off)));
         }
-        doc.shrinkToFit();
         doc.clear();
     }
 }
@@ -884,8 +880,7 @@ void parseJSONPump(const String& response) {
     DynamicJsonDocument doc(250);
     DeserializationError err = deserializeJson(doc, response);
     if (err) {
-        Serial.print(F(" Ошибка разбора: "));
-        Serial.println(err.c_str());
+        Serial.printf_P(PSTR("%s: %s"), F("Невозможно выполнить парсинг"), err.c_str());
         return;
     } else {
         auto array = doc.as<JsonArray>();
@@ -906,7 +901,6 @@ void parseJSONPump(const String& response) {
             pump->setOn(static_cast<time_t>(std::stoul(on)));
             pump->setOff(static_cast<time_t>(std::stoul(off)));
         }
-        doc.shrinkToFit();
         doc.clear();
     }
 }
@@ -920,7 +914,7 @@ void setHostName() {
 }
 
 boolean initWiFi() {
-    Serial.printf_P(PSTR("%s: %s\n"), "Подключение к WiFi", WIFI_SSID);
+    Serial.printf_P(PSTR("%s: %s\n"), F("Подключение к WiFi"), WIFI_SSID);
     WiFi.mode(WIFI_STA);
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     WiFi.setAutoReconnect(true);
@@ -932,10 +926,11 @@ boolean initWiFi() {
 
     if (WiFi.status() != WL_CONNECTED) {
         wifiConnectCount = 0;
-        Serial.printf_P(PSTR("%s: %s\n"), "Не удалось подключиться к WiFi", WIFI_SSID);
+        Serial.printf_P(PSTR("%s%s\n"), F("Не удалось подключиться к WiFi: "), WIFI_SSID);
         return false;
     } else {
-        Serial.printf_P(PSTR("\n%s: %s IP: %s\n"), "Успешное подключение к WiFi", WIFI_SSID, WiFi.localIP().toString().c_str());
+        Serial.printf_P(PSTR("%s%s%s%s\n"), F("\nУспешное подключение к WiFi: "), WIFI_SSID, F(" IP: "),
+                        WiFi.localIP().toString().c_str());
         setHostName();
         return true;
     }
@@ -1070,7 +1065,7 @@ void alarmDoser() {
         } else if (doserType == Doser::Fe) {
             doserFe = std::move(emptyDoser);
         } else {
-            Serial.printf_P(PSTR("%s"), "Неизвестный тип дозатора");
+            Serial.printf_P(PSTR("%s"), F("Неизвестный тип дозатора"));
         }
         auto alarm = Alarm.alarmRepeat(sensor->getHourOn(), sensor->getMinuteOn(), 0, 0, doserOnHandler, sensor);
 
@@ -1116,7 +1111,7 @@ void attachAlarms(Sensor::SensorType sensorType) {
 
 void getParamSonics() {
     char* url = getPGMString(urlSonic);
-    Serial.printf_P(PSTR("\n %s\n"), "Дальномеры...");
+    Serial.printf_P(PSTR("%s"), F("\n Дальномеры...\n"));
     https.useHTTP10(true);
     https.getStream().flush();
     if (https.begin(*client, String(url))) {
@@ -1127,7 +1122,7 @@ void getParamSonics() {
                 DeserializationError err = deserializeJson(doc, https.getStream());
 
                 if (err) {
-                    Serial.printf_P(PSTR(" %s %s\n"), "Ошибка разбора JSON объекта:", err.c_str());
+                    Serial.printf_P(PSTR("%s%s\n"), F(" Ошибка разбора JSON объекта: "), err.c_str());
                 } else {
                     auto array = doc.as<JsonArray>();
                     for (JsonObject obj : array) {
@@ -1151,18 +1146,18 @@ void getParamSonics() {
                 doc.clear();
             }
         } else {
-            Serial.printf_P(PSTR(" %s %s\n"), "Ошибка:", HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR("%s %s\n"), F(" Ошибка:"), HTTPClient::errorToString(httpCode).c_str());
         }
         https.end();
     } else {
-        Serial.printf_P(PSTR(" %s\n"), "Невозможно подключиться\n");
+        Serial.printf_P(PSTR("%s"), F(" Невозможно подключиться\n\n"));
     }
     delPtr(url);
 }
 
 void getParamLights() {
     char* url = getPGMString(urlLights);
-    Serial.printf_P(PSTR("\n %s\n"), "Прожекторы...");
+    Serial.printf_P(PSTR("%s"), F("\n Прожекторы...\n"));
     if (https.begin(*client, String(url))) {
         int httpCode = https.GET();
         if (httpCode > 0) {
@@ -1170,15 +1165,15 @@ void getParamLights() {
                 responseString = https.getString();
             }
         } else {
-            Serial.printf_P(PSTR(" %s %s\n"), "Ошибка:", HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR("%s%s\n"), F(" Ошибка: "), HTTPClient::errorToString(httpCode).c_str());
         }
         https.end();
     } else {
-        Serial.printf_P(PSTR(" %s\n"), "Невозможно подключиться\n");
+        Serial.printf_P(PSTR("%s"), F(" Невозможно подключиться\n\n"));
     }
     delPtr(url);
     if (responseString.isEmpty()) {
-        Serial.printf_P(PSTR(" %s\n"), "Ответ пустой");
+        Serial.printf_P(PSTR("%s"), F(" Ответ пустой\n"));
     } else {
         parseJSONLights(responseString);
         responseString.clear();
@@ -1188,7 +1183,7 @@ void getParamLights() {
 
 void getParamDosers() {
     char* url = getPGMString(urlDosers);
-    Serial.printf_P(PSTR("\n %s\n"), "Дозаторы...");
+    Serial.printf_P(PSTR("%s"), F("\n Дозаторы...\n"));
     if (https.begin(*client, String(url))) {
         int httpCode = https.GET();
         if (httpCode > 0) {
@@ -1196,15 +1191,15 @@ void getParamDosers() {
                 responseString = https.getString();
             }
         } else {
-            Serial.printf_P(PSTR(" %s %s\n"), "Ошибка:", HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR("%s%s\n"), F(" Ошибка: "), HTTPClient::errorToString(httpCode).c_str());
         }
         https.end();
     } else {
-        Serial.printf_P(PSTR(" %s\n"), "Невозможно подключиться\n");
+        Serial.printf_P(PSTR("%s"), F(" Невозможно подключиться\n\n"));
     }
     delPtr(url);
     if (responseString.isEmpty()) {
-        Serial.printf_P(PSTR(" %s\n"), "Ответ пустой");
+        Serial.printf_P(PSTR("%s"), F(" Ответ пустой\n"));
     } else {
         parseJSONDosers(responseString);
         responseString.clear();
@@ -1214,7 +1209,7 @@ void getParamDosers() {
 
 void getParamCompressor() {
     char* url = getPGMString(urlCompressor);
-    Serial.printf_P(PSTR("\n %s\n"), "Компрессор...");
+    Serial.printf_P(PSTR("%s"), F("\n Компрессор...\n"));
     if (https.begin(*client, String(url))) {
         int httpCode = https.GET();
         if (httpCode > 0) {
@@ -1222,15 +1217,15 @@ void getParamCompressor() {
                 responseString = https.getString();
             }
         } else {
-            Serial.printf_P(PSTR(" %s %s\n"), "Ошибка:", HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR("%s%s\n"), F(" Ошибка: "), HTTPClient::errorToString(httpCode).c_str());
         }
         https.end();
     } else {
-        Serial.printf_P(PSTR(" %s\n"), "Невозможно подключиться\n");
+        Serial.printf_P(PSTR("%s"), F(" Невозможно подключиться\n\n"));
     }
     delPtr(url);
     if (responseString.isEmpty()) {
-        Serial.printf_P(PSTR(" %s\n"), "Ответ пустой");
+        Serial.printf_P(PSTR("%s"), F(" Ответ пустой\n"));
     } else {
         parseJSONCompressor(responseString);
         responseString.clear();
@@ -1240,7 +1235,7 @@ void getParamCompressor() {
 
 void getParamFlow() {
     char* url = getPGMString(urlFlow);
-    Serial.printf_P(PSTR("\n %s\n"), "Помпа течения...");
+    Serial.printf_P(PSTR("%s"), F("\n Помпа течения...\n"));
     if (https.begin(*client, String(url))) {
         int httpCode = https.GET();
         if (httpCode > 0) {
@@ -1248,15 +1243,15 @@ void getParamFlow() {
                 responseString = https.getString();
             }
         } else {
-            Serial.printf_P(PSTR(" %s %s\n"), "Ошибка:", HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR("%s%s\n"), F(" Ошибка: "), HTTPClient::errorToString(httpCode).c_str());
         }
         https.end();
     } else {
-        Serial.printf_P(PSTR(" %s\n"), "Невозможно подключиться\n");
+        Serial.printf_P(PSTR("%s"), F(" Невозможно подключиться\n\n"));
     }
     delPtr(url);
     if (responseString.isEmpty()) {
-        Serial.printf_P(PSTR(" %s\n"), "Ответ пустой");
+        Serial.printf_P(PSTR("%s"), F(" Ответ пустой\n"));
     } else {
         parseJSONFlow(responseString);
         responseString.clear();
@@ -1266,7 +1261,7 @@ void getParamFlow() {
 
 void getParamCO2() {
     char* url = getPGMString(urlCO2);
-    Serial.printf_P(PSTR("\n %s\n"), "CO2...");
+    Serial.printf_P(PSTR("%s"), F("\n CO2...\n"));
     if (https.begin(*client, String(url))) {
         int httpCode = https.GET();
         if (httpCode > 0) {
@@ -1274,15 +1269,15 @@ void getParamCO2() {
                 responseString = https.getString();
             }
         } else {
-            Serial.printf_P(PSTR(" %s %s\n"), "Ошибка:", HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR("%s%s\n"), F(" Ошибка: "), HTTPClient::errorToString(httpCode).c_str());
         }
         https.end();
     } else {
-        Serial.printf_P(PSTR(" %s\n"), "Невозможно подключиться\n");
+        Serial.printf_P(PSTR("%s"), F(" Невозможно подключиться\n\n"));
     }
     delPtr(url);
     if (responseString.isEmpty()) {
-        Serial.printf_P(PSTR(" %s\n"), "Ответ пустой");
+        Serial.printf_P(PSTR("%s"), F(" Ответ пустой\n"));
     } else {
         parseJSONCO2(responseString);
         responseString.clear();
@@ -1292,7 +1287,7 @@ void getParamCO2() {
 
 void getParamHeater() {
     char* url = getPGMString(urlHeater);
-    Serial.printf_P(PSTR("\n %s\n"), "Нагреватель...");
+    Serial.printf_P(PSTR("%s"), F("\n Нагреватель...\n"));
     if (https.begin(*client, String(url))) {
         int httpCode = https.GET();
         if (httpCode > 0) {
@@ -1300,15 +1295,15 @@ void getParamHeater() {
                 responseString = https.getString();
             }
         } else {
-            Serial.printf_P(PSTR(" %s %s\n"), "Ошибка:", HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR("%s%s\n"), F(" Ошибка: "), HTTPClient::errorToString(httpCode).c_str());
         }
         https.end();
     } else {
-        Serial.printf_P(PSTR(" %s\n"), "Невозможно подключиться\n");
+        Serial.printf_P(PSTR("%s"), F(" Невозможно подключиться\n\n"));
     }
     delPtr(url);
     if (responseString.isEmpty()) {
-        Serial.printf_P(PSTR(" %s\n"), "Ответ пустой");
+        Serial.printf_P(PSTR("%s"), F(" Ответ пустой\n"));
     } else {
         parseJSONHeater(responseString);
         responseString.clear();
@@ -1318,7 +1313,7 @@ void getParamHeater() {
 
 void getParamPump() {
     char* url = getPGMString(urlPump);
-    Serial.printf_P(PSTR("\n %s\n"), F("Помпа..."));
+    Serial.printf_P(PSTR("%s"), F("\n Помпа...\n"));
     if (https.begin(*client, String(url))) {
         int httpCode = https.GET();
         if (httpCode > 0) {
@@ -1326,15 +1321,15 @@ void getParamPump() {
                 responseString = https.getString();
             }
         } else {
-            Serial.printf_P(PSTR(" %s %s\n"), F("Ошибка:"), HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR("%s%s\n"), F(" Ошибка: "), HTTPClient::errorToString(httpCode).c_str());
         }
         https.end();
     } else {
-        Serial.printf_P(PSTR(" %s\n"), F("Невозможно подключиться\n"));
+        Serial.printf_P(PSTR("%s"), F(" Невозможно подключиться\n\n"));
     }
     delPtr(url);
     if (responseString.isEmpty()) {
-        Serial.printf_P(PSTR(" %s\n"), "Ответ пустой");
+        Serial.printf_P(PSTR("%s"), F(" Ответ пустой\n"));
     } else {
         parseJSONPump(responseString);
         responseString.clear();
@@ -1402,7 +1397,7 @@ void setParamsEEPROM() {
 }
 */
 void getParamsBackEnd() {
-    Serial.printf_P(PSTR("%s\n"), F("Чтение параметров из облака"));
+    Serial.printf_P(PSTR("%s"), F("Чтение параметров из облака\n"));
     getParamLights();
     getParamCompressor();
     getParamFlow();
@@ -1426,7 +1421,7 @@ void initLocalClock() {
 void initDS3231() {
     clockRTC.begin();
     char* df = clockRTC.dateFormat("H:i:s d.m.Y", clockRTC.getDateTime());
-    Serial.printf_P(PSTR("Время DS3231: %s\n"), String(df).c_str());
+    Serial.printf_P(PSTR("%s%s\n"), F("Время DS3231: "), String(df).c_str());
     delPtr(df);
 }
 
@@ -1447,18 +1442,18 @@ void sendNTPpacket(const IPAddress& address) {
 }
 
 void syncTime() {
-    Serial.printf_P(PSTR("Синхронизация DS3231/NTP %s\n"), ntpServerName);
+    Serial.printf_P(PSTR("%s%s\n"), F("Синхронизация DS3231/NTP "), ntpServerName);
     udp.begin(2390);
     WiFi.hostByName(ntpServerName, timeServerIP);
     sendNTPpacket(timeServerIP);
     delay(100);
     int cb = udp.parsePacket();
     if (cb == 0) {
-        Serial.printf_P(PSTR(" Нет ответа от сервера времени %s\n"), ntpServerName);
+        Serial.printf_P(PSTR("%s%s\n"), F(" Нет ответа от сервера времени "), ntpServerName);
         count_sync++;
     } else {
         count_sync = 0;
-        Serial.printf_P(PSTR(" Получен ответ от сервера времени %s\n"), ntpServerName);
+        Serial.printf_P(PSTR("%s%s\n"), F(" Получен ответ от сервера времени "), ntpServerName);
         udp.read(packetBuffer, NTP_PACKET_SIZE);
         unsigned long highWord = word(packetBuffer[40], packetBuffer[41]);
         unsigned long lowWord = word(packetBuffer[42], packetBuffer[43]);
@@ -1472,11 +1467,11 @@ void syncTime() {
         rtc.dateTimeToStr(str);
         Serial.printf_P(PSTR(" %s\n"), str);
         uint32_t rtcEpoch = rtc.getEpoch();
-        Serial.printf_P(PSTR(" DS3231: %lu\n"), rtcEpoch);
-        Serial.printf_P(PSTR("    NTP: %lu\n"), epoch);
+        Serial.printf_P(PSTR("%s%lu\n"), F(" DS3231: "), rtcEpoch);
+        Serial.printf_P(PSTR("%s%lu\n"), F("    NTP: "), epoch);
 
         if ((rtcEpoch - epoch) > 2) {
-            Serial.printf_P(PSTR(" %s"), F("Обновляем DS3231 (разница между эпохами = "));
+            Serial.printf_P(PSTR("%s"), F(" Обновляем DS3231 (разница между эпохами = "));
             if ((rtcEpoch - epoch) > 10000) {
                 Serial.printf_P(PSTR(" %s\n"), (epoch - rtcEpoch));
             } else {
@@ -1484,7 +1479,7 @@ void syncTime() {
             }
             rtc.setEpoch(epoch);
         } else {
-            Serial.printf_P(PSTR(" %s\n"), F("Дата и время DS3231 не требуют синхронизации"));
+            Serial.printf_P(PSTR("%s"), F(" Дата и время DS3231 не требуют синхронизации\n"));
         }
     }
 }
@@ -1512,12 +1507,12 @@ void putUptime(const String& uptime) {
         int httpCode = https.PUT(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
         } else {
-            Serial.printf_P(PSTR("putUptime() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR("%s%s\n"), F("putUptime() -> Ошибка: "), HTTPClient::errorToString(httpCode).c_str());
         }
         https.end();
         payload.clear();
     } else {
-        Serial.printf_P(PSTR("%s\n"), "putUptime() -> Невозможно подключиться\n");
+        Serial.printf_P(PSTR("%s"), F("putUptime() -> Невозможно подключиться\n\n"));
     }
     delPtr(url);
     delPtr(ct);
@@ -1526,7 +1521,7 @@ void putUptime(const String& uptime) {
 
 void uptime() {
     String uptime = uptime_formatter::getUptime();
-    Serial.printf_P(PSTR("%s %s\n"), F("Uptime:"), uptime.c_str());
+    Serial.printf_P(PSTR("%s%s\n"), F("Uptime: "), uptime.c_str());
     putUptime(uptime);
 }
 
@@ -1547,11 +1542,11 @@ void lastOnline() {
         payload.clear();
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
         } else {
-            Serial.printf_P(PSTR("%s %s\n"), F("lastOnline -> Ошибка:"), HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR("%s%s\n"), F("lastOnline -> Ошибка: "), HTTPClient::errorToString(httpCode).c_str());
         }
         https.end();
     } else {
-        Serial.printf_P(PSTR("%s\n"), F("lastOnline() -> Невозможно подключиться"));
+        Serial.printf_P(PSTR("%s"), F("lastOnline() -> Невозможно подключиться\n"));
     }
     delPtr(currentTime);
     delPtr(url);
@@ -1577,11 +1572,11 @@ void postLog(const std::string& message) {
         payload.clear();
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
         } else {
-            Serial.printf_P(PSTR("postLog() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR("%s%s\n"), F("postLog() -> Ошибка: "), HTTPClient::errorToString(httpCode).c_str());
         }
         https.end();
     } else {
-        Serial.printf_P(PSTR("%s\n"), "postLog() -> Невозможно подключиться\n");
+        Serial.printf_P(PSTR("%s"), F("postLog() -> Невозможно подключиться\n\n"));
     }
     delPtr(url);
     delPtr(ct);
@@ -1601,13 +1596,14 @@ void postBoot() {
         payload += "\"}";
         https.addHeader(String(ct), String(aj));
         int httpCode = https.POST(payload);
+        payload.clear();
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
         } else {
-            Serial.printf_P(PSTR("postBoot() -> Ошибка: %s %d\n"), HTTPClient::errorToString(httpCode).c_str(), httpCode);
+            Serial.printf_P(PSTR("%s%s %d\n"), F("postBoot() -> Ошибка: "), HTTPClient::errorToString(httpCode).c_str(), httpCode);
         }
         https.end();
     } else {
-        Serial.printf_P(PSTR("%s\n"), "postBoot() -> Невозможно подключиться\n");
+        Serial.printf_P(PSTR("%s"), F("postBoot() -> Невозможно подключиться\n\n"));
     }
     delPtr(url);
     delPtr(ct);
@@ -1619,17 +1615,15 @@ void parseJSONUpdateSettings(const String& response, bool& result) {
     DynamicJsonDocument doc(capacity);
     DeserializationError err = deserializeJson(doc, response);
     if (err) {
-        Serial.print(F("Ошибка разбора: "));
-        Serial.println(err.c_str());
+        Serial.printf_P(PSTR("%s: %s"), F("Невозможно выполнить парсинг"), err.c_str());
         result = false;
     } else {
         auto array = doc.as<JsonArray>();
         for (JsonObject obj : array) {
             result = obj["flag"];
         }
-        doc.shrinkToFit();
-        doc.clear();
     }
+    doc.clear();
 }
 
 void putUpdateSettings() {
@@ -1637,12 +1631,14 @@ void putUpdateSettings() {
     char* ct = getPGMString(contentType);
     char* aj = getPGMString(applicationJson);
     if (https.begin(*client, String(url))) {
-        String payload = "{\"flag\": false }";
+        String payload;
+        payload = R"({"flag":false})";
         https.addHeader(String(ct), String(aj));
         int httpCode = https.PUT(payload);
+        payload.clear();
         (httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)
-            ? Serial.printf_P(PSTR("%s\n"), "putUpdateSettings() -> Флаг сброшен")
-            : Serial.printf_P(PSTR("%s %s\n"), "putUpdateSettings() -> Ошибка:", HTTPClient::errorToString(httpCode).c_str());
+            ? Serial.printf_P(PSTR("%s"), F("putUpdateSettings() -> Флаг сброшен\n"))
+            : Serial.printf_P(PSTR("%s%s\n"), F("putUpdateSettings() -> Ошибка: "), HTTPClient::errorToString(httpCode).c_str());
         https.end();
     } else {
         Serial.printf_P(PSTR("%s\n"), "putUpdateSettings() -> Невозможно подключиться\n");
@@ -1662,15 +1658,15 @@ bool getUpdateSettings() {
                 responseString = https.getString();
             }
         } else {
-            Serial.printf_P(PSTR("getUpdateSettings() -> Ошибка: %s\n"), HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR("%s%s\n"), F("getUpdateSettings() -> Ошибка: "), HTTPClient::errorToString(httpCode).c_str());
         }
         https.end();
     } else {
-        Serial.printf_P(PSTR("%s\n"), "getUpdateSettings() -> Невозможно подключиться\n");
+        Serial.printf_P(PSTR("%s"), F("getUpdateSettings() -> Невозможно подключиться\n\n"));
     }
     delPtr(url);
     if (responseString.isEmpty()) {
-        Serial.printf_P(PSTR(" %s\n"), "getUpdateSettings() -> Ответ пустой");
+        Serial.printf_P(PSTR("%s"), F(" getUpdateSettings() -> Ответ пустой\n"));
     } else {
         parseJSONUpdateSettings(responseString, flag);
         responseString.clear();
@@ -1684,7 +1680,7 @@ void timer1() {
     Serial.printf_P(PSTR("\e[1;31m%d\e[1;37m\n"), ESP.getFreeHeap());
     postLog(std::to_string(ESP.getFreeHeap()));
     if (getUpdateSettings()) {
-        Serial.printf_P(PSTR("%s\n"), "Будет выполнено обновление всех параметров");
+        Serial.printf_P(PSTR("%s\n"), F("Будет выполнено обновление всех параметров"));
         getParamsBackEnd();
         printAllDevices();
         putUpdateSettings();
@@ -1718,10 +1714,10 @@ void sendTemperature() {
         int httpCode = https.POST(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
         } else {
-            Serial.printf_P(PSTR("%s %s\n"), F("postTemperature() -> Ошибка:"), HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR("%s%s\n"), F("postTemperature() -> Ошибка: "), HTTPClient::errorToString(httpCode).c_str());
         }
     } else {
-        Serial.printf_P(PSTR("%s\n"), F("postTemperature() -> Невозможно подключиться"));
+        Serial.printf_P(PSTR("%s"), F("postTemperature() -> Невозможно подключиться\n"));
     }
     https.end();
 
@@ -1730,10 +1726,10 @@ void sendTemperature() {
         int httpCode = https.PUT(payload);
         if ((httpCode > 0) && (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_MOVED_PERMANENTLY)) {
         } else {
-            Serial.printf_P(PSTR("%s %s\n"), F("putTemperature() -> Ошибка:"), HTTPClient::errorToString(httpCode).c_str());
+            Serial.printf_P(PSTR("%s%s\n"), F("putTemperature() -> Ошибка: "), HTTPClient::errorToString(httpCode).c_str());
         }
     } else {
-        Serial.printf_P(PSTR("%s\n"), F("putTemperature() -> Невозможно подключиться"));
+        Serial.printf_P(PSTR("%s"), F("putTemperature() -> Невозможно подключиться\n"));
     }
     https.end();
     payload.clear();
@@ -1757,7 +1753,7 @@ void timer5() {
 void startTimers() {
     Alarm.timerRepeat(300, timer5);
     Alarm.timerRepeat(60, timer1);
-    Serial.printf_P(PSTR("%s %d\n"), "Всего таймеров", Alarm.count());
+    Serial.printf_P(PSTR("%s%d\n"), F("Всего таймеров "), Alarm.count());
 }
 
 void setup() {
@@ -1771,7 +1767,7 @@ void setup() {
     } else {
         initHTTPClient();
         initLocalClock();
-        // syncTime();
+         syncTime();
         postBoot();
         getParamsBackEnd();
         //  printAllDevices();
