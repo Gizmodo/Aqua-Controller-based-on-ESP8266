@@ -25,8 +25,11 @@
 
 #if defined(ARDUINO_ARCH_ESP8266)
 #define HOSTNAME "ESP8266"
+#include <ArduinoOTA.h>
 #include <ESP8266HTTPClient.h>
 #include <ESP8266WiFi.h>
+#include <ESP8266mDNS.h>
+#include <WiFiUdp.h>
 #elif defined(ARDUINO_ARCH_ESP32)
 #define HOSTNAME "ESP32"
 #include <HTTPClient.h>
@@ -1756,6 +1759,29 @@ void startTimers() {
     Serial.printf_P(PSTR("%s%d\n"), F("Всего таймеров "), Alarm.count());
 }
 
+void setupOTA() {
+    ArduinoOTA.onStart([]() { Serial.printf_P(PSTR("%s"), F("Start updating \n")); });
+    ArduinoOTA.onEnd([]() { Serial.printf_P(PSTR("%s"), F("\nEnd\n")); });
+    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+        Serial.printf_P(PSTR("%s%u%%\r"), F("Progress: "), (progress / (total / 100)));
+    });
+    ArduinoOTA.onError([](ota_error_t error) {
+        Serial.printf_P(PSTR("%s%u%s"), F("Error["), error, F("]: "));
+        if (error == OTA_AUTH_ERROR) {
+            Serial.printf_P(PSTR("%s"), F("Auth Failed\n"));
+        } else if (error == OTA_BEGIN_ERROR) {
+            Serial.printf_P(PSTR("%s"), F("Begin Failed\n"));
+        } else if (error == OTA_CONNECT_ERROR) {
+            Serial.printf_P(PSTR("%s"), F("Connect Failed\n"));
+        } else if (error == OTA_RECEIVE_ERROR) {
+            Serial.printf_P(PSTR("%s"), F("Receive Failed\n"));
+        } else if (error == OTA_END_ERROR) {
+            Serial.printf_P(PSTR("%s"), F("End Failed\n"));
+        }
+    });
+    ArduinoOTA.begin();
+}
+
 void setup() {
     Serial.begin(115200);
     Serial.println();
@@ -1765,6 +1791,7 @@ void setup() {
     if (!initWiFi()) {
         // getParamsEEPROM();
     } else {
+        setupOTA();
         initHTTPClient();
         initLocalClock();
         syncTime();
@@ -1779,6 +1806,7 @@ void setup() {
 
 void loop() {
     Alarm.delay(100);
+    ArduinoOTA.handle();
 }
 
 #pragma clang diagnostic pop
