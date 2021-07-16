@@ -162,7 +162,7 @@ const char* WiFi_hostname = HOSTNAME;
 
 //// HTTPS
 #ifdef ARDUINO_ARCH_ESP8266
-std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
+std::unique_ptr<BearSSL::WiFiClientSecure> client = std::make_unique<BearSSL::WiFiClientSecure>();
 #else
 std::unique_ptr<WiFiClientSecure> client(new WiFiClientSecure);
 #endif

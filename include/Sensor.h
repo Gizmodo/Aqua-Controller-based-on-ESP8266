@@ -158,12 +158,14 @@ class Sensor {
     }
 
     std::string sensorInfo() {
-        char bufferOn[32];
-        char bufferOff[32];
+        int maxsize = 32;
+        char bufferOn[maxsize];
+        char bufferOff[maxsize];
         const tm* tmOn = localtime(&_on);
-        strftime(bufferOn, 32, "%H:%M:%S", tmOn);
+        const char* fmt = "%H:%M:%S";
+        strftime(bufferOn, maxsize, fmt, tmOn);
         const tm* tmOff = localtime(&_off);
-        strftime(bufferOff, 32, "%H:%M:%S", tmOff);
+        strftime(bufferOff, maxsize, fmt, tmOff);
 
         std::string typeName;
         typeName = sensorTypeToString(this->_type);

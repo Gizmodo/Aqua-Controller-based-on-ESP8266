@@ -220,16 +220,25 @@ void TimeAlarmsClass::waitForRollover(dtUnits_t Units) {
 
 uint8_t TimeAlarmsClass::getDigitsNow(dtUnits_t Units) {
     time_t timenow = time(nullptr);
-//TODO: change to switch
-    if (Units == dtSecond)
-        return numberOfSeconds(timenow);
-    if (Units == dtMinute)
-        return numberOfMinutes(timenow);
-    if (Units == dtHour)
-        return numberOfHours(timenow);
-    if (Units == dtDay)
-        return dayOfWeek(timenow);
-    return 255;  // This should never happen
+    time_t result;
+    switch (Units) {
+        case dtSecond:
+            result = numberOfSeconds(timenow);
+            break;
+        case dtMinute:
+            result = numberOfMinutes(timenow);
+            break;
+        case dtHour:
+            result = numberOfHours(timenow);
+            break;
+        case dtDay:
+            result = dayOfWeek(timenow);
+            break;
+        default:
+            result = 255;
+            break;
+    }
+    return result;
 }
 
 // returns isServicing
@@ -298,7 +307,7 @@ void TimeAlarmsClass::serviceAlarms() {
 
 // returns the absolute time of the next scheduled alarm, or 0 if none
 time_t TimeAlarmsClass::getNextTrigger() {
-    auto nextTrigger = (time_t)0xffffffff;  // the max time value
+    auto nextTrigger = static_cast<time_t>(0xffffffffU);  // the max time value
 
     for (uint8_t id = 0; id < ALARMS_COUNT; id++) {
         if (isAllocated(id)) {
@@ -309,7 +318,7 @@ time_t TimeAlarmsClass::getNextTrigger() {
             }
         }
     }
-    return nextTrigger == (time_t)0xffffffff ? 0 : nextTrigger;
+    return nextTrigger == static_cast<time_t>(0xffffffffU) ? 0 : nextTrigger;
 }
 time_t TimeAlarmsClass::getNextTrigger(AlarmID_t ID) {
     if (isAllocated(ID)) {
@@ -340,7 +349,8 @@ AlarmID_t TimeAlarmsClass::create(time_t value, OnTick_t onTickHandler, bool isO
 AlarmID_t TimeAlarmsClass::createSensorTimerNew(time_t value,
                                                 onTickSensorNew_t onTickDeviceHandler,
                                                 bool isOneShot,
-                                                dtAlarmPeriod_t alarmType, Sensor* param) {
+                                                dtAlarmPeriod_t alarmType,
+                                                Sensor* param) {
     time_t now = time(nullptr);
     if (!((dtIsAlarm(alarmType) && now < SECS_PER_YEAR) || (dtUseAbsoluteValue(alarmType) && (value == 0)))) {
         for (uint8_t id = 0; id < ALARMS_COUNT; id++) {

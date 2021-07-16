@@ -314,10 +314,10 @@ char* DS3231::dateFormat(const char* dateFormat, RTCDateTime dt) {
 const char* DS3231::dateFormat(const char* dateFormat, RTCAlarmTime dt) {
     // char buffer[255];
     char* buffer = (char*)malloc(sizeof(char) * 255);
-    buffer[0] = 0;
     char helper[11];
 
     if (buffer != nullptr) {
+        buffer[0] = 0;
         while (*dateFormat != '\0') {
             switch (dateFormat[0]) {
                 // Day decoder
@@ -429,10 +429,6 @@ RTCDateTime DS3231::getDateTime(void) {
     t.unixtime = unixtime();
 
     return t;
-}
-
-uint8_t DS3231::isReady(void) {
-    return true;
 }
 
 void DS3231::enableOutput(bool enabled) {

@@ -19,8 +19,7 @@
 /**
  * Constructor
  */
-uEEPROMLib::uEEPROMLib() {
-}
+uEEPROMLib::uEEPROMLib() = default;
 
 /**
  * Constructor

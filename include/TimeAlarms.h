@@ -114,7 +114,7 @@ class TimeAlarmsClass {
 
     // trigger once at given time of day
     AlarmID_t alarmOnce(time_t value, OnTick_t onTickHandler) {
-        if (value <= 0 || (unsigned)value > SECS_PER_DAY)
+        if (value <= 0 || value > SECS_PER_DAY)
             return INVALID_ALARM_ID;
         return create(value, onTickHandler, true, dtDailyAlarm);
     }
@@ -124,12 +124,12 @@ class TimeAlarmsClass {
 
     // trigger daily at given time of day
     AlarmID_t alarmRepeat(time_t value, OnTick_t onTickHandler) {
-        if ((unsigned)value > SECS_PER_DAY)
+        if (value > SECS_PER_DAY)
             return INVALID_ALARM_ID;
         return create(value, onTickHandler, false, dtDailyAlarm);
     }
     AlarmID_t alarmRepeat(time_t value, time_t value2, onTickSensorNew_t onTickBaseDeviceHandler, Sensor* param) {
-        if (((unsigned)value > SECS_PER_DAY) && ((unsigned)value2 > SECS_PER_DAY))
+        if ((value > SECS_PER_DAY) && (value2 > SECS_PER_DAY))
             return INVALID_ALARM_ID;
         return createSensorAlarmNew(value, value2, onTickBaseDeviceHandler, false, dtDailyAlarm, param);
     }
